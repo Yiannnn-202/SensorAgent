@@ -1,0 +1,19 @@
+{
+  "name": "common.trace_context",
+  "version": "0.1.0",
+  "description": "Shared trace context for correlating Agent, skill, and tool calls.",
+  "schema": {
+    "type": "object",
+    "required": ["task_id", "trace_id"],
+    "properties": {
+      "task_id": {
+        "type": "string",
+        "description": "Task-level correlation ID."
+      },
+      "trace_id": {
+        "type": "string",
+        "description": "Execution trace correlation ID."
+      }
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "robot.mock_pick",
+  "version": "0.1.0",
+  "description": "Mock robot pick tool. It simulates a successful object pick.",
+  "input_schema": {
+    "type": "object",
+    "required": ["object_id"],
+    "properties": {
+      "object_id": {
+        "type": "string"
+      },
+      "pose_3d": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["picked", "object_id", "execution_id"],
+    "properties": {
+      "picked": {
+        "type": "boolean"
+      },
+      "object_id": {
+        "type": "string"
+      },
+      "execution_id": {
+        "type": "string"
+      }
+    }
+  },
+  "errors": [
+    "OBJECT_NOT_FOUND",
+    "PICK_FAILED"
+  ]
+}

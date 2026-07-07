@@ -1,0 +1,23 @@
+{
+  "name": "common.error",
+  "version": "0.1.0",
+  "description": "Shared error payload shape for tool failures.",
+  "schema": {
+    "type": "object",
+    "required": ["code", "message"],
+    "properties": {
+      "code": {
+        "type": "string",
+        "description": "Stable machine-readable error code."
+      },
+      "message": {
+        "type": "string",
+        "description": "Human-readable error message."
+      },
+      "details": {
+        "type": "object",
+        "description": "Optional structured error details."
+      }
+    }
+  }
+}

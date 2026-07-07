@@ -1,0 +1,43 @@
+{
+  "name": "vision.mock_detect",
+  "version": "0.1.0",
+  "description": "Mock object detection tool. It returns a deterministic object detection result for a natural-language query.",
+  "input_schema": {
+    "type": "object",
+    "required": ["query"],
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Natural-language object query."
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["found", "label", "confidence", "object_id", "pose_3d"],
+    "properties": {
+      "found": {
+        "type": "boolean"
+      },
+      "label": {
+        "type": "string"
+      },
+      "confidence": {
+        "type": "number"
+      },
+      "object_id": {
+        "type": "string"
+      },
+      "pose_3d": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "errors": [
+    "OBJECT_NOT_FOUND",
+    "INVALID_QUERY"
+  ]
+}

@@ -78,17 +78,17 @@ Goal: make the current mock chain configurable instead of hard-coded in tests.
 
 Goal: document cross-module tool input/output formats before real integrations begin.
 
-- [ ] Add root `contracts/` directory.
-- [ ] Add `contracts/README.md` explaining contracts vs internal schemas.
-- [ ] Add `contracts/tools/vision.mock_detect.schema.json`.
-- [ ] Add `contracts/tools/audio.mock_transcribe.schema.json`.
-- [ ] Add `contracts/tools/robot.mock_pick.schema.json`.
-- [ ] Add `contracts/tools/robot.mock_place.schema.json`.
-- [ ] Add shared error format contract.
-- [ ] Add shared trace context contract.
-- [ ] Add a simple contract validation helper for tests.
-- [ ] Validate mock tool inputs against contracts in tests.
-- [ ] Validate mock tool outputs against contracts in tests.
+- [x] Add root `contracts/` directory.
+- [x] Add `contracts/README.md` explaining contracts vs internal schemas.
+- [x] Add `contracts/tools/vision.mock_detect.schema.json`.
+- [x] Add `contracts/tools/audio.mock_transcribe.schema.json`.
+- [x] Add `contracts/tools/robot.mock_pick.schema.json`.
+- [x] Add `contracts/tools/robot.mock_place.schema.json`.
+- [x] Add shared error format contract.
+- [x] Add shared trace context contract.
+- [x] Add a simple contract validation helper for tests.
+- [x] Validate mock tool inputs against contracts in tests.
+- [x] Validate mock tool outputs against contracts in tests.
 
 ## Phase 1.3 - Manual runnable mock demo
 
