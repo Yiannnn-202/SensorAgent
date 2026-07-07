@@ -34,26 +34,26 @@ mock MCP/API request
 → structured log trace
 ```
 
-- [ ] Define minimal call/result schemas: `AgentRequest`, `AgentResponse`.
-- [ ] Define minimal tool schemas: `ToolSpec`, `ToolCall`, `ToolResult`, `ToolError`.
-- [ ] Define minimal skill schemas: `SkillSpec`, `SkillCall`, `SkillResult`.
-- [ ] Define minimal event/log schemas: `AgentEvent`, `LogRecord`, `TraceContext`.
-- [ ] Implement tool base protocol.
-- [ ] Implement skill base protocol.
-- [ ] Implement tool registry.
-- [ ] Implement skill registry.
-- [ ] Implement a mock vision tool, e.g. `vision.mock_detect`.
-- [ ] Implement a mock audio tool, e.g. `audio.mock_transcribe`.
-- [ ] Implement a mock robot tool, e.g. `robot.mock_pick` or `robot.mock_place`.
-- [ ] Implement one mock skill that calls at least one tool.
-- [ ] Add a minimal Agent runtime that can invoke a skill by name.
-- [ ] Expose the mock skill invocation through a minimal MCP/API-shaped entry point.
-- [ ] Return a structured result from the full chain.
-- [ ] Record one full task/tool-call log trace.
-- [ ] Add `tests/unit/` for schema, registry, and logger basics.
-- [ ] Add `tests/e2e/` for mock MCP/API -> Agent -> Skill -> Tool.
-- [ ] Add `tests/fixtures/` for mock image/audio/video/config/response inputs.
-- [ ] Add e2e assertions for final result, called tools, and generated logs.
+- [x] Define minimal call/result schemas: `AgentRequest`, `AgentResponse`.
+- [x] Define minimal tool schemas: `ToolSpec`, `ToolCall`, `ToolResult`.
+- [x] Define minimal skill schemas: `SkillSpec`, `SkillCall`, `SkillResult`.
+- [x] Define minimal event/log schemas: `LogRecord`, `TraceContext`.
+- [x] Implement tool base protocol.
+- [x] Implement skill base protocol.
+- [x] Implement tool registry.
+- [x] Implement skill registry.
+- [x] Implement a mock vision tool, e.g. `vision.mock_detect`.
+- [x] Implement a mock audio tool, e.g. `audio.mock_transcribe`.
+- [x] Implement a mock robot tool, e.g. `robot.mock_pick` or `robot.mock_place`.
+- [x] Implement one mock skill that calls at least one tool.
+- [x] Add a minimal Agent runtime that can invoke a skill by name.
+- [x] Expose the mock skill invocation through a minimal MCP/API-shaped entry point.
+- [x] Return a structured result from the full chain.
+- [x] Record one full task/tool-call log trace.
+- [x] Add `tests/unit/` for schema, registry, and logger basics.
+- [x] Add `tests/e2e/` for mock MCP/API -> Agent -> Skill -> Tool.
+- [x] Add `tests/fixtures/` directory structure for future mock inputs.
+- [x] Add e2e assertions for final result, called tools, and generated logs.
 - [ ] Add example configuration files only as needed for this mock chain.
 
 ## Phase 2 - Tool and skill framework
