@@ -1,0 +1,23 @@
+# Runtime logs
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Build outputs
+build/
+dist/
