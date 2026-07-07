@@ -23,8 +23,10 @@ These documents describe this repository and should be treated as the primary so
 | [sensoragent/en/architecture.md](sensoragent/en/architecture.md) | English architecture for this repository. |
 | [sensoragent/en/module-positioning.md](sensoragent/en/module-positioning.md) | English description of SensorAgent's role in the overall project. |
 | [sensoragent/en/logging.md](sensoragent/en/logging.md) | English logging policy and runtime log layout. |
+| [sensoragent/en/configuration.md](sensoragent/en/configuration.md) | English configuration loading and environment selection guide. |
 | [sensoragent/zh/architecture.md](sensoragent/zh/architecture.md) | Chinese architecture for this repository. |
 | [sensoragent/zh/logging.md](sensoragent/zh/logging.md) | Chinese logging policy and runtime log layout. |
+| [sensoragent/zh/configuration.md](sensoragent/zh/configuration.md) | Chinese configuration loading and environment selection guide. |
 
 ## Team-level docs
 

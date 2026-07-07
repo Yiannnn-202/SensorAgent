@@ -12,36 +12,16 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
   sys.path.insert(0, str(SRC))
 
-from sensoragent.agent import AgentRuntime
-from sensoragent.logger import TaskLogger
+from sensoragent.agent import build_agent_from_config
 from sensoragent.mcp import MockMcpEndpoint
-from sensoragent.skills import SkillRegistry, SkillRuntime
-from sensoragent.skills.mock import MockPickAndPlaceSkill
-from sensoragent.tools import ToolRegistry, ToolRuntime
-from sensoragent.tools.audio.mock import MockTranscribeTool
-from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
-from sensoragent.tools.vision.mock import MockDetectTool
 
 
 class MockPipelineTest(TestCase):
   def test_mock_mcp_to_skill_to_tool_pipeline(self) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
       log_path = Path(temp_dir) / "task.jsonl"
-      logger = TaskLogger(log_path)
-
-      tool_registry = ToolRegistry()
-      tool_registry.register(MockDetectTool())
-      tool_registry.register(MockTranscribeTool())
-      tool_registry.register(MockPickTool())
-      tool_registry.register(MockPlaceTool())
-      tool_runtime = ToolRuntime(tool_registry, logger)
-
-      skill_registry = SkillRegistry()
-      skill_registry.register(MockPickAndPlaceSkill())
-      skill_runtime = SkillRuntime(skill_registry, tool_runtime, logger)
-
-      agent = AgentRuntime(skill_runtime, logger)
-      endpoint = MockMcpEndpoint(agent)
+      bundle = build_agent_from_config(ROOT / "configs" / "mock.yaml", log_path=log_path)
+      endpoint = MockMcpEndpoint(bundle.agent)
 
       response = endpoint.call_skill(
         "mock.pick_and_place",
@@ -53,7 +33,7 @@ class MockPipelineTest(TestCase):
       self.assertEqual(response.result["object"]["label"], "silver roller")
       self.assertEqual(response.result["place"]["target"], "third bin cell")
 
-      events = list(logger.events())
+      events = list(bundle.logger.events())
       self.assertIn("agent_request_started", events)
       self.assertIn("skill_call_started", events)
       self.assertIn("tool_call_started", events)
@@ -63,7 +43,7 @@ class MockPipelineTest(TestCase):
 
       called_tools = [
         record.payload["tool"]
-        for record in logger.records
+        for record in bundle.logger.records
         if record.event == "tool_call_started"
       ]
       self.assertEqual(
