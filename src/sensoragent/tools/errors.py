@@ -15,3 +15,11 @@ class ToolNotFoundError(ToolError):
 
 class ToolExecutionError(ToolError):
   """Raised when a tool fails unexpectedly during execution."""
+
+
+class ToolValidationError(ToolError):
+  """Raised when tool input or output does not match its contract."""
+
+
+class ToolTimeoutError(ToolError):
+  """Raised when a tool invocation exceeds its timeout."""

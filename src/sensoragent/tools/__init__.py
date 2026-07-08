@@ -6,6 +6,8 @@ from sensoragent.tools.errors import (
   ToolExecutionError,
   ToolNotFoundError,
   ToolRegistrationError,
+  ToolTimeoutError,
+  ToolValidationError,
 )
 from sensoragent.tools.runtime import ToolRuntime
 
@@ -17,4 +19,6 @@ __all__ = [
   "ToolRegistrationError",
   "ToolRegistry",
   "ToolRuntime",
+  "ToolTimeoutError",
+  "ToolValidationError",
 ]

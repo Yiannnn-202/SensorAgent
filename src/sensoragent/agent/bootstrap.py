@@ -8,6 +8,7 @@ from typing import Callable
 
 from sensoragent.agent.runtime import AgentRuntime
 from sensoragent.config import SensorAgentConfig, load_config, resolve_config_path
+from sensoragent.contracts import ContractValidator
 from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.mock import MockPickAndPlaceSkill
@@ -56,7 +57,7 @@ def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> Agen
       raise KeyError(f"Configured tool is not available: {tool_name}") from exc
     tool_registry.register(tool_factory())
 
-  tool_runtime = ToolRuntime(tool_registry, logger)
+  tool_runtime = ToolRuntime(tool_registry, logger, ContractValidator())
 
   skill_registry = SkillRegistry()
   for skill_name in config.skills.enabled:

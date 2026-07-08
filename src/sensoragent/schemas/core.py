@@ -52,6 +52,11 @@ class ToolSpec:
 
   name: str
   description: str
+  version: str = "0.1.0"
+  tags: tuple[str, ...] = ()
+  enabled: bool = True
+  timeout_seconds: float | None = None
+  max_retries: int = 0
 
 
 @dataclass(frozen=True)
@@ -79,6 +84,9 @@ class SkillSpec:
 
   name: str
   description: str
+  version: str = "0.1.0"
+  tags: tuple[str, ...] = ()
+  enabled: bool = True
 
 
 @dataclass(frozen=True)
