@@ -121,3 +121,45 @@ The first long phase of this project is to build the generic agent framework:
 7. Minimal API / CLI for invoking tasks.
 
 Task-specific competition workflows should be added after the framework is stable.
+
+## Current Implementation Status
+
+SensorAgent currently has a working mock execution stack:
+
+```text
+CLI / mock MCP entry
+→ AgentRuntime
+→ planner
+→ ActionList / Skill / DecisionTree runtime
+→ ToolRuntime
+→ mock tools
+→ structured logs
+```
+
+Implemented capabilities include:
+
+```text
+configuration-driven mock runtime assembly
+tool and skill registries
+tool contracts and runtime validation
+typed tool/skill errors
+tool timeout and retry support
+ActionList runtime
+DecisionTree runtime
+task lifecycle state
+in-memory task store
+in-memory event stream
+DeepSeek/OpenAI-compatible LLM planner
+CLI mock pipeline and run-task commands
+```
+
+The LLM planner is intentionally narrow. It converts natural-language input into an `AgentPlan`:
+
+```text
+target_kind
+target
+input
+reason
+```
+
+It does not directly call low-level tools. Runtime code remains responsible for validating contracts, executing workflows, logging events, and returning structured results.

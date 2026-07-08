@@ -32,9 +32,11 @@ Expected files:
 
 ```text
 runtime.py       # Main Agent runtime loop
+bootstrap.py     # Build runtime objects from config
 planner.py       # Planner interface and task planning logic
-executor.py      # Workflow/skill/tool execution orchestration
-session.py       # Conversation or task session state
+llm_planner.py   # LLM-backed planner implementation
+selector.py      # Workflow selector interface
+prompts/         # Prompt templates for future/active LLM planners
 errors.py        # Agent-level exceptions
 ```
 
@@ -50,6 +52,7 @@ client.py        # MCP client for external tools/agents
 contracts.py     # Tool/resource contract definitions
 registry.py      # MCP capability discovery and registry helpers
 errors.py        # MCP-related exceptions
+mock.py          # Local MCP/API-shaped mock entry point
 ```
 
 ## `skills/`
@@ -137,9 +140,10 @@ Task-specific execution policies.
 Expected files:
 
 ```text
-base.py          # Workflow base class or protocol
-runtime.py       # Workflow execution runtime
-registry.py      # Workflow registration and selection
+errors.py        # Workflow-related exceptions
+actionlists/     # Linear workflows
+decision_trees/  # Branching workflows
+registry.py      # Future workflow registration and selection
 errors.py        # Workflow-related exceptions
 ```
 
@@ -152,6 +156,7 @@ Expected files:
 ```text
 base.py          # ActionList definition
 runtime.py       # Sequential action execution
+mock.py          # Mock pick-and-place ActionList
 industrial_pick_place.py
 ```
 
@@ -164,6 +169,7 @@ Expected files:
 ```text
 base.py          # Decision tree node definitions
 runtime.py       # Decision tree execution
+mock.py          # Mock retry/not-found DecisionTrees
 industrial_pick_place.py
 ```
 
@@ -190,10 +196,10 @@ Agent runtime state, task context, and event buffers.
 Expected files:
 
 ```text
-context.py       # Current task/session context
+task.py          # TaskState and lifecycle status
 events.py        # Agent event model and buffers
-memory.py        # Short-term task memory
-store.py         # Runtime state store
+store.py         # In-memory task store
+memory.py        # Future short-term task memory
 ```
 
 ## `integrations/`
@@ -207,6 +213,7 @@ base.py          # Integration client protocol
 http.py          # HTTP API client helpers
 websocket.py     # WebSocket client helpers
 mcp.py           # MCP integration client helpers
+llm.py           # OpenAI-compatible LLM client
 vision.py        # Vision-agent integration
 audio.py         # Audio-agent integration
 robot.py         # Robot-runtime integration
@@ -219,12 +226,9 @@ Shared typed data structures used across the package.
 Expected files:
 
 ```text
-task.py          # Task request/result schemas
-tool.py          # Tool call/result schemas
-skill.py         # Skill schemas
-workflow.py      # Workflow schemas
-event.py         # Event/log schemas
-common.py        # Shared primitives
+core.py          # Agent/tool/skill/log schemas
+workflow.py      # ActionList and DecisionTree schemas
+plan.py          # AgentPlan and planner target schemas
 ```
 
 ## `config/`

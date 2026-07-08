@@ -121,3 +121,45 @@ tool 输入输出
 7. 最小 API / CLI 任务入口。
 
 等框架稳定后，再逐步加入具体赛题 workflow。
+
+## 当前实现状态
+
+SensorAgent 目前已经具备一套可运行的 mock 执行栈：
+
+```text
+CLI / mock MCP 入口
+→ AgentRuntime
+→ planner
+→ ActionList / Skill / DecisionTree runtime
+→ ToolRuntime
+→ mock tools
+→ 结构化日志
+```
+
+当前已实现：
+
+```text
+配置驱动的 mock runtime 装配
+tool / skill registry
+tool contracts 与运行时校验
+typed tool / skill errors
+tool timeout / retry
+ActionList runtime
+DecisionTree runtime
+任务生命周期状态
+内存任务存储
+内存事件流
+DeepSeek / OpenAI-compatible LLM planner
+CLI mock pipeline 与 run-task 命令
+```
+
+当前 LLM planner 的职责刻意保持很窄：它只把自然语言转换成 `AgentPlan`：
+
+```text
+target_kind
+target
+input
+reason
+```
+
+它不直接调用底层 tools。workflow 执行、contracts 校验、日志记录和结构化返回仍由 runtime 代码负责。

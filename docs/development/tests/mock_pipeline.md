@@ -103,6 +103,33 @@ Expected behavior:
 5. A JSONL task log is written under logs/tasks/.
 ```
 
+## Run through the planner lifecycle
+
+The `run-task` command exercises the task lifecycle and planner path.
+
+Static planner:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m sensoragent.services.cli.main run-task "put the silver roller into the third bin cell" --config configs\mock.yaml --planner static --object-query "silver roller" --target "third bin cell"
+```
+
+DeepSeek-backed LLM planner:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m sensoragent.services.cli.main run-task "put the silver roller into the third bin cell" --config configs\mock.yaml --planner llm
+```
+
+The LLM planner requires a local `.env` with:
+
+```env
+SENSORAGENT_LLM_PROVIDER=deepseek
+SENSORAGENT_LLM_BASE_URL=https://api.deepseek.com
+SENSORAGENT_LLM_API_KEY=...
+SENSORAGENT_LLM_MODEL=deepseek-v4-flash
+```
+
 ## Logs
 
 Manual CLI runs write task logs under:
@@ -152,8 +179,6 @@ real ASR/TTS services
 real robot execution
 Isaac Sim
 hardware safety
-LLM planning
-ActionList or DecisionTree workflows
 ```
 
-Those capabilities are added in later phases.
+The CLI and unit tests now cover planner lifecycle, ActionList, and DecisionTree mock paths. They still do not cover real external modules or real MCP/HTTP/WebSocket transport.
