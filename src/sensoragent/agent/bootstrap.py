@@ -9,6 +9,7 @@ from typing import Callable
 from sensoragent.agent.runtime import AgentRuntime
 from sensoragent.config import SensorAgentConfig, load_config, resolve_config_path
 from sensoragent.contracts import ContractValidator
+from sensoragent.integrations import OpenAICompatibleClient, load_llm_config_from_env
 from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.mock import MockPickAndPlaceSkill
@@ -19,6 +20,7 @@ from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import ActionListRuntime, build_mock_pick_place_actionlist
 from sensoragent.workflows import DecisionTreeRuntime
+from sensoragent.agent.llm_planner import LLMPlanner
 
 
 ToolFactory = Callable[[], object]
@@ -55,7 +57,12 @@ class AgentBundle:
   event_stream: InMemoryEventStream
 
 
-def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> AgentBundle:
+def build_agent(
+  config: SensorAgentConfig,
+  log_path: Path | None = None,
+  *,
+  planner_mode: str = "static",
+) -> AgentBundle:
   """Build SensorAgent runtime objects from a loaded config."""
 
   logger = TaskLogger(log_path)
@@ -93,6 +100,11 @@ def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> Agen
   decision_trees: dict[str, object] = {}
   task_store = InMemoryTaskStore()
   event_stream = InMemoryEventStream()
+  planner = None
+  if planner_mode == "llm":
+    planner = LLMPlanner(OpenAICompatibleClient(load_llm_config_from_env()))
+  elif planner_mode != "static":
+    raise ValueError(f"Unknown planner mode: {planner_mode}")
   agent = AgentRuntime(
     skill_runtime,
     logger,
@@ -102,6 +114,7 @@ def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> Agen
     decision_trees=decision_trees,
     task_store=task_store,
     event_stream=event_stream,
+    planner=planner,
   )
 
   return AgentBundle(
@@ -120,17 +133,27 @@ def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> Agen
   )
 
 
-def build_agent_from_config(path: str | Path, log_path: Path | None = None) -> AgentBundle:
+def build_agent_from_config(
+  path: str | Path,
+  log_path: Path | None = None,
+  *,
+  planner_mode: str = "static",
+) -> AgentBundle:
   """Load a YAML config and build SensorAgent runtime objects."""
 
-  return build_agent(load_config(path), log_path=log_path)
+  return build_agent(load_config(path), log_path=log_path, planner_mode=planner_mode)
 
 
 def build_agent_from_env(
   explicit_path: str | Path | None = None,
   *,
   log_path: Path | None = None,
+  planner_mode: str = "static",
 ) -> AgentBundle:
   """Resolve configuration from arguments/environment and build SensorAgent."""
 
-  return build_agent_from_config(resolve_config_path(explicit_path), log_path=log_path)
+  return build_agent_from_config(
+    resolve_config_path(explicit_path),
+    log_path=log_path,
+    planner_mode=planner_mode,
+  )

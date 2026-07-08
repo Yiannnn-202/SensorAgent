@@ -10,6 +10,24 @@ DEFAULT_CONFIG_DIR = Path("configs")
 DEFAULT_ENV = "mock"
 
 
+def load_dotenv(path: str | Path = ".env", *, environ: dict[str, str] | None = None) -> None:
+  """Load simple KEY=VALUE pairs from a .env file into the environment."""
+
+  env = environ if environ is not None else os.environ
+  env_path = Path(path)
+  if not env_path.exists():
+    return
+  for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+      continue
+    key, value = line.split("=", 1)
+    key = key.strip()
+    value = value.strip().strip('"').strip("'")
+    if key and key not in env:
+      env[key] = value
+
+
 def resolve_config_path(
   explicit_path: str | Path | None = None,
   *,

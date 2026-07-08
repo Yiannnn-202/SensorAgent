@@ -73,6 +73,28 @@ configs/mock.yaml
 configs/competition.yaml
 ```
 
+## Local environment file
+
+Secrets and local-only overrides should live in `.env`. Do not commit `.env`.
+
+Use `.env.example` as the template:
+
+```env
+SENSORAGENT_ENV=mock
+SENSORAGENT_CONFIG=configs/mock.yaml
+
+SENSORAGENT_LLM_PROVIDER=deepseek
+SENSORAGENT_LLM_BASE_URL=https://api.deepseek.com
+SENSORAGENT_LLM_API_KEY=replace-me
+SENSORAGENT_LLM_MODEL=deepseek-v4-flash
+```
+
+The current recommended DeepSeek planner model is:
+
+```text
+deepseek-v4-flash
+```
+
 ## Why this exists
 
 The Agent framework should not hard-code which tools and skills are active. Different environments should be assembled through config:

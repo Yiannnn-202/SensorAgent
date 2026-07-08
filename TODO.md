@@ -159,6 +159,8 @@ Goal: evolve AgentRuntime from single-skill dispatch into task orchestration.
 - [x] Add workflow selector interface.
 - [x] Add planner interface.
 - [x] Add prompt placeholder structure for future LLM planner.
+- [x] Add DeepSeek/OpenAI-compatible LLM planner implementation.
+- [x] Add CLI planner mode for static or LLM planning.
 - [x] Add task lifecycle states: pending, running, succeeded, failed, cancelled.
 - [x] Add cancellation hook.
 - [x] Add event stream abstraction.

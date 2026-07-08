@@ -6,6 +6,7 @@ from sensoragent.agent.bootstrap import (
   build_agent_from_config,
   build_agent_from_env,
 )
+from sensoragent.agent.llm_planner import LLMPlanner
 from sensoragent.agent.planner import Planner, StaticPlanner
 from sensoragent.agent.runtime import AgentRuntime
 from sensoragent.agent.selector import IdentityWorkflowSelector, WorkflowSelector
@@ -14,6 +15,7 @@ __all__ = [
   "AgentBundle",
   "AgentRuntime",
   "IdentityWorkflowSelector",
+  "LLMPlanner",
   "Planner",
   "StaticPlanner",
   "WorkflowSelector",

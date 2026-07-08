@@ -95,6 +95,20 @@ Or use the helper script:
 
 By default, manual runs write JSONL task logs under `logs\tasks\`.
 
+You can also run through the Agent task lifecycle and planner:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m sensoragent.services.cli.main run-task "put the silver roller into the third bin cell" --config configs\mock.yaml --planner static --object-query "silver roller" --target "third bin cell"
+```
+
+To try the DeepSeek-backed planner, create a local `.env` from `.env.example`, set `SENSORAGENT_LLM_API_KEY`, then run:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m sensoragent.services.cli.main run-task "put the silver roller into the third bin cell" --config configs\mock.yaml --planner llm
+```
+
 ## Development Focus
 
 The current development phase focuses on building the generic Agent framework:

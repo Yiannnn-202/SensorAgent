@@ -73,6 +73,28 @@ configs/mock.yaml
 configs/competition.yaml
 ```
 
+## 本地环境文件
+
+密钥和本地覆盖配置应放在 `.env` 中。不要提交 `.env`。
+
+使用 `.env.example` 作为模板：
+
+```env
+SENSORAGENT_ENV=mock
+SENSORAGENT_CONFIG=configs/mock.yaml
+
+SENSORAGENT_LLM_PROVIDER=deepseek
+SENSORAGENT_LLM_BASE_URL=https://api.deepseek.com
+SENSORAGENT_LLM_API_KEY=replace-me
+SENSORAGENT_LLM_MODEL=deepseek-v4-flash
+```
+
+当前推荐的 DeepSeek planner 模型是：
+
+```text
+deepseek-v4-flash
+```
+
 ## 为什么需要配置
 
 Agent 框架不应该把启用哪些 tools 和 skills 写死在代码里。不同环境应该通过配置装配：

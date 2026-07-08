@@ -1,6 +1,6 @@
 """Runtime configuration loading."""
 
-from sensoragent.config.env import resolve_config_path
+from sensoragent.config.env import load_dotenv, resolve_config_path
 from sensoragent.config.loader import load_config
 from sensoragent.config.schema import (
   AgentConfig,
@@ -16,6 +16,7 @@ __all__ = [
   "SensorAgentConfig",
   "SkillsConfig",
   "ToolsConfig",
+  "load_dotenv",
   "load_config",
   "resolve_config_path",
 ]
