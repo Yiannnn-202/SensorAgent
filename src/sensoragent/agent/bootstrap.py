@@ -12,11 +12,13 @@ from sensoragent.contracts import ContractValidator
 from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.mock import MockPickAndPlaceSkill
+from sensoragent.state import InMemoryEventStream, InMemoryTaskStore
 from sensoragent.tools import ToolRegistry, ToolRuntime
 from sensoragent.tools.audio.mock import MockTranscribeTool
 from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import ActionListRuntime, build_mock_pick_place_actionlist
+from sensoragent.workflows import DecisionTreeRuntime
 
 
 ToolFactory = Callable[[], object]
@@ -47,6 +49,10 @@ class AgentBundle:
   skill_runtime: SkillRuntime
   actionlist_runtime: ActionListRuntime
   actionlists: dict[str, object]
+  decision_tree_runtime: DecisionTreeRuntime
+  decision_trees: dict[str, object]
+  task_store: InMemoryTaskStore
+  event_stream: InMemoryEventStream
 
 
 def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> AgentBundle:
@@ -77,11 +83,25 @@ def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> Agen
   actionlists = {
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
   }
+  decision_tree_runtime = DecisionTreeRuntime(
+    tool_runtime,
+    skill_runtime,
+    actionlist_runtime,
+    actionlists,
+    logger,
+  )
+  decision_trees: dict[str, object] = {}
+  task_store = InMemoryTaskStore()
+  event_stream = InMemoryEventStream()
   agent = AgentRuntime(
     skill_runtime,
     logger,
     actionlist_runtime=actionlist_runtime,
     actionlists=actionlists,
+    decision_tree_runtime=decision_tree_runtime,
+    decision_trees=decision_trees,
+    task_store=task_store,
+    event_stream=event_stream,
   )
 
   return AgentBundle(
@@ -93,6 +113,10 @@ def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> Agen
     skill_runtime=skill_runtime,
     actionlist_runtime=actionlist_runtime,
     actionlists=actionlists,
+    decision_tree_runtime=decision_tree_runtime,
+    decision_trees=decision_trees,
+    task_store=task_store,
+    event_stream=event_stream,
   )
 
 

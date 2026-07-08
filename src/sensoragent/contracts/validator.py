@@ -56,7 +56,11 @@ def validate_schema(value: Any, schema: dict[str, Any], path: str = "$") -> None
 class ContractValidator:
   """Loads tool contracts and validates tool input/output payloads."""
 
-  def __init__(self, contract_root: Path = Path("contracts"), require_contract: bool = False) -> None:
+  def __init__(
+    self,
+    contract_root: Path = Path("contracts"),
+    require_contract: bool = False,
+  ) -> None:
     self._contract_root = contract_root
     self._require_contract = require_contract
 

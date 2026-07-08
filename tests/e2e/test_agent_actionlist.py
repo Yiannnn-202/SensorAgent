@@ -53,4 +53,4 @@ class AgentActionListTest(TestCase):
     )
 
     self.assertFalse(response.success)
-    self.assertIn("cannot specify both skill and actionlist", response.error or "")
+    self.assertIn("cannot specify more than one execution target", response.error or "")

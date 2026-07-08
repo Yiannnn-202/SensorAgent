@@ -63,3 +63,82 @@ class ActionListResult:
   steps: list[ActionStepResult]
   output: dict | None = None
   error: str | None = None
+
+
+class DecisionNodeKind(StrEnum):
+  """Supported decision tree node kinds."""
+
+  TOOL = "tool"
+  SKILL = "skill"
+  ACTIONLIST = "actionlist"
+  CONDITION = "condition"
+  TERMINAL = "terminal"
+
+
+class ConditionOperator(StrEnum):
+  """Supported condition operators."""
+
+  EXISTS = "exists"
+  EQUALS = "equals"
+  TRUTHY = "truthy"
+
+
+@dataclass(frozen=True)
+class DecisionCondition:
+  """Condition evaluated against decision tree context."""
+
+  path: str
+  operator: ConditionOperator
+  value: object | None = None
+
+
+@dataclass(frozen=True)
+class DecisionNode:
+  """One executable or branching node inside a DecisionTree."""
+
+  name: str
+  kind: DecisionNodeKind
+  target: str | None = None
+  input: dict = field(default_factory=dict)
+  condition: DecisionCondition | None = None
+  save_as: str | None = None
+  on_success: str | None = None
+  on_failure: str | None = None
+  max_retries: int = 0
+  terminal_success: bool | None = None
+  description: str = ""
+
+
+@dataclass(frozen=True)
+class DecisionTree:
+  """Branching workflow made of decision nodes."""
+
+  name: str
+  start: str
+  nodes: list[DecisionNode]
+  description: str = ""
+  version: str = "0.1.0"
+  inputs: dict[str, str] = field(default_factory=dict)
+  tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class DecisionNodeResult:
+  """Execution result for a single DecisionNode."""
+
+  node: str
+  success: bool
+  attempts: int = 1
+  output: dict | None = None
+  error: str | None = None
+
+
+@dataclass(frozen=True)
+class DecisionTreeResult:
+  """Execution result for a DecisionTree."""
+
+  decision_tree: str
+  success: bool
+  nodes: list[DecisionNodeResult]
+  output: dict | None = None
+  error: str | None = None

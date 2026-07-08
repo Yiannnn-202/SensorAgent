@@ -31,6 +31,7 @@ class AgentRequest:
   input: dict
   skill: str | None = None
   actionlist: str | None = None
+  decision_tree: str | None = None
   trace: TraceContext = field(default_factory=TraceContext)
 
 

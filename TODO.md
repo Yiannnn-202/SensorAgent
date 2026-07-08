@@ -141,29 +141,29 @@ Goal: move fixed multi-step task procedures out of skills and into workflows.
 
 Goal: support branching task policies with retries and recovery.
 
-- [ ] Define DecisionTree node schema.
-- [ ] Define condition schema.
-- [ ] Implement branch evaluation.
-- [ ] Implement success/failure branches.
-- [ ] Implement retry counters.
-- [ ] Implement recoverable vs terminal failure states.
-- [ ] Add mock failure tools for testing.
-- [ ] Add e2e test for retry after mock pick failure.
-- [ ] Add e2e test for branch when object is not found.
+- [x] Define DecisionTree node schema.
+- [x] Define condition schema.
+- [x] Implement branch evaluation.
+- [x] Implement success/failure branches.
+- [x] Implement retry counters.
+- [x] Implement recoverable vs terminal failure states.
+- [x] Add mock failure tools for testing.
+- [x] Add e2e test for retry after mock pick failure.
+- [x] Add e2e test for branch when object is not found.
 
 ## Phase 5 - Agent runtime expansion
 
 Goal: evolve AgentRuntime from single-skill dispatch into task orchestration.
 
-- [ ] Add task/session state object.
-- [ ] Add workflow selector interface.
-- [ ] Add planner interface.
-- [ ] Add prompt placeholder structure for future LLM planner.
-- [ ] Add task lifecycle states: pending, running, succeeded, failed, cancelled.
-- [ ] Add cancellation hook.
-- [ ] Add event stream abstraction.
-- [ ] Add task result persistence hook.
-- [ ] Add end-to-end test for task lifecycle.
+- [x] Add task/session state object.
+- [x] Add workflow selector interface.
+- [x] Add planner interface.
+- [x] Add prompt placeholder structure for future LLM planner.
+- [x] Add task lifecycle states: pending, running, succeeded, failed, cancelled.
+- [x] Add cancellation hook.
+- [x] Add event stream abstraction.
+- [x] Add task result persistence hook.
+- [x] Add end-to-end test for task lifecycle.
 
 ## Phase 6 - API, WebSocket, and MCP service entry points
 

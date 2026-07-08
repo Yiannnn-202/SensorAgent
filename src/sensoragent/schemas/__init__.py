@@ -12,12 +12,20 @@ from sensoragent.schemas.core import (
   ToolSpec,
   TraceContext,
 )
+from sensoragent.schemas.plan import AgentPlan, PlanTargetKind
 from sensoragent.schemas.workflow import (
   ActionList,
   ActionListResult,
   ActionStep,
   ActionStepKind,
   ActionStepResult,
+  ConditionOperator,
+  DecisionCondition,
+  DecisionNode,
+  DecisionNodeKind,
+  DecisionNodeResult,
+  DecisionTree,
+  DecisionTreeResult,
 )
 
 __all__ = [
@@ -26,9 +34,18 @@ __all__ = [
   "ActionStep",
   "ActionStepKind",
   "ActionStepResult",
+  "AgentPlan",
+  "ConditionOperator",
+  "DecisionCondition",
+  "DecisionNode",
+  "DecisionNodeKind",
+  "DecisionNodeResult",
+  "DecisionTree",
+  "DecisionTreeResult",
   "AgentRequest",
   "AgentResponse",
   "LogRecord",
+  "PlanTargetKind",
   "SkillCall",
   "SkillResult",
   "SkillSpec",
