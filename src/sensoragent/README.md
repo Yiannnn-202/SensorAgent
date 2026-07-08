@@ -33,12 +33,14 @@ Expected files:
 ```text
 runtime.py       # Main Agent runtime loop
 bootstrap.py     # Build runtime objects from config
-planner.py       # Planner interface and task planning logic
-llm_planner.py   # LLM-backed planner implementation
+planner.py       # Planner protocol and deterministic StaticPlanner baseline
+llm_planner.py   # DeepSeek/OpenAI-compatible LLMPlanner implementation
 selector.py      # Workflow selector interface
 prompts/         # Prompt templates for future/active LLM planners
 errors.py        # Agent-level exceptions
 ```
+
+`planner.py` defines what a planner is and provides the non-LLM baseline. `llm_planner.py` is one concrete planner implementation that calls an OpenAI-compatible LLM endpoint and converts model JSON into an `AgentPlan`.
 
 ## `mcp/`
 
