@@ -1,6 +1,6 @@
-﻿# Robotic Arm Group
+# Robotic Arm Group
 
-> Group doc. Robot-side runtime for manipulators: motion planning, force-controlled grasping, embodied manipulation. Cross-cutting with [ECOS](ecos-2607.md) (which consumes the arm interface), [GECA](geca-2607.md) (which calls the arm through ECOS over MCP), and the [Robotic Base](robotic-base-2607.md) (mobile manipulation). See [../../team/zh/general-2607.md](../../team/zh/general-2607.md) for system-level context.
+> Group doc. Robot-side runtime for manipulators: motion planning, force-controlled grasping, embodied manipulation. Cross-cutting with [ECOS](ecos.md) (which consumes the arm interface), [GECA](geca.md) (which calls the arm through ECOS over MCP), and the [Robotic Base](base.md) (mobile manipulation). See [../team/general_cn.md](../team/general_cn.md) for system-level context.
 
 > **Version Lineage:** Radish (2602) -> **Aether (2607)**
 
@@ -117,7 +117,7 @@ In text form, the flow is:
 
 ##### Arm interface (vendor-agnostic)
 
-The only surface ECOS and GECA see. Covers grasp / move_to / move_joint commands on the input side and joint state, torque, and grasp pose on the feedback side. Exposed as MCP tools (`grasp`, `move_to`, `move_joint`, `get_arm_state`, `get_grasp_pose`), so the agent never talks to MoveIt or drivers directly. The contract is documented, versioned, and change-controlled per the inter-group rules in [../../team/zh/general-2607.md](../../team/zh/general-2607.md). The interface is identical in sim and on hardware.
+The only surface ECOS and GECA see. Covers grasp / move_to / move_joint commands on the input side and joint state, torque, and grasp pose on the feedback side. Exposed as MCP tools (`grasp`, `move_to`, `move_joint`, `get_arm_state`, `get_grasp_pose`), so the agent never talks to MoveIt or drivers directly. The contract is documented, versioned, and change-controlled per the inter-group rules in [../team/general_cn.md](../team/general_cn.md). The interface is identical in sim and on hardware.
 
 ##### Arm adapter (Realman 65-b first)
 
@@ -125,7 +125,7 @@ The per-arm implementation behind the interface. The Realman 65-b adapter is the
 
 ##### MoveIt 2 spine
 
-The internal motion layer. OMPL for planning, IK for joint solutions, `tf2` for kinematics, `rosbag2` for replay. ROS 2 distro differences (Humble on 22.04, Jazzy on 24.04) are isolated behind adapter layers, per [ecos-2607.md](ecos-2607.md). ROS specifics never leak north of the arm interface.
+The internal motion layer. OMPL for planning, IK for joint solutions, `tf2` for kinematics, `rosbag2` for replay. ROS 2 distro differences (Humble on 22.04, Jazzy on 24.04) are isolated behind adapter layers, per [ecos.md](ecos.md). ROS specifics never leak north of the arm interface.
 
 ##### Force / admittance control
 
@@ -339,7 +339,7 @@ flowchart LR
   EVAL -.regression vs Step 0/1.-> BASE["baseline grasp\n(Step 0/1)"]
 ```
 
-Sim rollouts from Isaac Sim / Lab and real-arm episodes from Step 2 both feed policy training (VLA / RL / BC candidates); the resulting policy runs through an eval suite of objects, poses, and mission fragments, then deploys to the Jetson Orin for a latency check before going live on the arm. The policy has to beat the Step 0 / Step 1 grasp baselines on the same eval suite - if it doesn't, the baseline ships and the policy keeps training. Compute mapping (see [../../team/zh/general-2607.md](../../team/zh/general-2607.md)): VLA fine-tune and concurrent sim run on the 3x P40 server; heavy RL/DRL goes on the 2x 3090 workstation.
+Sim rollouts from Isaac Sim / Lab and real-arm episodes from Step 2 both feed policy training (VLA / RL / BC candidates); the resulting policy runs through an eval suite of objects, poses, and mission fragments, then deploys to the Jetson Orin for a latency check before going live on the arm. The policy has to beat the Step 0 / Step 1 grasp baselines on the same eval suite - if it doesn't, the baseline ships and the policy keeps training. Compute mapping (see [../team/general_cn.md](../team/general_cn.md)): VLA fine-tune and concurrent sim run on the 3x P40 server; heavy RL/DRL goes on the 2x 3090 workstation.
 
 Why after data + missions: the policy needs Step 2's dataset to train and Step 3's missions as the things it learns to do. Landing it earlier would mean training on a dataset that doesn't exist yet, against tasks the arm can't yet perform.
 

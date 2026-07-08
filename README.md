@@ -62,9 +62,38 @@ Start from the documentation index:
 
 Key SensorAgent documents:
 
-- [Architecture](docs/sensoragent/en/architecture.md)
-- [Module positioning](docs/sensoragent/en/module-positioning.md)
-- [中文架构](docs/sensoragent/zh/architecture.md)
+- [Architecture](docs/sensoragent/architecture.md)
+- [Module positioning](docs/sensoragent/positioning.md)
+- [中文架构](docs/sensoragent/architecture_cn.md)
+
+## Run the Mock Pipeline
+
+The current Phase 1 demo runs a local mock Agent chain:
+
+```text
+CLI
+→ AgentRuntime
+→ mock.pick_and_place
+→ vision.mock_detect
+→ robot.mock_pick
+→ robot.mock_place
+→ structured task log
+```
+
+From the repository root:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m sensoragent.services.cli.main mock-pick-place --config configs\mock.yaml --object-query "silver roller" --target "third bin cell"
+```
+
+Or use the helper script:
+
+```powershell
+.\scripts\run_mock_pipeline.ps1 --object-query "silver roller" --target "third bin cell"
+```
+
+By default, manual runs write JSONL task logs under `logs\tasks\`.
 
 ## Development Focus
 

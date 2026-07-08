@@ -1,17 +1,12 @@
 # Documentation Index
 
-The documentation is organized by scope first, then by language.
+Documentation is organized by scope. English is the preferred original language. Chinese translations or summaries use the same path and base name with a `_cn.md` suffix.
 
 ```text
 docs/
-├── sensoragent/    # SensorAgent-specific documentation
-│   ├── en/         # English project docs
-│   └── zh/         # Chinese project docs
-├── team/           # Team-level conventions and system overview
-│   └── zh/
-└── modules/        # Documents for related modules in the broader system
-    ├── en/
-    └── zh/
+├── sensoragent/   # SensorAgent-specific documentation
+├── team/          # Team-level conventions and overview
+└── modules/       # Related modules in the broader system
 ```
 
 ## SensorAgent project docs
@@ -20,13 +15,13 @@ These documents describe this repository and should be treated as the primary so
 
 | Document | Description |
 |---|---|
-| [sensoragent/en/architecture.md](sensoragent/en/architecture.md) | English architecture for this repository. |
-| [sensoragent/en/module-positioning.md](sensoragent/en/module-positioning.md) | English description of SensorAgent's role in the overall project. |
-| [sensoragent/en/logging.md](sensoragent/en/logging.md) | English logging policy and runtime log layout. |
-| [sensoragent/en/configuration.md](sensoragent/en/configuration.md) | English configuration loading and environment selection guide. |
-| [sensoragent/zh/architecture.md](sensoragent/zh/architecture.md) | Chinese architecture for this repository. |
-| [sensoragent/zh/logging.md](sensoragent/zh/logging.md) | Chinese logging policy and runtime log layout. |
-| [sensoragent/zh/configuration.md](sensoragent/zh/configuration.md) | Chinese configuration loading and environment selection guide. |
+| [sensoragent/architecture.md](sensoragent/architecture.md) | Architecture for this repository. |
+| [sensoragent/architecture_cn.md](sensoragent/architecture_cn.md) | Chinese architecture for this repository. |
+| [sensoragent/positioning.md](sensoragent/positioning.md) | SensorAgent's role in the overall project. |
+| [sensoragent/configuration.md](sensoragent/configuration.md) | Configuration loading and environment selection. |
+| [sensoragent/configuration_cn.md](sensoragent/configuration_cn.md) | Chinese configuration guide. |
+| [sensoragent/logging.md](sensoragent/logging.md) | Logging policy and runtime log layout. |
+| [sensoragent/logging_cn.md](sensoragent/logging_cn.md) | Chinese logging guide. |
 
 ## Team-level docs
 
@@ -34,8 +29,17 @@ These documents describe team-wide conventions and the broader Aether 2607 archi
 
 | Document | Description |
 |---|---|
-| [team/zh/general-2607.md](team/zh/general-2607.md) | Chinese summary of the team-level architecture and project plan. |
-| [team/zh/convention.md](team/zh/convention.md) | Team code, documentation, CMake, and Git conventions. |
+| [team/convention.md](team/convention.md) | Repository-wide code, documentation, CMake, and Git conventions. |
+| [team/convention_cn.md](team/convention_cn.md) | Chinese conventions document. |
+| [team/general_cn.md](team/general_cn.md) | Chinese summary of the team-level architecture and project plan. |
+
+## Development and test docs
+
+These documents describe how specific parts of the implementation are verified.
+
+| Document | Description |
+|---|---|
+| [development/tests/mock_pipeline.md](development/tests/mock_pipeline.md) | How to run and evaluate the current mock Agent pipeline. |
 
 ## Related module docs
 
@@ -43,16 +47,16 @@ These documents describe related modules owned by the broader project. They are 
 
 | Document | Description |
 |---|---|
-| [modules/en/ecos-2607.md](modules/en/ecos-2607.md) | English ECOS robot runtime document. |
-| [modules/en/geca-2607.md](modules/en/geca-2607.md) | English GECA agent-side document. |
-| [modules/en/robotic-arm-2607.md](modules/en/robotic-arm-2607.md) | English robotic arm module document. |
-| [modules/en/robotic-base-2607.md](modules/en/robotic-base-2607.md) | English robotic base module document. |
-| [modules/zh/ecos-2607.md](modules/zh/ecos-2607.md) | Chinese summary of the ECOS robot runtime document. |
-| [modules/zh/geca-2607.md](modules/zh/geca-2607.md) | Chinese summary of the GECA agent-side document. |
+| [modules/ecos.md](modules/ecos.md) | ECOS robot runtime document. |
+| [modules/ecos_cn.md](modules/ecos_cn.md) | Chinese ECOS summary. |
+| [modules/geca.md](modules/geca.md) | GECA agent-side document. |
+| [modules/geca_cn.md](modules/geca_cn.md) | Chinese GECA summary. |
+| [modules/arm.md](modules/arm.md) | Robotic arm module document. |
+| [modules/base.md](modules/base.md) | Robotic base module document. |
 
 ## Rule of thumb
 
 - Put SensorAgent-specific docs under `docs/sensoragent/`.
 - Put team-wide process and overview docs under `docs/team/`.
 - Put docs for other modules under `docs/modules/`.
-- Keep language variants in `en/` or `zh/` subdirectories.
+- Use `_cn.md` for Chinese translations or summaries.

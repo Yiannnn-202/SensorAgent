@@ -2,7 +2,7 @@
 
 GECA 是 **General Embodied Cognition Agent**，即通用具身认知智能体。它是整个系统的决策侧，负责理解任务、规划步骤、调用工具，并根据执行反馈调整后续行为。
 
-完整英文文档见：[../en/geca-2607.md](../en/geca-2607.md)。
+完整英文文档见：[geca.md](geca.md)。
 
 ## 1. 模块定位
 

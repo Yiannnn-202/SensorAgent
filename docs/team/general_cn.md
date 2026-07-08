@@ -63,11 +63,11 @@ NAS 模型与数据存储
 
 | 模块 | 文档 |
 |---|---|
-| GECA 决策侧 | [../../modules/en/geca-2607.md](../../modules/en/geca-2607.md) |
-| ECOS 运行时侧 | [../../modules/en/ecos-2607.md](../../modules/en/ecos-2607.md) |
-| 机械臂模块 | [../../modules/en/robotic-arm-2607.md](../../modules/en/robotic-arm-2607.md) |
-| 机器人底盘模块 | [../../modules/en/robotic-base-2607.md](../../modules/en/robotic-base-2607.md) |
-| SensorAgent 项目定位 | [../../sensoragent/en/module-positioning.md](../../sensoragent/en/module-positioning.md) |
+| GECA 决策侧 | [../modules/geca.md](../modules/geca.md) |
+| ECOS 运行时侧 | [../modules/ecos.md](../modules/ecos.md) |
+| 机械臂模块 | [../modules/arm.md](../modules/arm.md) |
+| 机器人底盘模块 | [../modules/base.md](../modules/base.md) |
+| SensorAgent 项目定位 | [../sensoragent/positioning.md](../sensoragent/positioning.md) |
 
 ## 6. 项目阶段
 

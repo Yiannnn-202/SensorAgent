@@ -1,6 +1,6 @@
-﻿# Robotic Base Group
+# Robotic Base Group
 
-> Group doc. Robot-side runtime for mobile bases: locomotion, navigation, deployment. Cross-cutting with [ECOS](ecos-2607.md) (which consumes the base interface), [GECA](geca-2607.md) (which calls the base through ECOS over MCP), and the [Robotic Arm](robotic-arm-2607.md) (mounted mobile manipulation). See [../../team/zh/general-2607.md](../../team/zh/general-2607.md) for system-level context.
+> Group doc. Robot-side runtime for mobile bases: locomotion, navigation, deployment. Cross-cutting with [ECOS](ecos.md) (which consumes the base interface), [GECA](geca.md) (which calls the base through ECOS over MCP), and the [Robotic Arm](arm.md) (mounted mobile manipulation). See [../team/general_cn.md](../team/general_cn.md) for system-level context.
 
 > **Version Lineage:** Radish (2602) -> **Aether (2607)**
 
@@ -86,7 +86,7 @@ In text form, the flow is:
 
 ##### Base interface (vendor-agnostic)
 
-The only surface ECOS and GECA see. Covers velocity / waypoint / gait commands on the input side and odometry, IMU, joint status, contacts, pose, and map on the feedback side. Exposed as MCP tools (`move_to`, `set_velocity`, `set_gait`, `get_base_state`, `get_map`, `get_pose`), so the agent never talks to ROS or drivers directly. The contract is documented, versioned, and change-controlled per the inter-group rules in [../../team/zh/general-2607.md](../../team/zh/general-2607.md). The interface is identical in sim and on hardware.
+The only surface ECOS and GECA see. Covers velocity / waypoint / gait commands on the input side and odometry, IMU, joint status, contacts, pose, and map on the feedback side. Exposed as MCP tools (`move_to`, `set_velocity`, `set_gait`, `get_base_state`, `get_map`, `get_pose`), so the agent never talks to ROS or drivers directly. The contract is documented, versioned, and change-controlled per the inter-group rules in [../team/general_cn.md](../team/general_cn.md). The interface is identical in sim and on hardware.
 
 ##### Base adapter (x30 pro first)
 
@@ -94,7 +94,7 @@ The per-base implementation behind the interface. The x30 pro adapter is the fir
 
 ##### ROS 2 spine
 
-The internal bus that carries locomotion, state estimation, SLAM, navigation, and the security layer. Lifecycle nodes for deterministic bring-up, DDS via the rmw abstraction, `tf2` for kinematics, `rosbag2` for replay. ROS 2 distro differences (Humble on 22.04, Jazzy on 24.04) are isolated behind adapter layers, per [ecos-2607.md](ecos-2607.md). ROS specifics never leak north of the base interface.
+The internal bus that carries locomotion, state estimation, SLAM, navigation, and the security layer. Lifecycle nodes for deterministic bring-up, DDS via the rmw abstraction, `tf2` for kinematics, `rosbag2` for replay. ROS 2 distro differences (Humble on 22.04, Jazzy on 24.04) are isolated behind adapter layers, per [ecos.md](ecos.md). ROS specifics never leak north of the base interface.
 
 ##### ROS 1 internal (x30 pro only)
 
@@ -188,7 +188,7 @@ flowchart LR
   IFACE --> ECOS
 ```
 
-Same as Step 0, plus the full SDK surface is now exposed through the vendor-agnostic interface. ECOS can command velocity, waypoints, and gait, and read back odometry, IMU, joint status, and contacts. Future bases plug in by writing a new adapter that satisfies the same interface - ECOS and GECA see no change. The contract is documented, versioned, and change-controlled per [../../team/zh/general-2607.md](../../team/zh/general-2607.md).
+Same as Step 0, plus the full SDK surface is now exposed through the vendor-agnostic interface. ECOS can command velocity, waypoints, and gait, and read back odometry, IMU, joint status, and contacts. Future bases plug in by writing a new adapter that satisfies the same interface - ECOS and GECA see no change. The contract is documented, versioned, and change-controlled per [../team/general_cn.md](../team/general_cn.md).
 
 Why first: every later layer (SLAM, navigation, security) consumes the base through this interface. Nailing it early - and fixing it as the contract - prevents cascading rework when the layers underneath change.
 

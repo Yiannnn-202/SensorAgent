@@ -7,6 +7,9 @@ dependencies = [
   "PyYAML>=6.0",
 ]
 
+[project.scripts]
+sensoragent = "sensoragent.services.cli.main:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

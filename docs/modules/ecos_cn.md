@@ -2,7 +2,7 @@
 
 ECOS 是 **Embodied Cognition Operating System**，即具身认知操作系统。它是机器人侧运行时，负责把上层 Agent 的工具调用转化为实际的感知、控制、仿真或硬件动作。
 
-完整英文文档见：[../en/ecos-2607.md](../en/ecos-2607.md)。
+完整英文文档见：[ecos.md](ecos.md)。
 
 ## 1. 模块定位
 

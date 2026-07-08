@@ -94,14 +94,14 @@ Goal: document cross-module tool input/output formats before real integrations b
 
 Goal: let teammates run the mock Agent chain without reading test code.
 
-- [ ] Add CLI module `src/sensoragent/services/cli/main.py`.
-- [ ] Add command for running `mock.pick_and_place`.
-- [ ] Add CLI arguments: `--object-query`, `--target`, `--log-path`.
-- [ ] Write logs to `logs/tasks/` by default when run manually.
-- [ ] Print final `AgentResponse` in human-readable form.
-- [ ] Add script `scripts/run_mock_pipeline.*` if useful.
-- [ ] Add README instructions for running the mock chain.
-- [ ] Add e2e test for CLI execution.
+- [x] Add CLI module `src/sensoragent/services/cli/main.py`.
+- [x] Add command for running `mock.pick_and_place`.
+- [x] Add CLI arguments: `--object-query`, `--target`, `--log-path`.
+- [x] Write logs to `logs/tasks/` by default when run manually.
+- [x] Print final `AgentResponse` in human-readable form.
+- [x] Add script `scripts/run_mock_pipeline.*` if useful.
+- [x] Add README instructions for running the mock chain.
+- [x] Add e2e test for CLI execution.
 
 ## Phase 2 - Runtime hardening
 

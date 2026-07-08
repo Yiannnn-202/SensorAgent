@@ -1,6 +1,6 @@
-﻿# ECOS - Embodied Cognition Operating System
+# ECOS - Embodied Cognition Operating System
 
-> Component doc. Robot-side runtime, ROS 2 based. Cross-cutting: receives skills/perception from [Robotic Arm](robotic-arm-2607.md) and [Robotic Base](robotic-base-2607.md); exposes state to [GECA](geca-2607.md) and to the Frontend debug GUI. See [../../team/zh/general-2607.md](../../team/zh/general-2607.md) for system-level context.
+> Component doc. Robot-side runtime, ROS 2 based. Cross-cutting: receives skills/perception from [Robotic Arm](arm.md) and [Robotic Base](base.md); exposes state to [GECA](geca.md) and to the Frontend debug GUI. See [../team/general_cn.md](../team/general_cn.md) for system-level context.
 
 > **Version Lineage:** Clover (2602) -> **Robusta (2607)**
 
@@ -83,9 +83,9 @@ sequenceDiagram
   Bus-->>G: structured result
 ```
 
-In text: GECA issues a tool call (e.g. `move_to`, `grasp`) onto the MCP bus; action distribution parses and validates it, dispatches through the skill runtime, the secure module gates any motion, and ECOS returns an observation or state snapshot through the bus as a structured result. Schema changes are proposed, documented, and coordinated per the inter-group rules in [../../team/zh/general-2607.md](../../team/zh/general-2607.md).
+In text: GECA issues a tool call (e.g. `move_to`, `grasp`) onto the MCP bus; action distribution parses and validates it, dispatches through the skill runtime, the secure module gates any motion, and ECOS returns an observation or state snapshot through the bus as a structured result. Schema changes are proposed, documented, and coordinated per the inter-group rules in [../team/general_cn.md](../team/general_cn.md).
 
-The safety split between the two sides is explicit and mirrors [GECA](geca-2607.md): GECA's Safety/verification gate checks the **LLM side** (repeated calls, loops, off-task actions, malformed arguments) and explicitly does **not** check collision, force/torque, reach, workspace, or proximity. Those physics-level checks belong to ECOS's secure module below.
+The safety split between the two sides is explicit and mirrors [GECA](geca.md): GECA's Safety/verification gate checks the **LLM side** (repeated calls, loops, off-task actions, malformed arguments) and explicitly does **not** check collision, force/torque, reach, workspace, or proximity. Those physics-level checks belong to ECOS's secure module below.
 
 ---
 
@@ -113,7 +113,7 @@ Ingests sensor streams (cameras, depth, lidar, IMU, contacts), fuses them, and p
 
 ### Motion & grasp control
 
-Consumes high-level intents from skills (`move_to`, `grasp pose`, `set_velocity`) and turns them into joint-level commands via `ros2_control`. For manipulation, the [Robotic Arm](robotic-arm-2607.md) baseline grasp and learned policies execute here. For locomotion, the [Robotic Base](robotic-base-2607.md) interface lands here. Every command passes through the secure module before reaching the driver lib.
+Consumes high-level intents from skills (`move_to`, `grasp pose`, `set_velocity`) and turns them into joint-level commands via `ros2_control`. For manipulation, the [Robotic Arm](arm.md) baseline grasp and learned policies execute here. For locomotion, the [Robotic Base](base.md) interface lands here. Every command passes through the secure module before reaching the driver lib.
 
 ### Driver lib (hardware adapters)
 
@@ -282,7 +282,7 @@ In text: every node is now a managed ROS 2 node with a fixed bring-up order; hea
 
 ## Deployment
 
-Edge target is the Jetson Orin NX 16G on the robot, running the arm64 build. Heavier perception and sim runs off-board on the team's GPU servers (see [../../team/zh/general-2607.md](../../team/zh/general-2607.md) compute section). The same source tree builds for arm64 and x86_64, Ubuntu 22.04 / 24.04, ROS 2 Humble / Jazzy; distro and arch differences stay behind the environment module's adapter layers.
+Edge target is the Jetson Orin NX 16G on the robot, running the arm64 build. Heavier perception and sim runs off-board on the team's GPU servers (see [../team/general_cn.md](../team/general_cn.md) compute section). The same source tree builds for arm64 and x86_64, Ubuntu 22.04 / 24.04, ROS 2 Humble / Jazzy; distro and arch differences stay behind the environment module's adapter layers.
 
 ---
 

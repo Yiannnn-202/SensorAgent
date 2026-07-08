@@ -1,6 +1,6 @@
-﻿# GECA - General Embodied Cognition Agent
+# GECA - General Embodied Cognition Agent
 
-> Component doc. Decision side of the stack - a robot agent, runtime-agnostic by design. Talks to any runtime that speaks the MCP contract; [ECOS](ecos-2607.md) is our preferred runtime. See [../../team/zh/general-2607.md](../../team/zh/general-2607.md) for system-level context.
+> Component doc. Decision side of the stack - a robot agent, runtime-agnostic by design. Talks to any runtime that speaks the MCP contract; [ECOS](ecos.md) is our preferred runtime. See [../team/general_cn.md](../team/general_cn.md) for system-level context.
 
 > **Version Lineage:** Radish (2602) -> **Aether (2607)**
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-GECA is the decision side - a robot agent. Think "LangChain, but running a robot": a chain of pluggable models (ASR, VLM brain, TTS, ...) wired to memory, a planner, and custom control interfaces over MCP. It takes instructions, observations, and robot state in, and emits task plans, tool calls, and motion intents that a runtime executes. It does not touch drivers, ROS, or hardware directly - everything goes through the MCP contract. Any runtime that speaks the contract works; [ECOS](ecos-2607.md) is our preferred runtime.
+GECA is the decision side - a robot agent. Think "LangChain, but running a robot": a chain of pluggable models (ASR, VLM brain, TTS, ...) wired to memory, a planner, and custom control interfaces over MCP. It takes instructions, observations, and robot state in, and emits task plans, tool calls, and motion intents that a runtime executes. It does not touch drivers, ROS, or hardware directly - everything goes through the MCP contract. Any runtime that speaks the contract works; [ECOS](ecos.md) is our preferred runtime.
 
 > **MCP scope note.** "MCP" here is a general message-channel contract, not a strict JSON-RPC wire format. A tool call, observation, or status message may be JSON, but it may equally be a plain string, a mask-encoded payload, a base64 blob, or raw token/vector embeddings - whatever the tool's schema declares. We refer to all of these uniformly as "MCP". Schema versioning (per tool, in the registry) is what keeps this stable, not a fixed serialization.
 
