@@ -107,16 +107,16 @@ Goal: let teammates run the mock Agent chain without reading test code.
 
 Goal: make the minimal runtime safer, clearer, and easier to extend.
 
-- [ ] Replace broad tool exception handling with typed errors.
-- [ ] Replace broad skill exception handling with typed errors.
+- [x] Replace broad tool exception handling with typed errors.
+- [x] Replace broad skill exception handling with typed errors.
 - [ ] Add timeout support to `ToolRuntime`.
 - [ ] Add optional retry support to `ToolRuntime`.
 - [ ] Add input validation hook before tool invocation.
 - [ ] Add output validation hook after tool invocation.
-- [ ] Add richer `ToolError` and `SkillError` schemas.
+- [x] Add richer `ToolError` and `SkillError` schemas.
 - [ ] Add tool/skill metadata such as version, tags, and enabled state.
-- [ ] Add duplicate registration tests.
-- [ ] Add unknown tool/skill tests.
+- [x] Add duplicate registration tests.
+- [x] Add unknown tool/skill tests.
 - [ ] Add failure-path e2e tests.
 - [ ] Add JSONL log shape tests.
 

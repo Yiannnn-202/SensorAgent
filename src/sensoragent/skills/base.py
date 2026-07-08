@@ -7,6 +7,7 @@ from typing import Protocol
 
 from sensoragent.logger import TaskLogger
 from sensoragent.schemas import SkillCall, SkillResult, SkillSpec
+from sensoragent.skills.errors import SkillNotFoundError, SkillRegistrationError
 from sensoragent.tools import ToolRuntime
 
 
@@ -35,14 +36,14 @@ class SkillRegistry:
 
   def register(self, skill: Skill) -> None:
     if skill.spec.name in self._skills:
-      raise ValueError(f"Skill already registered: {skill.spec.name}")
+      raise SkillRegistrationError(f"Skill already registered: {skill.spec.name}")
     self._skills[skill.spec.name] = skill
 
   def get(self, name: str) -> Skill:
     try:
       return self._skills[name]
     except KeyError as exc:
-      raise KeyError(f"Unknown skill: {name}") from exc
+      raise SkillNotFoundError(f"Unknown skill: {name}") from exc
 
   def names(self) -> list[str]:
     return sorted(self._skills)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from sensoragent.logger import TaskLogger
 from sensoragent.schemas import ToolCall, ToolResult, TraceContext
 from sensoragent.tools.base import ToolRegistry
+from sensoragent.tools.errors import ToolError, ToolExecutionError
 
 
 class ToolRuntime:
@@ -23,8 +24,11 @@ class ToolRuntime:
     try:
       tool = self._registry.get(tool_name)
       result = tool.run(ToolCall(tool=tool_name, input=input_data, trace=trace))
-    except Exception as exc:  # Keep the minimal runtime failure-safe for Phase 1.
+    except ToolError as exc:
       result = ToolResult(tool=tool_name, success=False, error=str(exc))
+    except Exception as exc:
+      wrapped = ToolExecutionError(f"Tool execution failed for {tool_name}: {exc}")
+      result = ToolResult(tool=tool_name, success=False, error=str(wrapped))
     self._logger.log(
       "tool_call_finished",
       trace,
