@@ -12,3 +12,6 @@ class MockMcpEndpoint:
 
   def call_skill(self, skill: str, input_data: dict) -> AgentResponse:
     return self._agent.handle(AgentRequest(skill=skill, input=input_data))
+
+  def call_actionlist(self, actionlist: str, input_data: dict) -> AgentResponse:
+    return self._agent.handle(AgentRequest(actionlist=actionlist, input=input_data))

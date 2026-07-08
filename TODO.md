@@ -126,14 +126,16 @@ Goal: move fixed multi-step task procedures out of skills and into workflows.
 
 - [x] Define ActionList schema.
 - [x] Define ActionStep schema.
-- [ ] Implement sequential ActionList runtime.
-- [ ] Support passing step output into later steps.
-- [ ] Support named variables in workflow context.
-- [ ] Support stop-on-failure behavior.
-- [ ] Support per-step logging.
-- [ ] Recreate mock pick-and-place as an ActionList.
-- [ ] Add e2e test for ActionList mock pick-and-place.
-- [ ] Decide whether `mock.pick_and_place` remains as a skill or becomes a workflow-only demo.
+- [x] Implement sequential ActionList runtime.
+- [x] Support passing step output into later steps.
+- [x] Support named variables in workflow context.
+- [x] Support stop-on-failure behavior.
+- [x] Support per-step logging.
+- [x] Recreate mock pick-and-place as an ActionList.
+- [x] Add e2e test for ActionList mock pick-and-place.
+- [x] Allow `AgentRuntime` to run an ActionList directly.
+- [x] Keep `mock.pick_and_place` as a skill-level smoke test.
+- [x] Use `mock.pick_place_actionlist` as the workflow-level demo.
 
 ## Phase 4 - DecisionTree workflow runtime
 

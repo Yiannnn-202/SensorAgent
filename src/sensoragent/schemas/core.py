@@ -28,8 +28,9 @@ class TraceContext:
 class AgentRequest:
   """Request entering SensorAgent from an API/MCP-shaped entry point."""
 
-  skill: str
   input: dict
+  skill: str | None = None
+  actionlist: str | None = None
   trace: TraceContext = field(default_factory=TraceContext)
 
 

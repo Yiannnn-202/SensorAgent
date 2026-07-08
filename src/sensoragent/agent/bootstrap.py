@@ -16,6 +16,7 @@ from sensoragent.tools import ToolRegistry, ToolRuntime
 from sensoragent.tools.audio.mock import MockTranscribeTool
 from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
 from sensoragent.tools.vision.mock import MockDetectTool
+from sensoragent.workflows import ActionListRuntime, build_mock_pick_place_actionlist
 
 
 ToolFactory = Callable[[], object]
@@ -41,7 +42,11 @@ class AgentBundle:
   agent: AgentRuntime
   logger: TaskLogger
   tool_registry: ToolRegistry
+  tool_runtime: ToolRuntime
   skill_registry: SkillRegistry
+  skill_runtime: SkillRuntime
+  actionlist_runtime: ActionListRuntime
+  actionlists: dict[str, object]
 
 
 def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> AgentBundle:
@@ -68,13 +73,26 @@ def build_agent(config: SensorAgentConfig, log_path: Path | None = None) -> Agen
     skill_registry.register(skill_factory())
 
   skill_runtime = SkillRuntime(skill_registry, tool_runtime, logger)
-  agent = AgentRuntime(skill_runtime, logger)
+  actionlist_runtime = ActionListRuntime(tool_runtime, skill_runtime, logger)
+  actionlists = {
+    "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
+  }
+  agent = AgentRuntime(
+    skill_runtime,
+    logger,
+    actionlist_runtime=actionlist_runtime,
+    actionlists=actionlists,
+  )
 
   return AgentBundle(
     agent=agent,
     logger=logger,
     tool_registry=tool_registry,
+    tool_runtime=tool_runtime,
     skill_registry=skill_registry,
+    skill_runtime=skill_runtime,
+    actionlist_runtime=actionlist_runtime,
+    actionlists=actionlists,
   )
 
 
