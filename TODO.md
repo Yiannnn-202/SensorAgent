@@ -124,8 +124,8 @@ Goal: make the minimal runtime safer, clearer, and easier to extend.
 
 Goal: move fixed multi-step task procedures out of skills and into workflows.
 
-- [ ] Define ActionList schema.
-- [ ] Define ActionStep schema.
+- [x] Define ActionList schema.
+- [x] Define ActionStep schema.
 - [ ] Implement sequential ActionList runtime.
 - [ ] Support passing step output into later steps.
 - [ ] Support named variables in workflow context.
