@@ -1,6 +1,9 @@
 # Runtime logs
 logs/
 
+# Local model weights and runtime assets
+models/
+
 # Python
 __pycache__/
 *.py[cod]

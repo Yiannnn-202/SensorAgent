@@ -1,0 +1,43 @@
+{
+  "name": "audio.transcribe",
+  "version": "0.1.0",
+  "description": "Transcribe an audio file into text using the configured ASR backend.",
+  "input_schema": {
+    "type": "object",
+    "required": ["audio_path"],
+    "properties": {
+      "audio_path": {
+        "type": "string",
+        "description": "Path to an audio file to transcribe."
+      },
+      "language": {
+        "type": "string",
+        "description": "Optional language hint, such as zh or en."
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["text", "confidence", "language"],
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "Transcribed text."
+      },
+      "confidence": {
+        "type": "number",
+        "description": "Confidence score in the range 0-1 when available."
+      },
+      "language": {
+        "type": "string",
+        "description": "Detected or configured language."
+      }
+    }
+  },
+  "errors": [
+    "AUDIO_NOT_FOUND",
+    "TRANSCRIBE_FAILED",
+    "ASR_MODEL_MISSING",
+    "ASR_UNAVAILABLE"
+  ]
+}

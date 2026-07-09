@@ -40,6 +40,9 @@ These documents describe how specific parts of the implementation are verified.
 | Document | Description |
 |---|---|
 | [development/tests/mock_pipeline.md](development/tests/mock_pipeline.md) | How to run and evaluate the current mock Agent pipeline. |
+| [development/tests/audio_pipeline.md](development/tests/audio_pipeline.md) | How to run and evaluate the listen-once audio pipeline. |
+| [development/audio_integration.md](development/audio_integration.md) | Review and migration plan for Radish ASR/TTS integration. |
+| [development/audio_models.md](development/audio_models.md) | Local ASR/TTS model directory layout and Git policy. |
 
 ## Related module docs
 

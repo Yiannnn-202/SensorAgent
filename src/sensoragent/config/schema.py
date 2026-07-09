@@ -42,6 +42,14 @@ class LoggingConfig:
 
 
 @dataclass(frozen=True)
+class SensorAgentIntegrationsConfig:
+  """External/local integration configuration."""
+
+  audio: dict = field(default_factory=dict)
+  microphone: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class SensorAgentConfig:
   """Top-level SensorAgent configuration."""
 
@@ -49,3 +57,6 @@ class SensorAgentConfig:
   tools: ToolsConfig = field(default_factory=ToolsConfig)
   skills: SkillsConfig = field(default_factory=SkillsConfig)
   logging: LoggingConfig = field(default_factory=LoggingConfig)
+  integrations: SensorAgentIntegrationsConfig = field(
+    default_factory=SensorAgentIntegrationsConfig
+  )

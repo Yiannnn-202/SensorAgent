@@ -1,0 +1,31 @@
+agent:
+  name: sensoragent
+  mode: audio_mock
+  default_skill: mock.pick_and_place
+
+tools:
+  enabled:
+    - audio.listen_transcribe
+    - audio.transcribe
+    - audio.speak
+    - vision.mock_detect
+    - robot.mock_pick
+    - robot.mock_place
+
+skills:
+  enabled:
+    - mock.pick_and_place
+
+integrations:
+  audio:
+    backend: fake
+  microphone:
+    backend: fake
+
+logging:
+  level: info
+  console: true
+  app_log: logs/app.log
+  task_dir: logs/tasks
+  trace_dir: logs/traces
+  error_dir: logs/errors

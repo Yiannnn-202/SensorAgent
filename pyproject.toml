@@ -5,6 +5,7 @@ description = "Agent orchestration framework for embodied task skills and tools.
 requires-python = ">=3.12"
 dependencies = [
   "PyYAML>=6.0",
+  "requests>=2.32",
 ]
 
 [project.scripts]

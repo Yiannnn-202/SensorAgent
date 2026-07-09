@@ -10,6 +10,7 @@ import yaml
 from sensoragent.config.schema import (
   AgentConfig,
   LoggingConfig,
+  SensorAgentIntegrationsConfig,
   SensorAgentConfig,
   SkillsConfig,
   ToolsConfig,
@@ -44,6 +45,7 @@ def load_config(path: str | Path) -> SensorAgentConfig:
   tools = _as_mapping(raw.get("tools"), "tools")
   skills = _as_mapping(raw.get("skills"), "skills")
   logging = _as_mapping(raw.get("logging"), "logging")
+  integrations = _as_mapping(raw.get("integrations"), "integrations")
 
   return SensorAgentConfig(
     agent=AgentConfig(
@@ -62,5 +64,12 @@ def load_config(path: str | Path) -> SensorAgentConfig:
       task_dir=Path(str(logging.get("task_dir", "logs/tasks"))),
       trace_dir=Path(str(logging.get("trace_dir", "logs/traces"))),
       error_dir=Path(str(logging.get("error_dir", "logs/errors"))),
+    ),
+    integrations=SensorAgentIntegrationsConfig(
+      audio=_as_mapping(integrations.get("audio"), "integrations.audio"),
+      microphone=_as_mapping(
+        integrations.get("microphone"),
+        "integrations.microphone",
+      ),
     ),
   )

@@ -1,0 +1,51 @@
+{
+  "name": "audio.speak",
+  "version": "0.1.0",
+  "description": "Synthesize speech from text using the configured TTS backend.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "properties": {
+      "text": {
+        "type": "string",
+        "description": "Text to synthesize."
+      },
+      "voice": {
+        "type": "string",
+        "description": "Optional voice identifier."
+      },
+      "output_path": {
+        "type": "string",
+        "description": "Optional destination WAV path."
+      },
+      "play": {
+        "type": "boolean",
+        "description": "Whether to play audio through the local system device. Defaults to false."
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["spoken", "audio_path"],
+    "properties": {
+      "spoken": {
+        "type": "boolean",
+        "description": "Whether speech synthesis completed successfully."
+      },
+      "audio_path": {
+        "type": "string",
+        "description": "Path to the generated audio file."
+      },
+      "duration_ms": {
+        "type": "number",
+        "description": "Generated audio duration in milliseconds when available."
+      }
+    }
+  },
+  "errors": [
+    "SPEAK_FAILED",
+    "TTS_MODEL_MISSING",
+    "AUDIO_WRITE_FAILED",
+    "TTS_UNAVAILABLE"
+  ]
+}

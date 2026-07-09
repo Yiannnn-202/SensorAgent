@@ -6,10 +6,34 @@ from sensoragent.integrations.llm import (
   OpenAICompatibleClient,
   load_llm_config_from_env,
 )
+from sensoragent.integrations.microphone import (
+  FakeMicrophoneRecorder,
+  MicrophoneError,
+  MicrophoneRecorder,
+  SoundDeviceRecorder,
+)
+from sensoragent.integrations.audio import (
+  AudioClient,
+  AudioError,
+  AudioInputError,
+  AudioModelError,
+  FakeAudioClient,
+  LocalAudioClient,
+)
 
 __all__ = [
+  "AudioClient",
+  "AudioError",
+  "AudioInputError",
+  "AudioModelError",
+  "FakeAudioClient",
+  "FakeMicrophoneRecorder",
   "LlmConfig",
   "LlmError",
+  "LocalAudioClient",
+  "MicrophoneError",
+  "MicrophoneRecorder",
   "OpenAICompatibleClient",
+  "SoundDeviceRecorder",
   "load_llm_config_from_env",
 ]

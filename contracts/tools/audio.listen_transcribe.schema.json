@@ -1,0 +1,56 @@
+{
+  "name": "audio.listen_transcribe",
+  "version": "0.1.0",
+  "description": "Record fixed-duration microphone audio into a WAV file and transcribe it.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "duration_seconds": {
+        "type": "number",
+        "description": "Fixed recording duration in seconds."
+      },
+      "sample_rate": {
+        "type": "number",
+        "description": "Recording sample rate. The first implementation expects 16000."
+      },
+      "language": {
+        "type": "string",
+        "description": "ASR language hint."
+      },
+      "output_path": {
+        "type": "string",
+        "description": "Optional WAV path for the recorded utterance."
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["audio_path", "duration_ms", "sample_rate", "text", "confidence", "language"],
+    "properties": {
+      "audio_path": {
+        "type": "string"
+      },
+      "duration_ms": {
+        "type": "number"
+      },
+      "sample_rate": {
+        "type": "number"
+      },
+      "text": {
+        "type": "string"
+      },
+      "confidence": {
+        "type": "number"
+      },
+      "language": {
+        "type": "string"
+      }
+    }
+  },
+  "errors": [
+    "MICROPHONE_UNAVAILABLE",
+    "RECORD_FAILED",
+    "TRANSCRIBE_FAILED",
+    "ASR_MODEL_MISSING"
+  ]
+}

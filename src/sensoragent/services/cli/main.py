@@ -10,6 +10,7 @@ from typing import Sequence
 
 from sensoragent.agent import build_agent_from_env
 from sensoragent.mcp import MockMcpEndpoint
+from sensoragent.schemas import TraceContext
 
 
 def _default_task_log_path() -> Path:
@@ -85,6 +86,56 @@ def _build_parser() -> argparse.ArgumentParser:
     help="Path to the JSONL task log. Defaults to logs/tasks/*.jsonl.",
   )
 
+  listen_task = subparsers.add_parser(
+    "listen-task",
+    help="Record one utterance, transcribe it, and run it as an Agent task.",
+  )
+  listen_task.add_argument(
+    "--config",
+    type=Path,
+    default=None,
+    help="Path to a SensorAgent config file. Defaults to env resolution.",
+  )
+  listen_task.add_argument(
+    "--planner",
+    choices=("static", "llm"),
+    default="llm",
+    help="Planner mode used after transcription.",
+  )
+  listen_task.add_argument(
+    "--duration",
+    type=float,
+    default=5.0,
+    help="Fixed microphone recording duration in seconds.",
+  )
+  listen_task.add_argument(
+    "--language",
+    default="zh",
+    help="ASR language hint.",
+  )
+  listen_task.add_argument(
+    "--audio-path",
+    type=Path,
+    default=None,
+    help="Where to write the recorded WAV. Defaults to logs/audio/*.wav.",
+  )
+  listen_task.add_argument(
+    "--object-query",
+    default=None,
+    help="Optional structured object query passed to the planner.",
+  )
+  listen_task.add_argument(
+    "--target",
+    default=None,
+    help="Optional structured target passed to the planner.",
+  )
+  listen_task.add_argument(
+    "--log-path",
+    type=Path,
+    default=None,
+    help="Path to the JSONL task log. Defaults to logs/tasks/*.jsonl.",
+  )
+
   return parser
 
 
@@ -126,6 +177,51 @@ def _run_task(args: argparse.Namespace) -> int:
   return 0 if task.error is None else 1
 
 
+def _run_listen_task(args: argparse.Namespace) -> int:
+  log_path = args.log_path or _default_task_log_path()
+  bundle = build_agent_from_env(
+    args.config,
+    log_path=log_path,
+    planner_mode=args.planner,
+  )
+  listen_input = {
+    "duration_seconds": args.duration,
+    "language": args.language,
+  }
+  if args.audio_path is not None:
+    listen_input["output_path"] = str(args.audio_path)
+
+  transcript = bundle.tool_runtime.invoke(
+    "audio.listen_transcribe",
+    listen_input,
+    trace=TraceContext(),
+  )
+  if not transcript.success or not transcript.output:
+    print(json.dumps({"success": False, "error": transcript.error}, ensure_ascii=False, indent=2))
+    print(f"Task log: {log_path}")
+    return 1
+
+  initial_input = {}
+  if args.object_query is not None:
+    initial_input["object_query"] = args.object_query
+  if args.target is not None:
+    initial_input["target"] = args.target
+
+  task = bundle.agent.run_task(transcript.output["text"], initial_input)
+  print(
+    json.dumps(
+      {
+        "transcript": transcript.output,
+        "task": task.to_dict(),
+      },
+      ensure_ascii=False,
+      indent=2,
+    )
+  )
+  print(f"Task log: {log_path}")
+  return 0 if task.error is None else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
   parser = _build_parser()
   args = parser.parse_args(argv)
@@ -134,6 +230,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return _run_mock_pick_place(args)
   if args.command == "run-task":
     return _run_task(args)
+  if args.command == "listen-task":
+    return _run_listen_task(args)
 
   parser.error(f"Unknown command: {args.command}")
   return 2

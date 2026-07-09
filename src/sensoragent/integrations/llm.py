@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 
 from sensoragent.config import load_dotenv
@@ -57,22 +55,27 @@ class OpenAICompatibleClient:
       "temperature": 0,
       "response_format": {"type": "json_object"},
     }
-    request = urllib.request.Request(
-      endpoint,
-      data=json.dumps(payload).encode("utf-8"),
-      headers={
-        "Authorization": f"Bearer {self._config.api_key}",
-        "Content-Type": "application/json",
-      },
-      method="POST",
-    )
     try:
-      with urllib.request.urlopen(request, timeout=30) as response:
-        body = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-      detail = exc.read().decode("utf-8", errors="replace")
-      raise LlmError(f"LLM HTTP error {exc.code}: {detail}") from exc
+      import requests
     except Exception as exc:
+      raise LlmError("requests is required for LLM HTTP calls") from exc
+
+    try:
+      response = requests.post(
+        endpoint,
+        headers={
+          "Authorization": f"Bearer {self._config.api_key}",
+          "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=30,
+      )
+      if response.status_code >= 400:
+        raise LlmError(f"LLM HTTP error {response.status_code}: {response.text}")
+      body = response.json()
+    except Exception as exc:
+      if isinstance(exc, LlmError):
+        raise
       raise LlmError(f"LLM request failed: {exc}") from exc
 
     try:

@@ -109,6 +109,13 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m sensoragent.services.cli.main run-task "put the silver roller into the third bin cell" --config configs\mock.yaml --planner llm
 ```
 
+To try the listen-once audio path with fake audio components:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m sensoragent.services.cli.main listen-task --config configs\audio_mock.yaml --planner static --duration 1 --object-query "silver roller" --target "third bin cell"
+```
+
 ## Development Focus
 
 The current development phase focuses on building the generic Agent framework:

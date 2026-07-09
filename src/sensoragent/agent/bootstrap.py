@@ -9,13 +9,25 @@ from typing import Callable
 from sensoragent.agent.runtime import AgentRuntime
 from sensoragent.config import SensorAgentConfig, load_config, resolve_config_path
 from sensoragent.contracts import ContractValidator
-from sensoragent.integrations import OpenAICompatibleClient, load_llm_config_from_env
+from sensoragent.integrations import (
+  FakeAudioClient,
+  FakeMicrophoneRecorder,
+  LocalAudioClient,
+  OpenAICompatibleClient,
+  SoundDeviceRecorder,
+  load_llm_config_from_env,
+)
 from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.mock import MockPickAndPlaceSkill
 from sensoragent.state import InMemoryEventStream, InMemoryTaskStore
 from sensoragent.tools import ToolRegistry, ToolRuntime
 from sensoragent.tools.audio.mock import MockTranscribeTool
+from sensoragent.tools.audio import (
+  AudioListenTranscribeTool,
+  AudioSpeakTool,
+  AudioTranscribeTool,
+)
 from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import ActionListRuntime, build_mock_pick_place_actionlist
@@ -37,6 +49,46 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {
   "mock.pick_and_place": MockPickAndPlaceSkill,
 }
+
+
+def _build_audio_client(config: SensorAgentConfig):
+  audio_config = config.integrations.audio
+  backend = str(audio_config.get("backend", "fake"))
+  if backend == "fake":
+    return FakeAudioClient()
+  if backend == "local":
+    return LocalAudioClient(
+      asr_model_dir=str(audio_config.get("asr_model_dir", "models/asr/sense-voice")),
+      tts_model_dir=str(audio_config.get("tts_model_dir", "models/tts")),
+      asr_provider=str(audio_config.get("asr_provider", "cpu")),
+      asr_num_threads=int(audio_config.get("asr_num_threads", 4)),
+    )
+  raise ValueError(f"Unknown audio backend: {backend}")
+
+
+def _build_microphone_recorder(config: SensorAgentConfig):
+  microphone_config = config.integrations.microphone
+  backend = str(microphone_config.get("backend", "fake"))
+  if backend == "fake":
+    return FakeMicrophoneRecorder(
+      str(microphone_config.get("fixture_path", "tests/fixtures/audio/command.wav"))
+    )
+  if backend == "sounddevice":
+    return SoundDeviceRecorder()
+  raise ValueError(f"Unknown microphone backend: {backend}")
+
+
+def _build_tool(tool_name: str, config: SensorAgentConfig):
+  if tool_name in AVAILABLE_TOOLS:
+    return AVAILABLE_TOOLS[tool_name]()
+  if tool_name in {"audio.listen_transcribe", "audio.transcribe", "audio.speak"}:
+    client = _build_audio_client(config)
+    if tool_name == "audio.listen_transcribe":
+      return AudioListenTranscribeTool(_build_microphone_recorder(config), client)
+    if tool_name == "audio.transcribe":
+      return AudioTranscribeTool(client)
+    return AudioSpeakTool(client)
+  raise KeyError(f"Configured tool is not available: {tool_name}")
 
 
 @dataclass(frozen=True)
@@ -70,10 +122,9 @@ def build_agent(
   tool_registry = ToolRegistry()
   for tool_name in config.tools.enabled:
     try:
-      tool_factory = AVAILABLE_TOOLS[tool_name]
+      tool_registry.register(_build_tool(tool_name, config))
     except KeyError as exc:
       raise KeyError(f"Configured tool is not available: {tool_name}") from exc
-    tool_registry.register(tool_factory())
 
   tool_runtime = ToolRuntime(tool_registry, logger, ContractValidator())
 
