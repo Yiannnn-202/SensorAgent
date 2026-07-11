@@ -142,7 +142,9 @@ done
 python3 - \
   "${description_dir}/CMakeLists.txt" \
   "${gazebo_dir}/package.xml" \
-  "${moveit_dir}/package.xml" <<'PY'
+  "${moveit_dir}/package.xml" \
+  "${gazebo_dir}/config/gazebo_65_description.urdf.xacro" \
+  "${gazebo_dir}/launch/gz_demo_common.py" <<'PY'
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
@@ -150,6 +152,14 @@ import xml.etree.ElementTree as ET
 description_cmake = Path(sys.argv[1])
 gazebo_package = Path(sys.argv[2])
 moveit_package = Path(sys.argv[3])
+gazebo_xacro = Path(sys.argv[4])
+gazebo_launch = Path(sys.argv[5])
+
+
+def replace_once(content: str, old: str, new: str, path: Path) -> str:
+    if content.count(old) != 1:
+        raise RuntimeError(f"Expected one occurrence in {path}: {old!r}")
+    return content.replace(old, new, 1)
 
 cmake = description_cmake.read_text(encoding="utf-8")
 cmake = cmake.replace(
@@ -187,6 +197,100 @@ for dependency in root.findall("exec_depend"):
         dependency.text = "rm_description"
 ET.indent(tree, space="  ")
 tree.write(moveit_package, encoding="utf-8", xml_declaration=True)
+
+xacro = gazebo_xacro.read_text(encoding="utf-8")
+xacro = replace_once(
+    xacro,
+    '<xacro:include filename="$(find rm_description)/urdf/rm_65_gazebo.urdf" />',
+    '<xacro:include filename="$(find rm_description)/urdf/rm_65.urdf" />',
+    gazebo_xacro,
+)
+for link_number in range(1, 7):
+    xacro = replace_once(
+        xacro,
+        f'<gazebo reference="link{link_number}">',
+        f'<gazebo reference="Link{link_number}">',
+        gazebo_xacro,
+    )
+gazebo_xacro.write_text(xacro, encoding="utf-8")
+
+launch = gazebo_launch.read_text(encoding="utf-8")
+launch = replace_once(
+    launch,
+    '    start_gazebo = LaunchConfiguration("start_gazebo")\n',
+    '    start_gazebo = LaunchConfiguration("start_gazebo")\n'
+    '    auto_focus_robot = LaunchConfiguration("auto_focus_robot")\n'
+    '    render_engine = LaunchConfiguration("render_engine")\n',
+    gazebo_launch,
+)
+launch = replace_once(
+    launch,
+    '        launch_arguments={"gz_args": f"-v 4 -r {world_name}.sdf"}.items(),\n',
+    '''        launch_arguments={
+            "gz_args": [
+                "-v 4 -r --render-engine ",
+                render_engine,
+                f" {world_name}.sdf",
+            ]
+        }.items(),
+''',
+    gazebo_launch,
+)
+launch = replace_once(
+    launch,
+    '    unpause_world = ExecuteProcess(\n',
+    '''    focus_robot = ExecuteProcess(
+        cmd=[
+            "ign",
+            "service",
+            "-s",
+            "/gui/move_to",
+            "--reqtype",
+            "ignition.msgs.StringMsg",
+            "--reptype",
+            "ignition.msgs.Boolean",
+            "--timeout",
+            "30000",
+            "--req",
+            f'data: "{robot_name_in_model}"',
+        ],
+        output="screen",
+        condition=IfCondition(auto_focus_robot),
+    )
+
+    unpause_world = ExecuteProcess(
+''',
+    gazebo_launch,
+)
+launch = replace_once(
+    launch,
+    '    close_evt2 = RegisterEventHandler(\n',
+    '''    focus_evt = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=spawn_entity,
+            on_exit=[TimerAction(period=3.0, actions=[focus_robot])],
+        )
+    )
+    close_evt2 = RegisterEventHandler(
+''',
+    gazebo_launch,
+)
+launch = replace_once(
+    launch,
+    '            DeclareLaunchArgument("start_gazebo", default_value="true"),\n',
+    '            DeclareLaunchArgument("start_gazebo", default_value="true"),\n'
+    '            DeclareLaunchArgument("auto_focus_robot", default_value="true"),\n'
+    '            DeclareLaunchArgument("render_engine", default_value="ogre2"),\n',
+    gazebo_launch,
+)
+launch = replace_once(
+    launch,
+    '            close_evt2,\n',
+    '            close_evt2,\n'
+    '            focus_evt,\n',
+    gazebo_launch,
+)
+gazebo_launch.write_text(launch, encoding="utf-8")
 PY
 
 echo "Imported RM65-B simulation files from ${UPSTREAM_COMMIT}."

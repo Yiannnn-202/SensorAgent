@@ -10,9 +10,11 @@ RM65-B Gazebo 与 MoveIt 2 仿真控制栈。
 ## 1. 进入项目并加载 ROS 2
 
 ```bash
-cd /path/to/SensorAgent
+cd ~/SensorAgent
 source /opt/ros/humble/setup.bash
 ```
+
+如果仓库不在 `~/SensorAgent`，请将本文中的路径替换为实际克隆路径。
 
 本项目当前导入的是 RealMan 官方 `humble` 分支。其他 ROS 2 版本暂未验证。
 
@@ -69,8 +71,13 @@ rosdep install \
   --from-paths ros2_ws/src \
   --ignore-src \
   --rosdistro humble \
+  --skip-keys warehouse_ros_mongo \
   -r -y
 ```
+
+`warehouse_ros_mongo` 仅用于保存 MoveIt 规划场景，不影响本文中的 Gazebo、
+控制器、MoveIt 规划和 RViz 操作。部分 Humble 软件源不提供该包，因此默认
+跳过。
 
 ## 4. 编译 RM65-B 仿真包
 
@@ -88,7 +95,7 @@ source install/setup.bash
 每次打开新终端后都需要执行：
 
 ```bash
-cd /path/to/SensorAgent/ros2_ws
+cd ~/SensorAgent/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ```
@@ -98,7 +105,7 @@ source install/setup.bash
 在第一个终端执行：
 
 ```bash
-cd /path/to/SensorAgent/ros2_ws
+cd ~/SensorAgent/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 
@@ -114,13 +121,19 @@ ros2 launch rm_gazebo gazebo_65_demo.launch.py
 - `rm_group_controller`。
 
 等待 Gazebo 中出现机械臂，并确认终端没有控制器加载错误。
+启动文件会在模型生成后自动将 Gazebo 相机对准机械臂。如需保留当前相机位置，
+可使用 `auto_focus_robot:=false`：
+
+```bash
+ros2 launch rm_gazebo gazebo_65_demo.launch.py auto_focus_robot:=false
+```
 
 ## 6. 启动 MoveIt 2 和 RViz
 
 保持第一个终端运行，在第二个终端执行：
 
 ```bash
-cd /path/to/SensorAgent/ros2_ws
+cd ~/SensorAgent/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 
@@ -158,7 +171,7 @@ rm_group_controller     active
 
 ```bash
 source /opt/ros/humble/setup.bash
-source /path/to/SensorAgent/ros2_ws/install/setup.bash
+source ~/SensorAgent/ros2_ws/install/setup.bash
 ```
 
 ### 找不到 `gz_ros2_control`
@@ -190,3 +203,34 @@ ros2 action list | grep follow_joint_trajectory
 ```
 
 停止服务时，在运行 Gazebo 和 MoveIt 2 的终端分别按 `Ctrl+C`。
+
+### Gazebo 中看不到机械臂
+
+先确认终端中出现：
+
+```text
+Created entity [...] named [rm_65_description]
+```
+
+如果同时出现 `Entity named [rm_65_description] already exists`，说明上一次
+Gazebo 实例或启动进程仍在运行。先在原终端按 `Ctrl+C` 完整停止，再重新执行
+启动命令；不要在同一个 Gazebo 世界中重复启动该 launch 文件。
+
+如果 Gazebo 的按钮和文字正常，但三维视口完全为白色，通常是虚拟机中的
+Ogre 2 / OpenGL 兼容问题。先改用 Ogre 1：
+
+```bash
+ros2 launch rm_gazebo gazebo_65_demo.launch.py render_engine:=ogre
+```
+
+如果 Ogre 1 仍然无法显示，再尝试 Mesa 软件渲染：
+
+```bash
+LIBGL_ALWAYS_SOFTWARE=1 \
+ros2 launch rm_gazebo gazebo_65_demo.launch.py render_engine:=ogre
+```
+
+如果软件渲染导致整个三维视口闪烁，应取消 `LIBGL_ALWAYS_SOFTWARE`，并优先
+在虚拟机设置中启用三维加速。
+
+模型和控制器仍可正常生成时，这个问题与 ROS 2 或 RM65-B 文件无关。
