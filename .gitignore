@@ -2,7 +2,7 @@
 logs/
 
 # Local model weights and runtime assets
-models/
+/models/
 
 # Python
 __pycache__/
@@ -24,3 +24,21 @@ venv/
 # Build outputs
 build/
 dist/
+
+# ROS 2 / colcon outputs
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Locally imported RealMan files (upstream redistribution license is unclear)
+ros2_ws/src/rm_description/*
+!ros2_ws/src/rm_description/.gitkeep
+ros2_ws/src/rm_gazebo/*
+!ros2_ws/src/rm_gazebo/.gitkeep
+ros2_ws/src/rm_65_config/*
+!ros2_ws/src/rm_65_config/.gitkeep
+
+# Reinforcement learning runtime artifacts
+reinforcement_learning/checkpoints/
+reinforcement_learning/datasets/
+reinforcement_learning/runs/

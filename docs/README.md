@@ -22,6 +22,7 @@ These documents describe this repository and should be treated as the primary so
 | [sensoragent/configuration_cn.md](sensoragent/configuration_cn.md) | Chinese configuration guide. |
 | [sensoragent/logging.md](sensoragent/logging.md) | Logging policy and runtime log layout. |
 | [sensoragent/logging_cn.md](sensoragent/logging_cn.md) | Chinese logging guide. |
+| [sensoragent/robotics_extension_cn.md](sensoragent/robotics_extension_cn.md) | Discussion draft for the RM65-B, Gazebo, ROS 2, and reinforcement-learning repository extension. |
 
 ## Team-level docs
 
@@ -39,6 +40,7 @@ These documents describe how specific parts of the implementation are verified.
 
 | Document | Description |
 |---|---|
+| [robotics/rm65_b_gazebo_quickstart_cn.md](robotics/rm65_b_gazebo_quickstart_cn.md) | Ubuntu guide for importing, building, and launching the RM65-B Gazebo and MoveIt 2 stack. |
 | [development/tests/mock_pipeline.md](development/tests/mock_pipeline.md) | How to run and evaluate the current mock Agent pipeline. |
 | [development/tests/audio_pipeline.md](development/tests/audio_pipeline.md) | How to run and evaluate the listen-once audio pipeline. |
 | [development/audio_integration.md](development/audio_integration.md) | Review and migration plan for Radish ASR/TTS integration. |
