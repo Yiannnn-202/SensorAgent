@@ -10,6 +10,8 @@
 
 Responsible for control, operation, and grasping-related task development for robotic manipulators, focusing on motion planning, force-controlled grasping, and embodied intelligence manipulation algorithms.
 
+> **Required Robot Model:** The manipulator used by this project is the **RealMan RM65-B**, with the canonical configuration and integration identifier **`rm65_b`**. Simulation models, ROS 2/MoveIt 2 configurations, adapters, tests, and deployment documentation must target `rm65_b` unless an alternative platform is explicitly requested.
+
 > **Platform Note:** We actively test on the **Realman 65-b** robotic arm as our current manipulator platform. The control and grasping stack is **platform-crossing**: vendor-specific drivers are abstracted behind a common arm interface, so manipulators from other vendors can be integrated with minimal changes. The build path below describes how the Realman 65-b is used and how the same architecture maps onto other arms.
 
 The point of building the arm stack behind a vendor-agnostic interface is separation of concerns: the manipulation stack evolves on its own cadence, gets evaluated against reproducible task suites in Isaac Sim and on the Realman 65-b, and can be swapped or rolled back without touching ECOS or GECA. ECOS consumes a fixed MCP tool surface; what runs underneath is the arm group's to change.
@@ -356,4 +358,3 @@ Why last: every candidate here is an extension of an existing layer (grasp, miss
 ## xxxx - xxxx
 
 > Placeholder for the next cycle. Replace this section when the next version lands: record the target architecture and incremental build path for that cycle. Keep prior cycles intact above for history.
-
