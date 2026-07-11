@@ -24,11 +24,20 @@ It populates:
 - `ros2_ws/src/rm_65_config`
 
 For build and launch instructions, see
-[`docs/robotics/rm65_b_gazebo_quickstart_cn.md`](../docs/robotics/rm65_b_gazebo_quickstart_cn.md).
+[`docs/guides/rm65_b_gazebo_quickstart_cn.md`](../docs/guides/rm65_b_gazebo_quickstart_cn.md).
 
 Only the standard RM65 description, meshes, Gazebo integration, and MoveIt 2
 simulation configuration are selected. Drivers, examples, force-sensor
 variants, documentation assets, and other robot models are excluded.
+
+The import script also applies project compatibility adjustments:
+
+- maps the upstream `rm_65_description` dependency to `rm_description`;
+- uses the standard `rm_65.urdf` model and matching `Link1` through `Link6`
+  Gazebo references;
+- adds automatic camera focus and a selectable Ogre rendering engine;
+- omits the unused MongoDB warehouse launch file and
+  `warehouse_ros_mongo` dependency.
 
 ## License note
 

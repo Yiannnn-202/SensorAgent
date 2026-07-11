@@ -71,13 +71,12 @@ rosdep install \
   --from-paths ros2_ws/src \
   --ignore-src \
   --rosdistro humble \
-  --skip-keys warehouse_ros_mongo \
   -r -y
 ```
 
-`warehouse_ros_mongo` 仅用于保存 MoveIt 规划场景，不影响本文中的 Gazebo、
-控制器、MoveIt 规划和 RViz 操作。部分 Humble 软件源不提供该包，因此默认
-跳过。
+本项目导入的最小仿真栈不包含 MoveIt MongoDB 场景仓库，因此不需要
+`warehouse_ros_mongo`。如果此前已经导入过上游文件，请重新执行第 2 节的
+导入脚本，再运行 `rosdep install`。
 
 ## 4. 编译 RM65-B 仿真包
 

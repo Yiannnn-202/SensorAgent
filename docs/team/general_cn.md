@@ -59,15 +59,11 @@ NAS 模型与数据存储
 
 这些是当前测试资源，不是系统架构的固定绑定。架构目标是让不同机器人或仿真平台通过适配层接入。
 
-## 5. 相关模块文档
+## 5. SensorAgent 仓库架构
 
-| 模块 | 文档 |
-|---|---|
-| GECA 决策侧 | [../modules/geca.md](../modules/geca.md) |
-| ECOS 运行时侧 | [../modules/ecos.md](../modules/ecos.md) |
-| 机械臂模块 | [../modules/arm.md](../modules/arm.md) |
-| 机器人底盘模块 | [../modules/base.md](../modules/base.md) |
-| SensorAgent 项目定位 | [../sensoragent/positioning.md](../sensoragent/positioning.md) |
+SensorAgent 的完整职责、运行时结构、ROS 2 仿真边界和目录说明统一维护在
+[仓库架构文档](../architecture.md) 中。其他模块的详细设计由对应仓库维护，
+本仓库不再保存副本。
 
 ## 6. 项目阶段
 

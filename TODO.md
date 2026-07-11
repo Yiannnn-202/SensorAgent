@@ -10,12 +10,11 @@ Goal: make the project understandable to new contributors and keep repository bo
 - [x] Remove out-of-scope robot runtime, ROS 2, simulation, and hardware-driver content.
 - [x] Establish Python `src/` package layout.
 - [x] Add root `README.md`.
-- [x] Organize project, team, and related-module documentation under `docs/`.
-- [x] Add SensorAgent module positioning document.
+- [x] Establish one repository architecture document and a small operational guide set.
 - [x] Add `src/sensoragent/README.md` describing package layout.
 - [x] Initialize `pyproject.toml`.
 - [x] Add root `.gitignore`.
-- [x] Add logging documentation.
+- [x] Document configuration and logging in the repository architecture.
 - [x] Add root `TODO.md`.
 
 ## Phase 1 - Minimal MCP/API to Skill to Tool pipeline
@@ -167,6 +166,30 @@ Goal: evolve AgentRuntime from single-skill dispatch into task orchestration.
 - [x] Add task result persistence hook.
 - [x] Add end-to-end test for task lifecycle.
 
+## Phase 5.1 - Audio integration completion
+
+Goal: finish the existing ROS-independent ASR/TTS path without expanding the
+documentation surface again.
+
+Completed:
+
+- [x] Define audio contracts and fixtures.
+- [x] Implement fake and local audio clients.
+- [x] Implement `audio.transcribe`, `audio.speak`, and `audio.listen_transcribe`.
+- [x] Add audio configuration and fake end-to-end tests.
+- [x] Add the fixed-duration `listen-task` microphone pipeline.
+
+Remaining:
+
+- [ ] Add audio tool failure-path tests.
+- [ ] Add local-only tests that skip when model assets are unavailable.
+- [ ] Decide whether higher-level audio skills are useful.
+- [ ] Decide whether TTS playback belongs in SensorAgent or the interaction frontend.
+- [ ] Add RMS or model-backed VAD if fixed-duration recording is insufficient.
+- [ ] Add optional spoken task responses only after ownership is decided.
+- [ ] Remove unused Radish-derived code and confirm no ROS 2 audio dependency remains.
+- [ ] Confirm model weights and generated audio are ignored.
+
 ## Phase 6 - API, WebSocket, and MCP service entry points
 
 Goal: expose SensorAgent to users, frontend, and other modules.
@@ -213,6 +236,8 @@ Goal: implement competition-specific task logic after the generic framework is s
 ## Notes
 
 - Logger is framework infrastructure, not a normal skill.
-- Low-level robot control, Isaac Sim deployment, ROS 2 drivers, and physical safety belong to external runtime modules.
+- Low-level robot control, production ROS 2 drivers, and physical safety belong to
+  external runtime modules. The local RM65-B workspace is a development simulation
+  integration.
 - SensorAgent collaborates with external modules through API, MCP, WebSocket, or documented adapters.
 - Internal Python schemas are not the same as cross-module contracts; contracts should be language-neutral.

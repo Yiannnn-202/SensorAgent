@@ -1,6 +1,7 @@
 # 约定
 
-项目级代码、文档、CMake 与 git 规则。当本文件与 `docs/development/` 中的模块专项说明冲突时，对于该目录仅，以开发文档为准。
+项目级代码、文档、CMake 与 git 规则。仓库架构统一维护在
+`docs/architecture.md`，操作说明统一维护在 `docs/guides/`。
 
 ## C 与 C++
 
@@ -124,7 +125,8 @@ endif()
 
 ## 模块布局
 
-C++ 与 Python 模块共享同一理念：一个文件夹、一个关注点、测试与代码同放，API 文档在 `docs/api/`。
+C++ 与 Python 模块共享同一理念：一个文件夹、一个关注点、测试与代码同放。
+跨模块接口统一维护在 `contracts/` 或公共代码注释中。
 
 **C++**
 
@@ -151,15 +153,19 @@ ai/perception/detection/
 
 **单元测试**位于 `<module>/tests/`。每个测试文件选取一个被测单元，喂入 **mock 输入**，并断言 **预期输出**。单元测试中不得出现硬件 —— 在模块边界上 mock 驱动与 IPC。
 
-**API 文档** —— `docs/api/` 下每个公共模块接口一个 Markdown 文件（如 `docs/api/sched.md` 对应 `kernel/sched/` 的 syscall 暴露）。手写概览加链接到 Doxygen/Sphinx 生成的细节。
+不要为每个模块单独创建 Markdown。稳定的跨模块输入、输出、所有权、单位、
+错误和调用方责任应写入 `contracts/` 或公共代码注释。
 
-**开发文档** —— 新增或重命名模块时，更新 `docs/development/` 中对应文件（用途、边界、子模块）。与代码改动同一 PR。
+**架构文档** —— 仓库级设计和职责边界只维护在 `docs/architecture.md`，
+不要为各模块创建相互竞争的架构文档。只有长期有效的安装、运行和验证说明
+才放入 `docs/guides/`，并优先更新已有文件。
 
 ```mermaid
 flowchart LR
   code["module/ 代码"] --> tests["module/tests/"]
-  code --> api["docs/api/module.md"]
-  code --> dev["docs/development/module.md"]
+  code --> contract["contracts/"]
+  code --> arch["docs/architecture.md"]
+  code --> guide["docs/guides/"]
 ```
 
 用户态与工具通过 **syscall**（UDS RPC）调用内核，而非直接链接 `drivers/`。

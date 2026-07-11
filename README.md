@@ -1,8 +1,12 @@
 # SensorAgent
 
-SensorAgent is the agent-side orchestration module for embodied tasks. It focuses on task understanding, skill/tool orchestration, workflow execution, external module integration, and structured logging.
+SensorAgent is the agent-side orchestration repository for embodied tasks. It
+focuses on task understanding, skill/tool orchestration, workflow execution,
+external integrations, structured logging, and local RM65-B simulation development.
 
-It does **not** own Isaac Sim deployment, ROS 2 drivers, robot firmware, MoveIt2 configuration, or physical robot execution. Those capabilities are provided by other modules or teams and are consumed through API, MCP, WebSocket, or other documented adapters.
+It does **not** own production robot drivers, firmware, physical safety, or hardware
+bringup. The included ROS 2 workspace provides a local Gazebo and MoveIt 2
+development stack, not the production robot runtime.
 
 ## Role in the System
 
@@ -22,11 +26,12 @@ SensorAgent is responsible for:
 - Vision/audio/robot tool adapters.
 - External module integration through API or MCP.
 - Agent-owned structured logging.
+- Reproducible local RM65-B Gazebo and MoveIt 2 integration.
 
 SensorAgent is not responsible for:
 
 - Isaac Sim scene deployment.
-- ROS 2 runtime ownership.
+- Production ROS 2 runtime ownership.
 - Mechanical arm drivers or low-level control.
 - Physical robot safety.
 - Camera or hardware bringup.
@@ -36,8 +41,11 @@ SensorAgent is not responsible for:
 ```text
 sensoragent/
 ├── configs/                 # Project-level configuration files
-├── docs/                    # Project, team, and related-module docs
+├── docs/                    # Architecture, team documents, and guides
 ├── scripts/                 # Project-level startup and maintenance scripts
+├── ros2_ws/                 # Local RM65-B ROS 2 simulation workspace
+├── simulation/              # Gazebo worlds, models, and scenarios
+├── reinforcement_learning/  # Future RL environments and policies
 ├── src/
 │   └── sensoragent/
 │       ├── agent/           # Agent loop, planning, orchestration
@@ -62,9 +70,10 @@ Start from the documentation index:
 
 Key SensorAgent documents:
 
-- [Architecture](docs/sensoragent/architecture.md)
-- [Module positioning](docs/sensoragent/positioning.md)
-- [中文架构](docs/sensoragent/architecture_cn.md)
+- [Architecture](docs/architecture.md)
+- [Development backlog](TODO.md)
+- [Testing guide](docs/guides/testing.md)
+- [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
 
 ## Run the Mock Pipeline
 

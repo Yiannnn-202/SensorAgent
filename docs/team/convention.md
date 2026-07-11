@@ -1,6 +1,7 @@
 # Conventions
 
-Repository-wide rules for code, docs, CMake, and git. When something here conflicts with a module-specific note in `docs/development/`, the development doc wins for that folder only.
+Repository-wide rules for code, docs, CMake, and git. Repository architecture
+belongs in `docs/architecture.md`; operational instructions belong in `docs/guides/`.
 
 ## C and C++
 
@@ -91,7 +92,9 @@ Keep bullet lists short — if you need more than a handful, split into sections
 
 Write like internal engineering notes, not a generated spec. One idea per paragraph; skip filler openers.
 
-Docs may be written in English or Chinese. Prefer English for original docs. If a Chinese version is needed, use the same path and base name with `_cn.md`, for example `docs/api/scheduler.md` and `docs/api/scheduler_cn.md`. Keep translated docs structurally aligned with the original: same headings, same diagrams, same API names, and a note when the translation intentionally omits or summarizes details.
+Docs may be written in English or Chinese, but do not maintain duplicate translations
+by default. Add a translated document only when the audience requires it and the team
+will keep both versions synchronized.
 
 Do not edit generated documentation directly. Update the source comments, docstrings, or hand-written Markdown, then regenerate the output.
 
@@ -132,7 +135,8 @@ Executable modules (`rtcore/`, `userspace/*/`, tools) use `add_executable` and t
 
 ## Module layout
 
-C++ and Python modules share the same idea: one folder, one concern, tests beside the code, API doc in `docs/api/`.
+C++ and Python modules share the same idea: one folder, one concern, and tests beside
+the code. Cross-module interfaces belong in `contracts/` or public code comments.
 
 **C++**
 
@@ -159,19 +163,24 @@ ai/perception/detection/
 
 **Unit tests** live in `<module>/tests/`. Each test file picks one unit under test, feeds **mock input**, and asserts **expected output**. No hardware in unit tests — mock drivers and IPC at the module boundary.
 
-Every module needs three hand-written docs, updated in the same PR as the code:
+Do not create one Markdown file per module. Document stable cross-module inputs,
+outputs, ownership, units, errors, and caller responsibilities in `contracts/` or
+public code comments.
 
-**API docs** — one Markdown file per public module surface under `docs/api/` (e.g. `docs/api/sched.md` for `kernel/sched/` syscalls exposure). Interfaces are the first priority: define the stable inputs, outputs, data types, ownership, units, errors, timing, and caller responsibilities before binding the module to any specific data source. Include one minimal request/response, call sequence, or message example when it clarifies correct use. Link to generated Doxygen/Sphinx detail instead of duplicating every signature.
+**Architecture** — keep repository-wide design and ownership boundaries in the
+single `docs/architecture.md` file. Do not create competing module architecture
+documents.
 
-**Module docs** — one Markdown file under `docs/development/` for the module design. Cover purpose, ownership boundaries, interface contracts, algorithm choices, architecture, methods, dataflow, state transitions, timing assumptions, dependencies, and known limits. Treat simulation, replay, reference code, hardware drivers, and live services as interchangeable data sources behind the same interface whenever possible. Use mermaid for architecture and dataflow diagrams when a diagram is clearer than prose.
-
-**Test docs** — one Markdown file under `docs/development/tests/` for the module's verification story. State what is tested, how to run it, what result counts as pass/fail, and what quality signal the test gives. Name the method used: smoke test, unit test with mock, stubbed integration test, simulation, replay, benchmark, hardware-in-loop, or manual acceptance test. For simulation or reference implementations, document which interface they exercise and why the result is representative of real behavior. Summarize test results instead of pasting long logs; link CI artifacts or benchmark reports when raw output is needed.
+**Operational guides** — add a file under `docs/guides/` only when contributors
+need durable setup, operation, or verification instructions. Prefer updating an
+existing guide over creating another file.
 
 ```mermaid
 flowchart LR
   code["module/ code"] --> tests["module/tests/"]
-  code --> api["docs/api/module.md"]
-  code --> dev["docs/development/module.md"]
+  code --> contract["contracts/"]
+  code --> arch["docs/architecture.md"]
+  code --> guide["docs/guides/"]
 ```
 
 Userspace and tools call the kernel through **syscalls** (UDS RPC), not by linking `drivers/` directly.
@@ -187,10 +196,11 @@ Use the larger workflow when adding or redesigning a module. Use the small-chang
 1. Define the problem, success criteria, constraints, and non-goals.
 2. Research existing approaches, dependencies, algorithms, hardware limits, and failure modes.
 3. Define the public interface before choosing final data sources. Keep simulation, replay, mock, hardware, and live inputs behind the same contract where practical.
-4. Write or update the module design doc under `docs/development/`. Include architecture, algorithm choice, methods, dataflow, dependencies, and expected limits.
-5. Write or update the test doc under `docs/development/tests/`. Explain how the design will be proven: unit tests, mocks, stubs, simulation, replay, benchmarks, hardware-in-loop, smoke tests, or manual acceptance tests. State what result is good enough and why.
-6. Build an MVP with the smallest useful API and unit tests. Record the first meaningful test result in the test doc.
-7. Update the API doc under `docs/api/`. Add Doxygen/Sphinx comments for public interfaces before relying on them from other modules.
+4. Update `docs/architecture.md` only when repository-wide design or ownership changes.
+5. Update an existing `docs/guides/` file when setup or verification behavior changes.
+6. Build an MVP with the smallest useful API and unit tests.
+7. Update contracts and public code comments before relying on an interface from
+   another module.
 8. Finish the implementation, tests, docs, formatting, and local checks.
 9. Commit the complete module change after review-ready code and docs are together.
 10. Run global tests or CI before merging.
@@ -263,7 +273,7 @@ git diff
 Stage only intended files. Prefer explicit paths over `git add .` so generated files, local logs, credentials, and unrelated edits are not committed accidentally.
 
 ```bash
-git add path/to/file.cpp path/to/test.cpp docs/api/module.md
+git add path/to/file.cpp path/to/test.cpp contracts/tools/example.schema.json
 git status
 ```
 
@@ -298,4 +308,8 @@ Do not force-push shared branches unless the team agrees.
 
 **Commit contents**
 
-Commits contain source code, tests, configuration, and hand-written docs needed to review and reproduce the change. Do not commit logs, build directories, temporary files, runtime state, cache files, local environment files, generated reports, or machine-specific artifacts. Test results belong in CI, the test doc summary, or an external artifact link unless the repository explicitly tracks them.
+Commits contain source code, tests, configuration, contracts, and hand-written docs
+needed to review and reproduce the change. Do not commit logs, build directories,
+temporary files, runtime state, cache files, local environment files, generated
+reports, or machine-specific artifacts. Test results belong in CI or an external
+artifact link unless the repository explicitly tracks them.

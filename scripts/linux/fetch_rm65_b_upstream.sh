@@ -132,8 +132,7 @@ for launch_file in \
   rsp.launch.py \
   setup_assistant.launch.py \
   spawn_controllers.launch.py \
-  static_virtual_joint_tfs.launch.py \
-  warehouse_db.launch.py; do
+  static_virtual_joint_tfs.launch.py; do
   copy_file \
     "rm_moveit2_config/rm_65_config/launch/${launch_file}" \
     "${moveit_dir}/launch/${launch_file}"
@@ -183,6 +182,7 @@ excluded = {
     "rm_eco65_config",
     "rm_gen72_config",
     "rm_rx75_config",
+    "warehouse_ros_mongo",
 }
 for dependency in list(root.findall("exec_depend")):
     if dependency.text in excluded:
@@ -192,9 +192,11 @@ tree.write(gazebo_package, encoding="utf-8", xml_declaration=True)
 
 tree = ET.parse(moveit_package)
 root = tree.getroot()
-for dependency in root.findall("exec_depend"):
+for dependency in list(root.findall("exec_depend")):
     if dependency.text == "rm_65_description":
         dependency.text = "rm_description"
+    elif dependency.text == "warehouse_ros_mongo":
+        root.remove(dependency)
 ET.indent(tree, space="  ")
 tree.write(moveit_package, encoding="utf-8", xml_declaration=True)
 
