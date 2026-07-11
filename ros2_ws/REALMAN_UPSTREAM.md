@@ -30,6 +30,11 @@ Only the standard RM65 description, meshes, Gazebo integration, and MoveIt 2
 simulation configuration are selected. Drivers, examples, force-sensor
 variants, documentation assets, and other robot models are excluded.
 
+The tracked `sensoragent_rm65_b_bringup` package consumes these imported files
+and combines the arm with the vendored Robotiq 2F-85. The RealMan source files
+remain local and ignored; the integration package contains only project-owned
+configuration and references to the imported package.
+
 The import script also applies project compatibility adjustments:
 
 - maps the upstream `rm_65_description` dependency to `rm_description`;

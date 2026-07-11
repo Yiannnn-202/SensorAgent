@@ -26,7 +26,7 @@ SensorAgent is responsible for:
 - Vision/audio/robot tool adapters.
 - External module integration through API or MCP.
 - Agent-owned structured logging.
-- Reproducible local RM65-B Gazebo and MoveIt 2 integration.
+- Reproducible local RM65-B + Robotiq 2F-85 Gazebo and MoveIt 2 integration.
 
 SensorAgent is not responsible for:
 
@@ -43,7 +43,13 @@ sensoragent/
 ├── configs/                 # Project-level configuration files
 ├── docs/                    # Architecture, team documents, and guides
 ├── scripts/                 # Project-level startup and maintenance scripts
-├── ros2_ws/                 # Local RM65-B ROS 2 simulation workspace
+├── ros2_ws/                 # Local ROS 2 simulation workspace
+│   └── src/
+│       ├── rm_description/                  # Locally imported RM65-B model
+│       ├── rm_gazebo/                       # Locally imported arm-only Gazebo stack
+│       ├── rm_65_config/                    # Locally imported arm-only MoveIt config
+│       ├── robotiq_description/             # Vendored Robotiq 2F-85 model
+│       └── sensoragent_rm65_b_bringup/      # Combined arm/gripper stack
 ├── simulation/              # Gazebo worlds, models, and scenarios
 ├── reinforcement_learning/  # Future RL environments and policies
 ├── src/
@@ -74,6 +80,48 @@ Key SensorAgent documents:
 - [Development backlog](TODO.md)
 - [Testing guide](docs/guides/testing.md)
 - [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
+
+## RM65-B and Robotiq Simulation
+
+The tracked `sensoragent_rm65_b_bringup` package combines:
+
+```text
+RealMan RM65-B
+└── Link6
+    └── Robotiq 2F-85
+```
+
+The gripper is attached to `Link6` by a fixed joint. A single
+`gz_ros2_control` system manages the six arm joints and the Robotiq primary
+knuckle joint; the remaining finger joints follow through mimic relationships.
+MoveIt exposes separate `rm_group` and `gripper` planning groups.
+
+On Ubuntu 22.04 with ROS 2 Humble:
+
+```bash
+bash scripts/linux/fetch_rm65_b_upstream.sh
+
+cd ros2_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Start Gazebo:
+
+```bash
+ros2 launch sensoragent_rm65_b_bringup gazebo_robotiq_demo.launch.py
+```
+
+In another configured terminal, start MoveIt 2 and RViz:
+
+```bash
+ros2 launch sensoragent_rm65_b_bringup moveit_robotiq_demo.launch.py
+```
+
+The default gripper mounting transform is currently zero-offset and must be
+calibrated against the RM65-B flange in Gazebo before grasp evaluation. See the
+[full Ubuntu guide](docs/guides/rm65_b_gazebo_quickstart_cn.md).
 
 ## Run the Mock Pipeline
 

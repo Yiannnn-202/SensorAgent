@@ -117,20 +117,67 @@ microphone, speaker, or model weights.
 `ros2_ws/` provides the local RM65-B simulation stack for Ubuntu 22.04 and ROS 2
 Humble:
 
-```text
-rm_description   robot description and meshes
-rm_gazebo        Gazebo launch and ros2_control integration
-rm_65_config     MoveIt 2 configuration
-```
+| Package | Ownership | Responsibility |
+| --- | --- | --- |
+| `rm_description` | Imported locally | RM65-B URDF and meshes |
+| `rm_gazebo` | Imported locally | Upstream arm-only Gazebo integration |
+| `rm_65_config` | Imported locally | Upstream arm-only MoveIt 2 configuration |
+| `robotiq_description` | Vendored | Robotiq 2F-85 Xacro and meshes |
+| `sensoragent_rm65_b_bringup` | Project-owned | Combined Gazebo, ros2_control, and MoveIt integration |
 
 Upstream files are imported locally by
 `scripts/linux/fetch_rm65_b_upstream.sh` because redistribution permission is
 unclear. The repository tracks the import recipe and compatibility adjustments, not
-the upstream model assets.
+the RealMan model assets. Robotiq assets are redistributed under BSD-3-Clause;
+their pinned source and retained license are documented in
+`ros2_ws/ROBOTIQ_UPSTREAM.md`.
 
-The simulation launches Gazebo, the RM65-B model, joint controllers, MoveIt 2, and
-RViz. SensorAgent does not yet contain a completed ROS 2 bridge for issuing robot
-tasks directly.
+### Combined robot structure
+
+```text
+world
+└── base_link
+    └── RM65-B joint1 ... joint6
+        └── Link6
+            └── robotiq_85_base_joint (fixed)
+                └── Robotiq 2F-85 links and mimic joints
+```
+
+The mounting joint is defined in
+`sensoragent_rm65_b_bringup/urdf/rm65_b_robotiq_2f85.urdf.xacro`. Its default
+`xyz` and `rpy` are zero so Gazebo and MoveIt share one configurable transform.
+The final flange adapter thickness and orientation remain an Ubuntu simulation
+calibration task.
+
+### Control and planning path
+
+```text
+MoveIt / direct ROS 2 Action
+├── rm_group_controller
+│   └── joint1 ... joint6
+└── robotiq_gripper_controller
+    └── robotiq_85_left_knuckle_joint
+        └── remaining finger joints through mimic relationships
+            ↓
+       gz_ros2_control
+            ↓
+        Gazebo Sim
+```
+
+`position_controllers/GripperActionController` is used because it is available
+in ROS 2 Humble. The newer `parallel_gripper_action_controller` configuration
+from the current Robotiq main branch is intentionally not used.
+
+The combined SRDF exposes:
+
+- `rm_group`: the `base_link` to `Link6` arm chain;
+- `gripper`: the active 2F-85 knuckle joint;
+- `robotiq_2f85`: the end effector attached to `Link6`;
+- named `open` and `closed` gripper states.
+
+SensorAgent does not yet contain a completed ROS 2 bridge for issuing robot
+tasks directly. Gazebo contact behavior, flange alignment, grasp stability, and
+reinforcement-learning interfaces remain separate follow-up work.
 
 ## Reinforcement learning and simulation assets
 

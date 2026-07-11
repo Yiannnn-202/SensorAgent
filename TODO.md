@@ -233,6 +233,22 @@ Goal: implement competition-specific task logic after the generic framework is s
 - [ ] Add demo CLI/API command for the competition task.
 - [ ] Add fixture-based e2e tests for competition task logic.
 
+## Robotics simulation and learning environment
+
+Goal: provide a reproducible RM65-B manipulation environment before building
+reinforcement-learning tasks.
+
+- [x] Add a reproducible minimal RM65-B upstream import.
+- [x] Vendor the BSD-3-Clause Robotiq 2F-85 simulation description.
+- [x] Attach the 2F-85 to RM65-B `Link6` in a combined Xacro.
+- [x] Add Humble-compatible arm and gripper ros2_control configuration.
+- [x] Add combined Gazebo and MoveIt 2 launch files.
+- [ ] Validate and calibrate the gripper flange transform on Ubuntu.
+- [ ] Validate finger contact, friction, and grasp stability in Gazebo Sim.
+- [ ] Add industrial worlds, objects, and repeatable grasp scenarios.
+- [ ] Define the Gymnasium observation, action, reward, and termination contract.
+- [ ] Implement the first RL environment and scripted baseline.
+
 ## Notes
 
 - Logger is framework infrastructure, not a normal skill.

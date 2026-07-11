@@ -1,0 +1,138 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="rm65_b_robotiq_2f85">
+  <xacro:arg name="gripper_mount_xyz" default="0 0 0"/>
+  <xacro:arg name="gripper_mount_rpy" default="0 0 0"/>
+
+  <link name="world"/>
+  <joint name="world_to_rm65_b" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+  </joint>
+
+  <xacro:include filename="$(find rm_description)/urdf/rm_65_gazebo.urdf"/>
+  <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro"/>
+
+  <xacro:robotiq_gripper
+    name="Robotiq2F85"
+    prefix=""
+    parent="Link6"
+    include_ros2_control="false">
+    <origin xyz="$(arg gripper_mount_xyz)" rpy="$(arg gripper_mount_rpy)"/>
+  </xacro:robotiq_gripper>
+
+  <gazebo reference="base_link">
+    <self_collide>false</self_collide>
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="Link1">
+    <material>Gazebo/Purple</material>
+    <self_collide>false</self_collide>
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="Link2">
+    <material>Gazebo/Red</material>
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="Link3">
+    <material>Gazebo/Blue</material>
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="Link4">
+    <material>Gazebo/Green</material>
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="Link5">
+    <material>Gazebo/Yellow</material>
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="Link6">
+    <material>Gazebo/Orange</material>
+    <gravity>false</gravity>
+  </gazebo>
+
+  <ros2_control name="RM65BWithRobotiqSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+
+    <joint name="joint1">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint2">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint3">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint4">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint5">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="joint6">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="robotiq_85_left_knuckle_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="robotiq_85_right_knuckle_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">-1</param>
+    </joint>
+    <joint name="robotiq_85_left_inner_knuckle_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">1</param>
+    </joint>
+    <joint name="robotiq_85_right_inner_knuckle_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">-1</param>
+    </joint>
+    <joint name="robotiq_85_left_finger_tip_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">-1</param>
+    </joint>
+    <joint name="robotiq_85_right_finger_tip_joint">
+      <param name="mimic">robotiq_85_left_knuckle_joint</param>
+      <param name="multiplier">1</param>
+    </joint>
+  </ros2_control>
+
+  <gazebo>
+    <self_collide>true</self_collide>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find sensoragent_rm65_b_bringup)/config/ros2_controllers.yaml</parameters>
+      <robot_param>robot_description</robot_param>
+      <robot_param_node>robot_state_publisher</robot_param_node>
+    </plugin>
+  </gazebo>
+</robot>
