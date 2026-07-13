@@ -28,24 +28,42 @@ def generate_launch_description():
     package_name = "sensoragent_rm65_b_bringup"
     world_name = "empty"
     package_share = get_package_share_directory(package_name)
+    description_share = get_package_share_directory("rm_description")
+    robotiq_share = get_package_share_directory("robotiq_description")
     ros_gz_sim_share = get_package_share_directory("ros_gz_sim")
-    share_parent = os.path.dirname(package_share)
+    world_path = os.path.join(package_share, "worlds", "empty_pgs.sdf")
+    resource_paths = [
+        os.path.dirname(package_share),
+        os.path.dirname(description_share),
+        os.path.dirname(robotiq_share),
+    ]
 
+    xacro_path = PathJoinSubstitution(
+        [
+            package_share,
+            "urdf",
+            "rm65_b_robotiq_2f85.urdf.xacro",
+        ]
+    )
+    state_description_xml = Command(
+        [
+            FindExecutable(name="xacro"),
+            " ",
+            xacro_path,
+            " use_urdf_mimic:=true",
+        ]
+    )
+    gazebo_description_xml = Command(
+        [
+            FindExecutable(name="xacro"),
+            " ",
+            xacro_path,
+            " use_urdf_mimic:=false",
+        ]
+    )
     robot_description = {
         "robot_description": ParameterValue(
-            Command(
-                [
-                    FindExecutable(name="xacro"),
-                    " ",
-                    PathJoinSubstitution(
-                        [
-                            package_share,
-                            "urdf",
-                            "rm65_b_robotiq_2f85.urdf.xacro",
-                        ]
-                    ),
-                ]
-            ),
+            state_description_xml,
             value_type=str,
         )
     }
@@ -58,7 +76,7 @@ def generate_launch_description():
             "gz_args": [
                 "-v 4 -r --render-engine ",
                 LaunchConfiguration("render_engine"),
-                f" {world_name}.sdf",
+                f" {world_path}",
             ]
         }.items(),
         condition=IfCondition(LaunchConfiguration("start_gazebo")),
@@ -87,12 +105,31 @@ def generate_launch_description():
         arguments=[
             "-world",
             world_name,
-            "-topic",
-            "robot_description",
+            "-string",
+            gazebo_description_xml,
             "-name",
             "rm65_b_robotiq_2f85",
         ],
         output="screen",
+    )
+
+    focus_robot = ExecuteProcess(
+        cmd=[
+            "ign",
+            "service",
+            "-s",
+            "/gui/move_to",
+            "--reqtype",
+            "ignition.msgs.StringMsg",
+            "--reptype",
+            "ignition.msgs.Boolean",
+            "--timeout",
+            "30000",
+            "--req",
+            'data: "rm65_b_robotiq_2f85"',
+        ],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("auto_focus_robot")),
     )
 
     unpause_world = ExecuteProcess(
@@ -145,15 +182,22 @@ def generate_launch_description():
             on_exit=[TimerAction(period=2.0, actions=[spawn_controllers])],
         )
     )
+    focus_after_spawn = RegisterEventHandler(
+        OnProcessExit(
+            target_action=spawn_robot,
+            on_exit=[TimerAction(period=3.0, actions=[focus_robot])],
+        )
+    )
 
     return LaunchDescription(
         [
             DeclareLaunchArgument("start_gazebo", default_value="true"),
-            DeclareLaunchArgument("render_engine", default_value="ogre2"),
+            DeclareLaunchArgument("auto_focus_robot", default_value="false"),
+            DeclareLaunchArgument("render_engine", default_value="ogre"),
             SetEnvironmentVariable(
                 name="GZ_SIM_RESOURCE_PATH",
                 value=[
-                    share_parent,
+                    os.pathsep.join(resource_paths),
                     os.pathsep,
                     EnvironmentVariable("GZ_SIM_RESOURCE_PATH", default_value=""),
                 ],
@@ -164,5 +208,6 @@ def generate_launch_description():
             spawn_robot,
             unpause_after_spawn,
             controllers_after_unpause,
+            focus_after_spawn,
         ]
     )

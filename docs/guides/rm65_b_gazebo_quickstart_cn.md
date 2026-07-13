@@ -126,9 +126,13 @@ source install/setup.bash
 ros2 launch sensoragent_rm65_b_bringup gazebo_robotiq_demo.launch.py
 ```
 
+Ogre 1 下默认不调用 Gazebo 的自动聚焦服务，因为该服务可能在计算组合模型
+边界时触发渲染器崩溃。机械臂和夹爪会直接出现在默认视口中。确认使用 Ogre 2
+且需要自动聚焦时，可传入 `auto_focus_robot:=true`。
+
 该命令会启动：
 
-- Gazebo 空场景；
+- 使用 DART PGS 求解器的 Gazebo 空场景；
 - RM65-B 模型；
 - 固定在 `Link6` 末端的 Robotiq 2F-85；
 - `robot_state_publisher`；
@@ -137,6 +141,11 @@ ros2 launch sensoragent_rm65_b_bringup gazebo_robotiq_demo.launch.py
 - `robotiq_gripper_controller`。
 
 等待 Gazebo 中出现机械臂，并确认终端没有控制器加载错误。
+
+PGS 求解器用于规避 Ubuntu 22.04 自带 DART 6 Dantzig 求解器在旋转耦合夹爪
+机构上的 `RevoluteJoint::updateRelativeTransform()` 崩溃。
+Gazebo 使用不含 DART 原生 mimic 约束的物理描述，由 `gz_ros2_control` 驱动
+五个从动关节；`robot_state_publisher` 和 MoveIt 仍使用完整 mimic 描述。
 
 如需只验证未安装夹爪的 RealMan 上游模型，仍可使用：
 
@@ -264,27 +273,21 @@ ros2 action list | grep gripper_cmd
 
 停止服务时，在运行 Gazebo 和 MoveIt 2 的终端分别按 `Ctrl+C`。
 
-### Gazebo 中看不到机械臂
+### Gazebo 中看不到机械臂和夹爪
 
 先确认终端中出现：
 
 ```text
-Created entity [...] named [rm_65_description]
+Created entity [...] named [rm65_b_robotiq_2f85]
 ```
 
-如果同时出现 `Entity named [rm_65_description] already exists`，说明上一次
-Gazebo 实例或启动进程仍在运行。先在原终端按 `Ctrl+C` 完整停止，再重新执行
-启动命令；不要在同一个 Gazebo 世界中重复启动该 launch 文件。
+如果同时出现 `Entity named [rm65_b_robotiq_2f85] already exists`，说明
+上一次 Gazebo 实例或启动进程仍在运行。先在原终端按 `Ctrl+C` 完整停止，
+再重新执行启动命令；不要在同一个 Gazebo 世界中重复启动该 launch 文件。
 
-如果 Gazebo 的按钮和文字正常，但三维视口完全为白色，通常是虚拟机中的
-Ogre 2 / OpenGL 兼容问题。先改用 Ogre 1：
-
-```bash
-ros2 launch sensoragent_rm65_b_bringup \
-  gazebo_robotiq_demo.launch.py render_engine:=ogre
-```
-
-如果 Ogre 1 仍然无法显示，再尝试 Mesa 软件渲染：
+此启动文件默认使用兼容性更好的 Ogre 1。如果 Gazebo 的按钮和文字正常，
+但三维视口仍完全为白色，通常是虚拟机中的 OpenGL 兼容问题。尝试 Mesa
+软件渲染：
 
 ```bash
 LIBGL_ALWAYS_SOFTWARE=1 \
@@ -293,6 +296,7 @@ ros2 launch sensoragent_rm65_b_bringup \
 ```
 
 如果软件渲染导致整个三维视口闪烁，应取消 `LIBGL_ALWAYS_SOFTWARE`，并优先
-在虚拟机设置中启用三维加速。
+在虚拟机设置中启用三维加速。确认显卡支持 Ogre 2 后，可使用
+`render_engine:=ogre2` 恢复较新的渲染器。
 
 模型和控制器仍可正常生成时，这个问题与 ROS 2 或 RM65-B 文件无关。

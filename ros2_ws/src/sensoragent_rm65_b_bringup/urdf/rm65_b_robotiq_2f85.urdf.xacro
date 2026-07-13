@@ -2,6 +2,7 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="rm65_b_robotiq_2f85">
   <xacro:arg name="gripper_mount_xyz" default="0 0 0"/>
   <xacro:arg name="gripper_mount_rpy" default="0 0 0"/>
+  <xacro:arg name="use_urdf_mimic" default="true"/>
 
   <link name="world"/>
   <joint name="world_to_rm65_b" type="fixed">
@@ -9,14 +10,15 @@
     <child link="base_link"/>
   </joint>
 
-  <xacro:include filename="$(find rm_description)/urdf/rm_65_gazebo.urdf"/>
+  <xacro:include filename="$(find rm_description)/urdf/rm_65.urdf"/>
   <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro"/>
 
   <xacro:robotiq_gripper
     name="Robotiq2F85"
     prefix=""
     parent="Link6"
-    include_ros2_control="false">
+    include_ros2_control="false"
+    use_urdf_mimic="$(arg use_urdf_mimic)">
     <origin xyz="$(arg gripper_mount_xyz)" rpy="$(arg gripper_mount_rpy)"/>
   </xacro:robotiq_gripper>
 
@@ -49,6 +51,23 @@
     <material>Gazebo/Orange</material>
     <gravity>false</gravity>
   </gazebo>
+
+  <!-- Keep the attached gripper stable before ros2_control activates. -->
+  <xacro:macro name="gazebo_gripper_link" params="link">
+    <gazebo reference="${link}">
+      <self_collide>false</self_collide>
+      <gravity>false</gravity>
+    </gazebo>
+  </xacro:macro>
+  <xacro:gazebo_gripper_link link="robotiq_85_base_link"/>
+  <xacro:gazebo_gripper_link link="robotiq_85_left_knuckle_link"/>
+  <xacro:gazebo_gripper_link link="robotiq_85_right_knuckle_link"/>
+  <xacro:gazebo_gripper_link link="robotiq_85_left_finger_link"/>
+  <xacro:gazebo_gripper_link link="robotiq_85_right_finger_link"/>
+  <xacro:gazebo_gripper_link link="robotiq_85_left_inner_knuckle_link"/>
+  <xacro:gazebo_gripper_link link="robotiq_85_right_inner_knuckle_link"/>
+  <xacro:gazebo_gripper_link link="robotiq_85_left_finger_tip_link"/>
+  <xacro:gazebo_gripper_link link="robotiq_85_right_finger_tip_link"/>
 
   <ros2_control name="RM65BWithRobotiqSystem" type="system">
     <hardware>
@@ -128,7 +147,7 @@
   </ros2_control>
 
   <gazebo>
-    <self_collide>true</self_collide>
+    <self_collide>false</self_collide>
     <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
       <parameters>$(find sensoragent_rm65_b_bringup)/config/ros2_controllers.yaml</parameters>
       <robot_param>robot_description</robot_param>
