@@ -7,6 +7,45 @@ RM65-B、Robotiq 2F-85、Gazebo 与 MoveIt 2 仿真控制栈。
 > `sensoragent_robot_bridge` 尚未实现，因此 SensorAgent 还不能直接向
 > ROS 2 下发机械臂任务。
 
+## 最简使用方式
+
+首次克隆仓库，或者 RM65-B/Robotiq 仿真文件发生更新后，运行一次：
+
+```bash
+cd ~/SensorAgent
+bash scripts/linux/prepare_rm65_b_sim.sh
+```
+
+以后每次启动只需要：
+
+```bash
+cd ~/SensorAgent
+bash scripts/linux/run_rm65_b_sim.sh
+```
+
+该命令会自动加载 ROS 2 和工作区环境，并启动 Gazebo、RM65-B、Robotiq
+2F-85、MoveIt 2 与 RViz。仅启动 Gazebo、不启动 MoveIt/RViz 时使用：
+
+```bash
+bash scripts/linux/run_rm65_b_sim.sh start_moveit:=false
+```
+
+如果希望在任意目录直接启动，可以配置一次终端别名：
+
+```bash
+echo "alias sensoragent-sim='cd ~/SensorAgent && bash scripts/linux/run_rm65_b_sim.sh'" \
+  >> ~/.bashrc
+source ~/.bashrc
+```
+
+以后只需执行：
+
+```bash
+sensoragent-sim
+```
+
+后续章节保留手动命令，供安装、调试和故障排查使用。
+
 ## 1. 进入项目并加载 ROS 2
 
 ```bash

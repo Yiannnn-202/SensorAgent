@@ -96,27 +96,25 @@ The gripper is attached to `Link6` by a fixed joint. A single
 knuckle joint; the remaining finger joints follow through mimic relationships.
 MoveIt exposes separate `rm_group` and `gripper` planning groups.
 
-On Ubuntu 22.04 with ROS 2 Humble:
+On Ubuntu 22.04 with ROS 2 Humble, prepare the workspace once:
 
 ```bash
-bash scripts/linux/fetch_rm65_b_upstream.sh
-
-cd ros2_ws
-source /opt/ros/humble/setup.bash
-colcon build --symlink-install
-source install/setup.bash
+bash scripts/linux/prepare_rm65_b_sim.sh
 ```
 
-Start Gazebo:
+After that, start the complete Gazebo and MoveIt stack with one command:
 
 ```bash
-ros2 launch sensoragent_rm65_b_bringup gazebo_robotiq_demo.launch.py
+bash scripts/linux/run_rm65_b_sim.sh
 ```
 
-In another configured terminal, start MoveIt 2 and RViz:
+An optional shell alias reduces this to `sensoragent-sim`; see the
+[full Ubuntu guide](docs/guides/rm65_b_gazebo_quickstart_cn.md).
+
+To start Gazebo without MoveIt and RViz:
 
 ```bash
-ros2 launch sensoragent_rm65_b_bringup moveit_robotiq_demo.launch.py
+bash scripts/linux/run_rm65_b_sim.sh start_moveit:=false
 ```
 
 The default gripper mounting transform is currently zero-offset and must be
