@@ -1,6 +1,7 @@
 moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
 
 moveit_simple_controller_manager:
+  parallel: true
   controller_names:
     - rm_group_controller
     - robotiq_gripper_controller
@@ -21,5 +22,7 @@ moveit_simple_controller_manager:
     type: GripperCommand
     action_ns: gripper_cmd
     default: true
+    max_effort: 20.0
     joints:
       - robotiq_85_left_knuckle_joint
+      - robotiq_85_right_knuckle_joint

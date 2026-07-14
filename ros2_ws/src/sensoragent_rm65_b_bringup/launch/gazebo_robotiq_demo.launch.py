@@ -50,7 +50,6 @@ def generate_launch_description():
             FindExecutable(name="xacro"),
             " ",
             xacro_path,
-            " use_urdf_mimic:=true",
         ]
     )
     gazebo_description_xml = Command(
@@ -58,7 +57,6 @@ def generate_launch_description():
             FindExecutable(name="xacro"),
             " ",
             xacro_path,
-            " use_urdf_mimic:=false",
         ]
     )
     robot_description = {
@@ -156,7 +154,7 @@ def generate_launch_description():
         arguments=[
             "joint_state_broadcaster",
             "rm_group_controller",
-            "robotiq_gripper_controller",
+            "robotiq_gripper_effort_controller",
             "--controller-manager",
             "/controller_manager",
             "--controller-manager-timeout",
@@ -170,6 +168,13 @@ def generate_launch_description():
         output="screen",
     )
 
+    gripper_action_bridge = Node(
+        package=package_name,
+        executable="gripper_action_bridge.py",
+        output="screen",
+        parameters=[{"use_sim_time": True}],
+    )
+
     unpause_after_spawn = RegisterEventHandler(
         OnProcessExit(
             target_action=spawn_robot,
@@ -180,6 +185,12 @@ def generate_launch_description():
         OnProcessExit(
             target_action=unpause_world,
             on_exit=[TimerAction(period=2.0, actions=[spawn_controllers])],
+        )
+    )
+    gripper_bridge_after_controllers = RegisterEventHandler(
+        OnProcessExit(
+            target_action=spawn_controllers,
+            on_exit=[TimerAction(period=1.0, actions=[gripper_action_bridge])],
         )
     )
     focus_after_spawn = RegisterEventHandler(
@@ -208,6 +219,7 @@ def generate_launch_description():
             spawn_robot,
             unpause_after_spawn,
             controllers_after_unpause,
+            gripper_bridge_after_controllers,
             focus_after_spawn,
         ]
     )

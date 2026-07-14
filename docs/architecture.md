@@ -140,7 +140,7 @@ world
     └── RM65-B joint1 ... joint6
         └── Link6
             └── robotiq_85_base_joint (fixed)
-                └── Robotiq 2F-85 links and mimic joints
+                └── Robotiq 2F-85 rigid parallel-jaw links
 ```
 
 The mounting joint is defined in
@@ -156,17 +156,20 @@ MoveIt / direct ROS 2 Action
 ├── rm_group_controller
 │   └── joint1 ... joint6
 └── robotiq_gripper_controller
-    └── robotiq_85_left_knuckle_joint
-        └── remaining finger joints through mimic relationships
-            ↓
-       gz_ros2_control
-            ↓
-        Gazebo Sim
+    └── gripper_action_bridge.py
+        └── robotiq_gripper_effort_controller
+            ├── robotiq_85_left_knuckle_joint
+            └── robotiq_85_right_knuckle_joint
+                ↓
+           gz_ros2_control
+                ↓
+            Gazebo Sim
 ```
 
-`position_controllers/GripperActionController` is used because it is available
-in ROS 2 Humble. The newer `parallel_gripper_action_controller` configuration
-from the current Robotiq main branch is intentionally not used.
+The simulation uses two bounded-effort prismatic finger joints behind the
+standard `control_msgs/action/GripperCommand` API. Each rigid finger assembly
+moves linearly and can stop independently on contact, avoiding the
+non-physical deformation caused by velocity-driven mimic joints under load.
 
 The combined SRDF exposes:
 
@@ -175,9 +178,9 @@ The combined SRDF exposes:
 - `robotiq_2f85`: the end effector attached to `Link6`;
 - named `open` and `closed` gripper states.
 
-SensorAgent does not yet contain a completed ROS 2 bridge for issuing robot
-tasks directly. Gazebo contact behavior, flange alignment, grasp stability, and
-reinforcement-learning interfaces remain separate follow-up work.
+SensorAgent does not yet contain a completed ROS 2 bridge for issuing full
+robot tasks directly. Flange alignment and reinforcement-learning interfaces
+remain separate follow-up work.
 
 ## Reinforcement learning and simulation assets
 

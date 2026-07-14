@@ -92,9 +92,9 @@ RealMan RM65-B
 ```
 
 The gripper is attached to `Link6` by a fixed joint. A single
-`gz_ros2_control` system manages the six arm joints and the Robotiq primary
-knuckle joint; the remaining finger joints follow through mimic relationships.
-MoveIt exposes separate `rm_group` and `gripper` planning groups.
+`gz_ros2_control` system manages the six arm joints and two independently
+effort-controlled parallel gripper joints. MoveIt exposes separate `rm_group`
+and `gripper` planning groups.
 
 On Ubuntu 22.04 with ROS 2 Humble, prepare the workspace once:
 

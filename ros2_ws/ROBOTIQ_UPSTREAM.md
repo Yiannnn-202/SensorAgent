@@ -16,9 +16,10 @@ The repository keeps only the files needed to describe and simulate a 2F-85:
 
 The 2F-140, Hand-E, Universal Robots adapter, physical serial driver, hardware
 activation controller, examples, and hardware tests are intentionally omitted.
-The simulation uses the Humble
-`position_controllers/GripperActionController`, so no custom Robotiq controller
-source is required.
+The integrated simulation replaces the upstream contact-bearing mimic linkage
+with two rigid, independently effort-controlled prismatic finger assemblies.
+A small ROS 2 action bridge preserves the standard `GripperCommand` interface
+while allowing either finger to stop safely on object contact.
 
 The vendored macro defaults `include_ros2_control` to `false`. The combined
 bringup package supplies the simulation control interfaces in the same

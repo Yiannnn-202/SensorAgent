@@ -177,14 +177,14 @@ Ogre 1 下默认不调用 Gazebo 的自动聚焦服务，因为该服务可能�
 - `robot_state_publisher`；
 - `joint_state_broadcaster`；
 - `rm_group_controller`；
-- `robotiq_gripper_controller`。
+- `robotiq_gripper_effort_controller`；
+- 提供 `/robotiq_gripper_controller/gripper_cmd` 的夹爪 Action bridge。
 
 等待 Gazebo 中出现机械臂，并确认终端没有控制器加载错误。
 
-PGS 求解器用于规避 Ubuntu 22.04 自带 DART 6 Dantzig 求解器在旋转耦合夹爪
-机构上的 `RevoluteJoint::updateRelativeTransform()` 崩溃。
-Gazebo 使用不含 DART 原生 mimic 约束的物理描述，由 `gz_ros2_control` 驱动
-五个从动关节；`robot_state_publisher` 和 MoveIt 仍使用完整 mimic 描述。
+PGS 求解器用于规避 Ubuntu 22.04 自带 DART 6 Dantzig 求解器的稳定性问题。
+Gazebo 中左右夹指使用独立的限力 effort 控制，夹指内部接触部件固定为刚体，
+因此任一夹指接触物体后不会与指节脱节。
 
 如需只验证未安装夹爪的 RealMan 上游模型，仍可使用：
 
@@ -214,7 +214,7 @@ RViz 启动后，可以通过 MotionPlanning 面板设置目标姿态，先执�
 ros2 action send_goal \
   /robotiq_gripper_controller/gripper_cmd \
   control_msgs/action/GripperCommand \
-  '{command: {position: 0.0, max_effort: 30.0}}'
+  '{command: {position: 0.0, max_effort: 20.0}}'
 ```
 
 关闭夹爪：
@@ -223,8 +223,12 @@ ros2 action send_goal \
 ros2 action send_goal \
   /robotiq_gripper_controller/gripper_cmd \
   control_msgs/action/GripperCommand \
-  '{command: {position: 0.7929, max_effort: 30.0}}'
+  '{command: {position: 0.0848, max_effort: 20.0}}'
 ```
+
+`position` 是左右夹指向内行程之和，单位为米；`0.0` 为完全打开，
+`0.0848` 为完全闭合。抓住物体时通常会在二者之间停止并返回
+`stalled: true`。
 
 ## 7. 检查运行状态
 
@@ -247,7 +251,7 @@ ros2 action list | grep robotiq
 ```text
 joint_state_broadcaster  active
 rm_group_controller     active
-robotiq_gripper_controller active
+robotiq_gripper_effort_controller active
 ```
 
 ## 8. 校准夹爪安装位姿
@@ -298,7 +302,9 @@ sudo apt install -y ros-humble-ign-ros2-control
 ros2 control list_controllers
 ros2 control load_controller --set-state active joint_state_broadcaster
 ros2 control load_controller --set-state active rm_group_controller
-ros2 control load_controller --set-state active robotiq_gripper_controller
+ros2 control load_controller --set-state active robotiq_gripper_effort_controller
+ros2 run sensoragent_rm65_b_bringup gripper_action_bridge.py --ros-args \
+  -p use_sim_time:=true
 ```
 
 ### Gazebo 已启动但 MoveIt 不能执行
