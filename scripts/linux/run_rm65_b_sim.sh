@@ -20,9 +20,11 @@ if [[ ! -f "${workspace_setup}" ]]; then
 fi
 
 # shellcheck disable=SC1090
+set +u
 source "${ros_setup}"
 # shellcheck disable=SC1090
 source "${workspace_setup}"
+set -u
 
 exec ros2 launch \
   sensoragent_rm65_b_bringup \

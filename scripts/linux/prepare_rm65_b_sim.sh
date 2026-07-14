@@ -21,7 +21,9 @@ for command_name in rosdep colcon; do
 done
 
 # shellcheck disable=SC1090
+set +u
 source "${ros_setup}"
+set -u
 
 bash "${repo_root}/scripts/linux/fetch_rm65_b_upstream.sh"
 
