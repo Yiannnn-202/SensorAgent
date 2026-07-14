@@ -14,23 +14,31 @@ from sensoragent.integrations import (
   FakeMicrophoneRecorder,
   LocalAudioClient,
   OpenAICompatibleClient,
+  SileroVadSegmenter,
+  SoundDeviceVadRecorder,
   SoundDeviceRecorder,
   load_llm_config_from_env,
 )
 from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
+from sensoragent.skills.audio import AudioAnnounceSkill, AudioListenCommandSkill
 from sensoragent.skills.mock import MockPickAndPlaceSkill
 from sensoragent.state import InMemoryEventStream, InMemoryTaskStore
 from sensoragent.tools import ToolRegistry, ToolRuntime
 from sensoragent.tools.audio.mock import MockTranscribeTool
 from sensoragent.tools.audio import (
   AudioListenTranscribeTool,
+  AudioListenVadTranscribeTool,
   AudioSpeakTool,
   AudioTranscribeTool,
 )
 from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
 from sensoragent.tools.vision.mock import MockDetectTool
-from sensoragent.workflows import ActionListRuntime, build_mock_pick_place_actionlist
+from sensoragent.workflows import (
+  ActionListRuntime,
+  build_mock_pick_place_actionlist,
+  build_voice_command_ack_actionlist,
+)
 from sensoragent.workflows import DecisionTreeRuntime
 from sensoragent.agent.llm_planner import LLMPlanner
 
@@ -47,6 +55,8 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
 }
 
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {
+  "audio.announce": AudioAnnounceSkill,
+  "audio.listen_command": AudioListenCommandSkill,
   "mock.pick_and_place": MockPickAndPlaceSkill,
 }
 
@@ -75,16 +85,53 @@ def _build_microphone_recorder(config: SensorAgentConfig):
     )
   if backend == "sounddevice":
     return SoundDeviceRecorder()
+  if backend == "sounddevice_vad":
+    audio_config = config.integrations.audio
+    return SoundDeviceVadRecorder(
+      model_path=str(audio_config.get("vad_model_path", "models/asr/vad/silero_vad.onnx")),
+      threshold=float(audio_config.get("vad_threshold", 0.35)),
+      min_speech_windows=int(audio_config.get("vad_min_speech_windows", 2)),
+      pre_roll_ms=int(audio_config.get("vad_pre_roll_ms", 120)),
+      post_roll_ms=int(audio_config.get("vad_post_roll_ms", 1800)),
+      tail_padding_ms=int(audio_config.get("vad_tail_padding_ms", 700)),
+      max_utterance_sec=float(audio_config.get("vad_max_utterance_sec", 15.0)),
+    )
   raise ValueError(f"Unknown microphone backend: {backend}")
+
+
+def _build_vad_segmenter(config: SensorAgentConfig):
+  audio_config = config.integrations.audio
+  model_path = audio_config.get("vad_model_path")
+  if not model_path:
+    return None
+  return SileroVadSegmenter(
+    model_path=str(model_path),
+    threshold=float(audio_config.get("vad_threshold", 0.35)),
+    min_speech_windows=int(audio_config.get("vad_min_speech_windows", 2)),
+    pre_roll_ms=int(audio_config.get("vad_pre_roll_ms", 120)),
+    post_roll_ms=int(audio_config.get("vad_post_roll_ms", 1800)),
+    max_utterance_sec=float(audio_config.get("vad_max_utterance_sec", 15.0)),
+  )
 
 
 def _build_tool(tool_name: str, config: SensorAgentConfig):
   if tool_name in AVAILABLE_TOOLS:
     return AVAILABLE_TOOLS[tool_name]()
-  if tool_name in {"audio.listen_transcribe", "audio.transcribe", "audio.speak"}:
+  if tool_name in {
+    "audio.listen_transcribe",
+    "audio.listen_vad_transcribe",
+    "audio.transcribe",
+    "audio.speak",
+  }:
     client = _build_audio_client(config)
     if tool_name == "audio.listen_transcribe":
       return AudioListenTranscribeTool(_build_microphone_recorder(config), client)
+    if tool_name == "audio.listen_vad_transcribe":
+      return AudioListenVadTranscribeTool(
+        _build_microphone_recorder(config),
+        client,
+        _build_vad_segmenter(config),
+      )
     if tool_name == "audio.transcribe":
       return AudioTranscribeTool(client)
     return AudioSpeakTool(client)
@@ -140,6 +187,7 @@ def build_agent(
   actionlist_runtime = ActionListRuntime(tool_runtime, skill_runtime, logger)
   actionlists = {
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
+    "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,

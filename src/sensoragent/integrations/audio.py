@@ -108,10 +108,10 @@ def _read_mono_16k_wav(path: Path):
 class LocalAudioClient:
   """Local model-backed ASR/TTS client.
 
-  ASR uses SenseVoice through sherpa-onnx. TTS currently supports the Piper-VITS
-  layout used by the reviewed Radish TTS server. The Baker/icefall TTS layout
-  is detected and reported as unsupported until its sherpa-onnx backend is
-  confirmed.
+  ASR uses SenseVoice through sherpa-onnx. TTS supports sherpa-onnx VITS
+  layouts, including the Chinese/English MeloTTS model and Piper-VITS.
+  The Baker/icefall TTS layout is detected and reported as unsupported until
+  its sherpa-onnx backend is confirmed.
   """
 
   def __init__(
@@ -173,7 +173,70 @@ class LocalAudioClient:
       "language": language,
     }
 
-  def _find_vits_assets(self) -> tuple[Path, Path, Path] | None:
+  def _find_fanchen_vits_assets(self) -> tuple[Path, Path, Path, str, str] | None:
+    candidates = [
+      self._tts_model_dir / "vits-zh-hf-fanchen-wnj",
+      self._tts_model_dir,
+    ]
+    for directory in candidates:
+      model_path = directory / "vits-zh-hf-fanchen-wnj.onnx"
+      tokens_path = directory / "tokens.txt"
+      lexicon_path = directory / "lexicon.txt"
+      if not (
+        model_path.is_file()
+        and tokens_path.is_file()
+        and lexicon_path.is_file()
+      ):
+        continue
+
+      rule_paths = [
+        path
+        for path in (directory / "date.fst", directory / "number.fst")
+        if path.is_file()
+      ]
+      return (
+        model_path,
+        tokens_path,
+        lexicon_path,
+        ",".join(str(path) for path in rule_paths),
+        "vits-zh-hf-fanchen-wnj",
+      )
+    return None
+
+  def _find_melo_vits_assets(self) -> tuple[Path, Path, Path, str, str] | None:
+    candidates = [
+      self._tts_model_dir / "vits-melo-tts-zh_en",
+      self._tts_model_dir,
+    ]
+    for directory in candidates:
+      model_path = directory / "model.onnx"
+      tokens_path = directory / "tokens.txt"
+      lexicon_path = directory / "lexicon.txt"
+      if not (
+        model_path.is_file()
+        and tokens_path.is_file()
+        and lexicon_path.is_file()
+      ):
+        continue
+
+      rule_paths = [
+        path
+        for path in (directory / "date.fst", directory / "number.fst")
+        if path.is_file()
+      ]
+      return (
+        model_path,
+        tokens_path,
+        lexicon_path,
+        ",".join(str(path) for path in rule_paths),
+        "vits-melo-tts-zh_en",
+      )
+    return None
+
+  def _find_zh_vits_assets(self) -> tuple[Path, Path, Path, str, str] | None:
+    return self._find_fanchen_vits_assets() or self._find_melo_vits_assets()
+
+  def _find_piper_vits_assets(self) -> tuple[Path, Path, Path] | None:
     candidates = [
       self._tts_model_dir,
       self._tts_model_dir / "vits-piper-en_US-glados",
@@ -195,15 +258,38 @@ class LocalAudioClient:
     except Exception as exc:
       raise AudioModelError("sherpa_onnx is required for local TTS") from exc
 
-    vits_assets = self._find_vits_assets()
-    if vits_assets is None:
+    zh_vits_assets = self._find_zh_vits_assets()
+    if zh_vits_assets is not None:
+      model_path, tokens_path, lexicon_path, rule_fsts, voice_name = zh_vits_assets
+      config = sherpa_onnx.OfflineTtsConfig(
+        model=sherpa_onnx.OfflineTtsModelConfig(
+          vits=sherpa_onnx.OfflineTtsVitsModelConfig(
+            model=str(model_path),
+            lexicon=str(lexicon_path),
+            tokens=str(tokens_path),
+          ),
+          num_threads=2,
+          debug=False,
+          provider="cpu",
+        ),
+        rule_fsts=rule_fsts,
+        max_num_sentences=1,
+      )
+      if not config.validate():
+        raise AudioModelError(f"Invalid {voice_name} sherpa-onnx configuration")
+      self._tts_engine = sherpa_onnx.OfflineTts(config)
+      self._tts_voice = voice_name
+      return self._tts_engine
+
+    piper_assets = self._find_piper_vits_assets()
+    if piper_assets is None:
       if (self._tts_model_dir / "model-steps-3.onnx").exists():
         raise AudioModelError(
           "Detected Baker/icefall TTS assets, but this backend is not wired yet"
         )
       raise AudioModelError(f"TTS model assets missing under {self._tts_model_dir}")
 
-    model_path, tokens_path, data_dir = vits_assets
+    model_path, tokens_path, data_dir = piper_assets
     config = sherpa_onnx.OfflineTtsConfig(
       model=sherpa_onnx.OfflineTtsModelConfig(
         vits=sherpa_onnx.OfflineTtsVitsModelConfig(
@@ -218,6 +304,8 @@ class LocalAudioClient:
       rule_fsts="",
       max_num_sentences=1,
     )
+    if not config.validate():
+      raise AudioModelError("Invalid Piper-VITS sherpa-onnx configuration")
     self._tts_engine = sherpa_onnx.OfflineTts(config)
     self._tts_voice = "vits-piper"
     return self._tts_engine
@@ -285,8 +373,17 @@ class LocalAudioClient:
     except Exception as exc:
       raise AudioModelError("numpy is required for local TTS") from exc
 
+    try:
+      import sherpa_onnx
+    except Exception as exc:
+      raise AudioModelError("sherpa_onnx is required for local TTS") from exc
+
     tts = self._load_tts()
-    audio = tts.generate(text)
+    gen_config = sherpa_onnx.GenerationConfig()
+    gen_config.sid = 0
+    gen_config.speed = 1.0
+    gen_config.silence_scale = 0.2
+    audio = tts.generate(text, gen_config)
     samples = np.asarray(audio.samples)
     if samples.size == 0:
       raise AudioModelError("TTS produced no audio")
@@ -305,7 +402,8 @@ class LocalAudioClient:
 def _write_wav(path: Path, samples, sample_rate: int) -> None:
   import numpy as np
 
-  samples_int16 = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
+  samples_float = np.asarray(samples, dtype=np.float32)
+  samples_int16 = (np.clip(samples_float, -1.0, 1.0) * 32767).astype(np.int16)
   with wave.open(str(path), "wb") as wav:
     wav.setnchannels(1)
     wav.setsampwidth(2)

@@ -120,6 +120,24 @@ def _build_parser() -> argparse.ArgumentParser:
     help="Where to write the recorded WAV. Defaults to logs/audio/*.wav.",
   )
   listen_task.add_argument(
+    "--vad-threshold",
+    type=float,
+    default=None,
+    help="Optional VAD speech threshold override for listen-task.",
+  )
+  listen_task.add_argument(
+    "--vad-post-roll-ms",
+    type=int,
+    default=None,
+    help="Optional VAD silence tail wait override in milliseconds.",
+  )
+  listen_task.add_argument(
+    "--vad-tail-padding-ms",
+    type=int,
+    default=None,
+    help="Optional silent padding appended before ASR in milliseconds.",
+  )
+  listen_task.add_argument(
     "--object-query",
     default=None,
     help="Optional structured object query passed to the planner.",
@@ -190,9 +208,18 @@ def _run_listen_task(args: argparse.Namespace) -> int:
   }
   if args.audio_path is not None:
     listen_input["output_path"] = str(args.audio_path)
+  vad_input = {}
+  if args.vad_threshold is not None:
+    vad_input["threshold"] = args.vad_threshold
+  if args.vad_post_roll_ms is not None:
+    vad_input["post_roll_ms"] = args.vad_post_roll_ms
+  if args.vad_tail_padding_ms is not None:
+    vad_input["tail_padding_ms"] = args.vad_tail_padding_ms
+  if vad_input:
+    listen_input["vad"] = vad_input
 
   transcript = bundle.tool_runtime.invoke(
-    "audio.listen_transcribe",
+    "audio.listen_vad_transcribe",
     listen_input,
     trace=TraceContext(),
   )

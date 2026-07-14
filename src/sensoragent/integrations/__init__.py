@@ -12,6 +12,12 @@ from sensoragent.integrations.microphone import (
   MicrophoneRecorder,
   SoundDeviceRecorder,
 )
+from sensoragent.integrations.vad import (
+  SileroVadSegmenter,
+  SoundDeviceVadRecorder,
+  VadError,
+  VadSegmenter,
+)
 from sensoragent.integrations.audio import (
   AudioClient,
   AudioError,
@@ -34,6 +40,10 @@ __all__ = [
   "MicrophoneError",
   "MicrophoneRecorder",
   "OpenAICompatibleClient",
+  "SileroVadSegmenter",
+  "SoundDeviceVadRecorder",
   "SoundDeviceRecorder",
+  "VadError",
+  "VadSegmenter",
   "load_llm_config_from_env",
 ]

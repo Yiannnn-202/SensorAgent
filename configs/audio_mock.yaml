@@ -6,6 +6,7 @@ agent:
 tools:
   enabled:
     - audio.listen_transcribe
+    - audio.listen_vad_transcribe
     - audio.transcribe
     - audio.speak
     - vision.mock_detect
@@ -14,6 +15,8 @@ tools:
 
 skills:
   enabled:
+    - audio.listen_command
+    - audio.announce
     - mock.pick_and_place
 
 integrations:

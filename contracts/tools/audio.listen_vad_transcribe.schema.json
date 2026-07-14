@@ -1,0 +1,64 @@
+{
+  "name": "audio.listen_vad_transcribe",
+  "version": "0.1.0",
+  "description": "Record microphone audio and transcribe one VAD-segmented speech command.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "duration_seconds": {
+        "type": "number",
+        "description": "Maximum fixed recording window in seconds."
+      },
+      "sample_rate": {
+        "type": "number",
+        "description": "Recording sample rate. VAD/ASR backends currently expect 16000."
+      },
+      "language": {
+        "type": "string",
+        "description": "ASR language hint."
+      },
+      "output_path": {
+        "type": "string",
+        "description": "Optional WAV path for the recorded audio."
+      },
+      "vad": {
+        "type": "object",
+        "description": "Optional VAD tuning hints for compatible audio backends."
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["audio_path", "duration_ms", "sample_rate", "text", "confidence", "language", "vad"],
+    "properties": {
+      "audio_path": {
+        "type": "string"
+      },
+      "duration_ms": {
+        "type": "number"
+      },
+      "sample_rate": {
+        "type": "number"
+      },
+      "text": {
+        "type": "string"
+      },
+      "confidence": {
+        "type": "number"
+      },
+      "language": {
+        "type": "string"
+      },
+      "vad": {
+        "type": "object"
+      }
+    }
+  },
+  "errors": [
+    "MICROPHONE_UNAVAILABLE",
+    "RECORD_FAILED",
+    "VAD_FAILED",
+    "TRANSCRIBE_FAILED",
+    "ASR_MODEL_MISSING"
+  ]
+}

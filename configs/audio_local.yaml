@@ -6,6 +6,7 @@ agent:
 tools:
   enabled:
     - audio.listen_transcribe
+    - audio.listen_vad_transcribe
     - audio.transcribe
     - audio.speak
     - vision.mock_detect
@@ -14,6 +15,8 @@ tools:
 
 skills:
   enabled:
+    - audio.listen_command
+    - audio.announce
     - mock.pick_and_place
 
 integrations:
@@ -23,8 +26,15 @@ integrations:
     tts_model_dir: models/tts
     asr_provider: cpu
     asr_num_threads: 4
+    vad_model_path: models/asr/vad/silero_vad.onnx
+    vad_threshold: 0.30
+    vad_min_speech_windows: 2
+    vad_pre_roll_ms: 120
+    vad_post_roll_ms: 2800
+    vad_tail_padding_ms: 500
+    vad_max_utterance_sec: 15
   microphone:
-    backend: sounddevice
+    backend: sounddevice_vad
 
 logging:
   level: info

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import sys
 import tempfile
+import wave
 from pathlib import Path
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -13,10 +14,20 @@ if str(SRC) not in sys.path:
   sys.path.insert(0, str(SRC))
 
 from sensoragent.agent import build_agent_from_config
-from sensoragent.integrations import FakeAudioClient, FakeMicrophoneRecorder
+from sensoragent.integrations import FakeAudioClient, FakeMicrophoneRecorder, LocalAudioClient
+from sensoragent.integrations.audio import _write_wav
+from sensoragent.integrations.vad import SoundDeviceVadRecorder
 from sensoragent.schemas import ToolCall, TraceContext
 from sensoragent.tools.audio import AudioSpeakTool, AudioTranscribeTool
 from sensoragent.tools.audio import AudioListenTranscribeTool
+from sensoragent.tools.audio import AudioListenVadTranscribeTool
+
+try:
+  import onnxruntime  # noqa: F401
+
+  HAS_ONNXRUNTIME = True
+except Exception:
+  HAS_ONNXRUNTIME = False
 
 
 class AudioIntegrationTest(TestCase):
@@ -67,6 +78,118 @@ class AudioIntegrationTest(TestCase):
       self.assertIn("银色滚柱", result.output["text"])
       self.assertTrue(Path(output_path).exists())
 
+  def test_audio_listen_vad_transcribe_tool_segments_before_asr(self) -> None:
+    class CapturingAudioClient(FakeAudioClient):
+      def __init__(self) -> None:
+        self.audio_path = ""
+
+      def transcribe_file(self, audio_path: str, language: str = "zh") -> dict:
+        self.audio_path = audio_path
+        return super().transcribe_file(audio_path, language)
+
+    class FakeVadSegmenter:
+      def segment_wav(self, audio_path: str, output_path: str | None = None) -> dict:
+        destination = Path(output_path or audio_path)
+        destination.write_bytes(Path(audio_path).read_bytes())
+        return {
+          "audio_path": str(destination),
+          "start_ms": 100,
+          "end_ms": 900,
+          "duration_ms": 800,
+          "sample_rate": 16000,
+        }
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      output_path = str(Path(temp_dir) / "listen.wav")
+      client = CapturingAudioClient()
+      tool = AudioListenVadTranscribeTool(
+        FakeMicrophoneRecorder(),
+        client,
+        FakeVadSegmenter(),
+      )
+
+      result = tool.run(
+        ToolCall(
+          tool="audio.listen_vad_transcribe",
+          input={
+            "duration_seconds": 1,
+            "language": "zh",
+            "output_path": output_path,
+          },
+          trace=TraceContext(),
+        )
+      )
+
+      self.assertTrue(result.success)
+      self.assertTrue(client.audio_path.endswith("_utterance.wav"))
+      self.assertEqual(result.output["vad"]["source"], "silero")
+      self.assertEqual(result.output["vad"]["duration_ms"], 800)
+
+  def test_audio_listen_vad_transcribe_tool_uses_realtime_vad_recording(self) -> None:
+    class RealtimeVadRecorder:
+      def record_once(
+        self,
+        duration_seconds: float,
+        output_path: str,
+        sample_rate: int = 16000,
+      ) -> dict:
+        del duration_seconds
+        FakeMicrophoneRecorder().record_once(1, output_path, sample_rate)
+        return {
+          "audio_path": output_path,
+          "duration_ms": 1200,
+          "sample_rate": sample_rate,
+          "vad": {
+            "enabled": True,
+            "source": "silero_realtime",
+            "start_ms": 120,
+            "end_ms": 1320,
+            "duration_ms": 1200,
+          },
+        }
+
+    class FailingSegmenter:
+      def segment_wav(self, audio_path: str, output_path: str | None = None) -> dict:
+        raise AssertionError("offline segmenter should not run")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      output_path = str(Path(temp_dir) / "listen.wav")
+      tool = AudioListenVadTranscribeTool(
+        RealtimeVadRecorder(),
+        FakeAudioClient(),
+        FailingSegmenter(),
+      )
+
+      result = tool.run(
+        ToolCall(
+          tool="audio.listen_vad_transcribe",
+          input={"duration_seconds": 1, "language": "zh", "output_path": output_path},
+          trace=TraceContext(),
+        )
+      )
+
+      self.assertTrue(result.success)
+      self.assertEqual(result.output["vad"]["source"], "silero_realtime")
+      self.assertEqual(result.output["vad"]["start_ms"], 120)
+
+  @skipUnless(HAS_ONNXRUNTIME, "onnxruntime is required for VAD recorder tests")
+  def test_sounddevice_vad_recorder_supports_runtime_overrides(self) -> None:
+    recorder = SoundDeviceVadRecorder(
+      model_path=str(ROOT / "models" / "asr" / "vad" / "silero_vad.onnx"),
+      threshold=0.3,
+      pre_roll_ms=120,
+      post_roll_ms=1800,
+      tail_padding_ms=700,
+    )
+
+    overridden = recorder.with_overrides(
+      {"post_roll_ms": 3000, "tail_padding_ms": 500}
+    )
+
+    self.assertEqual(overridden._post_roll_ms, 3000)
+    self.assertEqual(overridden._tail_padding_ms, 500)
+    self.assertEqual(overridden._pre_roll_ms, 120)
+
   def test_audio_speak_tool_uses_client(self) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
       output_path = str(Path(temp_dir) / "speech.wav")
@@ -82,6 +205,70 @@ class AudioIntegrationTest(TestCase):
 
       self.assertTrue(result.success)
       self.assertEqual(result.output["audio_path"], output_path)
+
+  def test_local_audio_client_detects_melo_tts_assets(self) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+      model_dir = Path(temp_dir) / "vits-melo-tts-zh_en"
+      dict_dir = model_dir / "dict"
+      dict_dir.mkdir(parents=True)
+      for filename in (
+        "model.onnx",
+        "tokens.txt",
+        "lexicon.txt",
+        "date.fst",
+        "number.fst",
+      ):
+        (model_dir / filename).write_text("placeholder", encoding="utf-8")
+
+      client = LocalAudioClient(tts_model_dir=temp_dir)
+      assets = client._find_melo_vits_assets()
+
+      self.assertIsNotNone(assets)
+      model_path, tokens_path, lexicon_path, rule_fsts, voice_name = assets
+      self.assertEqual(model_path, model_dir / "model.onnx")
+      self.assertEqual(tokens_path, model_dir / "tokens.txt")
+      self.assertEqual(lexicon_path, model_dir / "lexicon.txt")
+      self.assertIn("date.fst", rule_fsts)
+      self.assertIn("number.fst", rule_fsts)
+      self.assertEqual(voice_name, "vits-melo-tts-zh_en")
+
+  def test_local_audio_client_prefers_fanchen_tts_assets(self) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+      model_dir = Path(temp_dir) / "vits-zh-hf-fanchen-wnj"
+      model_dir.mkdir(parents=True)
+      for filename in (
+        "vits-zh-hf-fanchen-wnj.onnx",
+        "tokens.txt",
+        "lexicon.txt",
+        "date.fst",
+        "number.fst",
+      ):
+        (model_dir / filename).write_text("placeholder", encoding="utf-8")
+
+      client = LocalAudioClient(tts_model_dir=temp_dir)
+      assets = client._find_zh_vits_assets()
+
+      self.assertIsNotNone(assets)
+      model_path, tokens_path, lexicon_path, rule_fsts, voice_name = assets
+      self.assertEqual(model_path, model_dir / "vits-zh-hf-fanchen-wnj.onnx")
+      self.assertEqual(tokens_path, model_dir / "tokens.txt")
+      self.assertEqual(lexicon_path, model_dir / "lexicon.txt")
+      self.assertIn("date.fst", rule_fsts)
+      self.assertIn("number.fst", rule_fsts)
+      self.assertEqual(voice_name, "vits-zh-hf-fanchen-wnj")
+
+  def test_tts_wav_writer_preserves_float_sample_scale(self) -> None:
+    import numpy as np
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      output_path = Path(temp_dir) / "quiet.wav"
+      _write_wav(output_path, np.array([0.0, 0.5, -0.5], dtype=np.float32), 16000)
+
+      with wave.open(str(output_path), "rb") as wav:
+        audio = np.frombuffer(wav.readframes(wav.getnframes()), dtype=np.int16)
+
+      self.assertGreaterEqual(int(np.max(np.abs(audio))), 16000)
+      self.assertLess(int(np.max(np.abs(audio))), 17000)
 
   def test_audio_mock_config_registers_audio_tools(self) -> None:
     bundle = build_agent_from_config(ROOT / "configs" / "audio_mock.yaml")
