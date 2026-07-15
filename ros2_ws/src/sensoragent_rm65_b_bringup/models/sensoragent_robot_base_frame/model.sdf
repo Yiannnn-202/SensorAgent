@@ -4,12 +4,12 @@
     <static>true</static>
     <link name="pedestal">
       <collision name="body_collision">
-        <pose>0 0 0.15 0 0 0</pose>
-        <geometry><box><size>0.28 0.28 0.30</size></box></geometry>
+        <pose>0 0 0.125 0 0 0</pose>
+        <geometry><box><size>0.28 0.28 0.25</size></box></geometry>
       </collision>
       <visual name="body_visual">
-        <pose>0 0 0.15 0 0 0</pose>
-        <geometry><box><size>0.28 0.28 0.30</size></box></geometry>
+        <pose>0 0 0.125 0 0 0</pose>
+        <geometry><box><size>0.28 0.28 0.25</size></box></geometry>
         <material>
           <ambient>0.10 0.12 0.14 1</ambient>
           <diffuse>0.14 0.17 0.20 1</diffuse>
@@ -17,7 +17,7 @@
         </material>
       </visual>
       <visual name="top_plate_visual">
-        <pose>0 0 0.295 0 0 0</pose>
+        <pose>0 0 0.245 0 0 0</pose>
         <geometry><box><size>0.34 0.34 0.01</size></box></geometry>
         <material>
           <ambient>0.16 0.18 0.20 1</ambient>
