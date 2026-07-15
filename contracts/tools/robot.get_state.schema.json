@@ -1,0 +1,19 @@
+{
+  "name": "robot.get_state",
+  "version": "0.1.0",
+  "description": "Return current arm and gripper state.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["completed", "message", "state"],
+    "properties": {
+      "completed": {"type": "boolean"},
+      "message": {"type": "string"},
+      "state": {"type": "object"}
+    }
+  },
+  "errors": ["ROBOT_UNAVAILABLE", "STATE_TIMEOUT"]
+}

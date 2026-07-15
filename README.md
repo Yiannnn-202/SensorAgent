@@ -47,13 +47,19 @@ SensorAgent is not responsible for:
 | Local microphone VAD and SenseVoice ASR | Implemented |
 | Local TTS file generation | Implemented; direct playback is intentionally disabled |
 | RM65-B + Robotiq Gazebo and MoveIt stack | Implemented and manually exercised on Ubuntu |
-| Voice command to physical/simulated robot execution | Not connected |
-| Industrial Gazebo scenarios and Gymnasium RL environment | Not implemented |
+| Backend-neutral robot Tools and pick/place Skills | Implemented |
+| SensorAgent-to-Gazebo/MoveIt HTTP bridge | Implemented; Ubuntu ROS 2 runtime acceptance pending |
+| Physical robot connection | Not connected |
+| Industrial Gazebo tabletop scenario | Initial environment implemented |
+| Gymnasium RL environment | Not implemented |
 
-The audio and ROS 2 stacks currently run as separate capabilities. `listen-task`
-transcribes speech and sends the text through the Agent planner, but the only
-approved planning target is still the mock pick-and-place workflow. No production
-ROS 2 robot Tool or `sensoragent_robot_bridge` implementation exists yet.
+The reusable robot control surface now includes state, joint motion, pose motion,
+linear motion, stop, gripper control, and deterministic `robot.pick` /
+`robot.place` Skills. `configs/robot_mock.yaml` selects the deterministic fake
+backend, while `configs/robot_sim.yaml` selects the implemented
+`HttpRobotControlClient` and local Gazebo/MoveIt bridge. Windows validation covers
+unit/static testing only; Ubuntu ROS 2 runtime acceptance is still pending. The
+physical robot is not connected.
 
 ## Repository Layout
 
@@ -68,7 +74,8 @@ sensoragent/
 │       ├── rm_gazebo/                       # Locally imported arm-only Gazebo stack
 │       ├── rm_65_config/                    # Locally imported arm-only MoveIt config
 │       ├── robotiq_description/             # Vendored Robotiq 2F-85 model
-│       └── sensoragent_rm65_b_bringup/      # Combined arm/gripper stack
+│       ├── sensoragent_rm65_b_bringup/      # Combined arm/gripper stack
+│       └── sensoragent_robot_bridge/         # HTTP-to-ROS 2 simulation bridge
 ├── simulation/              # Gazebo worlds, models, and scenarios
 ├── reinforcement_learning/  # Future RL environments and policies
 ├── src/
@@ -101,6 +108,7 @@ Key SensorAgent documents:
 - [Testing guide](docs/guides/testing.md)
 - [Audio guide](docs/guides/audio.md)
 - [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
+- [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
 
 ## RM65-B and Robotiq Simulation
 
@@ -233,12 +241,12 @@ python -m sensoragent.services.cli.main listen-task --config configs\audio_mock.
 
 ## Current Development Priorities
 
-1. Add a real ROS 2 robot integration and stable robot Tool contracts.
+1. Complete Ubuntu ROS 2 runtime acceptance for the simulation HTTP bridge.
 2. Connect recognized voice commands to approved robot workflows.
-3. Add industrial Gazebo worlds, objects, reset services, and repeatable scenarios.
+3. Add industrial Gazebo objects, reset services, and repeatable scenarios.
 4. Define the Gymnasium observation, action, reward, and termination contract.
-5. Add service entry points and external vision integration.
+5. Add service entry points, external vision integration, and a physical robot adapter.
 
 The Python Agent package currently declares Python 3.12, while Ubuntu 22.04 and
-ROS 2 Humble normally use Python 3.10. This compatibility boundary must be
-resolved before an in-process `rclpy` adapter is added.
+ROS 2 Humble normally use Python 3.10. The implemented design keeps them in
+separate processes and connects them through HTTP.

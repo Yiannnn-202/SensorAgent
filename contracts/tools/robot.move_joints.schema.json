@@ -1,0 +1,24 @@
+{
+  "name": "robot.move_joints",
+  "version": "0.1.0",
+  "description": "Move the arm to absolute joint positions in radians.",
+  "input_schema": {
+    "type": "object",
+    "required": ["joints"],
+    "properties": {
+      "joints": {"type": "array", "items": {"type": "number"}},
+      "speed": {"type": "number"},
+      "wait": {"type": "boolean"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["completed", "message", "state"],
+    "properties": {
+      "completed": {"type": "boolean"},
+      "message": {"type": "string"},
+      "state": {"type": "object"}
+    }
+  },
+  "errors": ["INVALID_JOINT_COUNT", "MOTION_FAILED", "MOTION_TIMEOUT", "ROBOT_BUSY"]
+}

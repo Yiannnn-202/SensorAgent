@@ -1,0 +1,32 @@
+{
+  "name": "robot.move_linear",
+  "version": "0.1.0",
+  "description": "Move the end effector linearly to a Cartesian pose.",
+  "input_schema": {
+    "type": "object",
+    "required": ["pose"],
+    "properties": {
+      "pose": {
+        "type": "object",
+        "required": ["position", "orientation"],
+        "properties": {
+          "position": {"type": "array", "items": {"type": "number"}},
+          "orientation": {"type": "array", "items": {"type": "number"}},
+          "frame_id": {"type": "string"}
+        }
+      },
+      "speed": {"type": "number"},
+      "wait": {"type": "boolean"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["completed", "message", "state"],
+    "properties": {
+      "completed": {"type": "boolean"},
+      "message": {"type": "string"},
+      "state": {"type": "object"}
+    }
+  },
+  "errors": ["INVALID_POSE", "CARTESIAN_PATH_FAILED", "MOTION_FAILED", "MOTION_TIMEOUT"]
+}

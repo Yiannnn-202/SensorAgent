@@ -1,0 +1,23 @@
+{
+  "name": "gripper.close",
+  "version": "0.1.0",
+  "description": "Close the gripper to a requested opening and force.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "opening": {"type": "number"},
+      "force": {"type": "number"},
+      "speed": {"type": "number"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["completed", "message", "state"],
+    "properties": {
+      "completed": {"type": "boolean"},
+      "message": {"type": "string"},
+      "state": {"type": "object"}
+    }
+  },
+  "errors": ["INVALID_GRIPPER_OPENING", "GRIPPER_FAILED", "GRIPPER_TIMEOUT"]
+}

@@ -22,7 +22,15 @@ contracts/
     ├── vision.mock_detect.schema.json
     ├── audio.mock_transcribe.schema.json
     ├── robot.mock_pick.schema.json
-    └── robot.mock_place.schema.json
+    ├── robot.mock_place.schema.json
+    ├── robot.get_state.schema.json
+    ├── robot.move_joints.schema.json
+    ├── robot.move_pose.schema.json
+    ├── robot.move_linear.schema.json
+    ├── robot.stop.schema.json
+    ├── gripper.open.schema.json
+    ├── gripper.close.schema.json
+    └── gripper.get_state.schema.json
 ```
 
 ## Tool contract shape

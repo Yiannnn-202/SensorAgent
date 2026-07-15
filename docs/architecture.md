@@ -57,6 +57,20 @@ does not directly execute low-level tools.
 Tool execution includes contract validation, timeout handling, retry policy, typed
 errors, and structured logging.
 
+The initial robot control surface is backend-neutral:
+
+```text
+robot.pick / robot.place
+  → robot.move_pose / robot.move_linear
+  → gripper.open / gripper.close
+  → RobotControlClient
+  → fake, Gazebo, or hardware backend
+```
+
+`RobotPose`, `PickPlan`, and `PlacePlan` deliberately contain no ROS message
+types. This keeps Agent orchestration reusable across the Python 3.12 process,
+ROS 2 Humble, simulation, and future hardware adapters.
+
 ### Contracts
 
 `contracts/` contains language-neutral JSON contracts for cross-module interfaces.
@@ -100,6 +114,8 @@ Current configurations include:
 configs/mock.yaml
 configs/audio_mock.yaml
 configs/audio_local.yaml
+configs/robot_mock.yaml
+configs/robot_sim.yaml
 ```
 
 ## Audio integration
@@ -154,6 +170,7 @@ Humble:
 | `rm_65_config` | Imported locally | Upstream arm-only MoveIt 2 configuration |
 | `robotiq_description` | Vendored | Robotiq 2F-85 Xacro and meshes |
 | `sensoragent_rm65_b_bringup` | Project-owned | Combined Gazebo, ros2_control, and MoveIt integration |
+| `sensoragent_robot_bridge` | Project-owned | HTTP-to-MoveIt/GripperCommand simulation adapter |
 
 Upstream files are imported locally by
 `scripts/linux/fetch_rm65_b_upstream.sh` because redistribution permission is
@@ -214,27 +231,35 @@ The combined model, arm trajectory execution, and gripper Action interface have
 been manually exercised on Ubuntu. Object contact and repeatable grasp stability
 still require acceptance testing.
 
-SensorAgent does not yet contain a completed ROS 2 bridge for issuing full robot
-tasks directly. `src/sensoragent/integrations/ros2/`, real robot Tools, robot
-Skills, and robot workflows are placeholders. The ROS 2 bringup package can be
-controlled directly through MoveIt and ROS 2 Actions, but it is not registered
-inside the Python Agent runtime.
+SensorAgent now contains stable atomic robot Tool contracts, deterministic
+top-down pick/place planning helpers, and `robot.pick` / `robot.place` Skills.
+`configs/robot_mock.yaml` registers them against a stateful fake backend for
+integration development. `configs/robot_sim.yaml` selects
+`HttpRobotControlClient`, which calls the implemented `sensoragent_robot_bridge`
+HTTP service. The bridge translates backend-neutral requests into MoveIt 2 arm
+planning/execution and `GripperCommand` actions for Gazebo. Its Windows validation
+is limited to unit and static tests; Ubuntu ROS 2 runtime acceptance is pending.
 
 ## Runtime compatibility boundary
 
 The current Python Agent package declares Python 3.12 and uses features such as
 `enum.StrEnum` and `datetime.UTC`. Ubuntu 22.04 with ROS 2 Humble normally ships
-Python 3.10. The audio/Agent process and ROS 2 simulation can therefore run
-separately, but an in-process `rclpy` integration needs an explicit compatibility
-decision:
+Python 3.10. The implemented integration intentionally uses a separate-process
+boundary:
 
 ```text
-make SensorAgent Python 3.10 compatible
-or
-keep separate processes and define a ROS 2 / API / MCP transport boundary
+Python 3.12 SensorAgent
+→ HttpRobotControlClient
+→ HTTP on localhost:8765
+→ Python 3.10 sensoragent_robot_bridge under ROS 2 Humble
+→ MoveIt 2 / GripperCommand
+→ Gazebo
 ```
 
-This is a known issue, not an implemented integration.
+This avoids importing Python 3.10 `rclpy` into the Agent process. The bridge
+defaults to localhost; remote binding requires network-level protection because
+the HTTP server does not provide authentication or TLS. Implementation is
+complete, but Ubuntu ROS 2 runtime acceptance remains pending.
 
 ## Reinforcement learning and simulation assets
 

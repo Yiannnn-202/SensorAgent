@@ -219,9 +219,13 @@ Goal: connect SensorAgent to modules owned by other teams through stable adapter
 - [ ] Implement MCP integration client.
 - [ ] Add vision-agent adapter.
 - [ ] Add audio-agent adapter.
-- [ ] Add robot-runtime adapter.
-- [ ] Add simulation-runtime adapter if needed.
-- [ ] Implement real ROS 2 robot Tools instead of the current mock pick/place Tools.
+- [x] Define backend-neutral robot runtime adapter protocol.
+- [x] Add atomic arm and gripper Tool contracts.
+- [x] Add deterministic `robot.pick` and `robot.place` Skills.
+- [x] Add the HTTP-to-ROS 2 simulation runtime adapter.
+- [x] Connect the existing robot Tools to Gazebo/MoveIt through the HTTP bridge.
+- [ ] Complete Ubuntu ROS 2 runtime acceptance for the Gazebo/MoveIt HTTP bridge.
+- [ ] Connect the existing robot Tools to the physical robot.
 - [ ] Add mocked integration tests.
 - [ ] Add contract tests for external adapters.
 

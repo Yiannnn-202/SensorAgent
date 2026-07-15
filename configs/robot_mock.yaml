@@ -1,0 +1,33 @@
+agent:
+  name: sensoragent
+  mode: robot_mock
+
+tools:
+  enabled:
+    - robot.get_state
+    - robot.move_joints
+    - robot.move_pose
+    - robot.move_linear
+    - robot.stop
+    - gripper.open
+    - gripper.close
+    - gripper.get_state
+
+skills:
+  enabled:
+    - robot.pick
+    - robot.place
+
+integrations:
+  robot:
+    backend: fake
+    dof: 6
+    maximum_opening: 0.0848
+
+logging:
+  level: info
+  console: true
+  app_log: logs/app.log
+  task_dir: logs/tasks
+  trace_dir: logs/traces
+  error_dir: logs/errors

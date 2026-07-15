@@ -1,0 +1,70 @@
+"""Deterministic robot pick skill."""
+
+from __future__ import annotations
+
+from sensoragent.schemas import SkillCall, SkillResult, SkillSpec
+from sensoragent.schemas.robot import PickPlan
+from sensoragent.skills.base import SkillContext
+
+
+class RobotPickSkill:
+  """Execute a precomputed pick plan using atomic robot tools."""
+
+  spec = SkillSpec(
+    name="robot.pick",
+    description="Open, approach, grasp, close, and lift an object.",
+    tags=("robot", "pick"),
+  )
+
+  def run(self, call: SkillCall, context: SkillContext) -> SkillResult:
+    plan = PickPlan.from_dict(call.input.get("plan"))
+    speed = call.input.get("speed", 0.2)
+    completed_steps: list[str] = []
+    steps = [
+      (
+        "open_gripper",
+        "gripper.open",
+        {
+          "opening": call.input.get("open_opening", 0.0848),
+          "speed": call.input.get("gripper_speed", 0.5),
+        },
+      ),
+      ("move_approach", "robot.move_pose", {"pose": plan.approach.to_dict(), "speed": speed}),
+      (
+        "move_pregrasp",
+        "robot.move_linear",
+        {"pose": plan.pregrasp.to_dict(), "speed": speed},
+      ),
+      ("move_grasp", "robot.move_linear", {"pose": plan.grasp.to_dict(), "speed": speed}),
+      (
+        "close_gripper",
+        "gripper.close",
+        {
+          "opening": call.input.get("close_opening", 0.0),
+          "force": call.input.get("gripper_force", 0.5),
+          "speed": call.input.get("gripper_speed", 0.5),
+        },
+      ),
+      ("lift", "robot.move_linear", {"pose": plan.lift.to_dict(), "speed": speed}),
+    ]
+
+    for step_name, tool_name, input_data in steps:
+      result = context.tool_runtime.invoke(tool_name, input_data, call.trace)
+      if not result.success:
+        return SkillResult(
+          skill=self.spec.name,
+          success=False,
+          output={"completed_steps": completed_steps, "failed_step": step_name},
+          error=f"{step_name}: {result.error}",
+        )
+      completed_steps.append(step_name)
+
+    return SkillResult(
+      skill=self.spec.name,
+      success=True,
+      output={
+        "picked": True,
+        "object_id": call.input.get("object_id"),
+        "completed_steps": completed_steps,
+      },
+    )

@@ -37,11 +37,32 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("start_moveit")),
     )
 
+    robot_bridge = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("sensoragent_robot_bridge"),
+                "launch",
+                "robot_bridge.launch.py",
+            )
+        ),
+        launch_arguments={
+            "bind_host": LaunchConfiguration("robot_bridge_host"),
+            "bind_port": LaunchConfiguration("robot_bridge_port"),
+        }.items(),
+        condition=IfCondition(LaunchConfiguration("start_robot_bridge")),
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument("render_engine", default_value="ogre"),
             DeclareLaunchArgument("auto_focus_robot", default_value="false"),
             DeclareLaunchArgument("start_moveit", default_value="true"),
+            DeclareLaunchArgument("start_robot_bridge", default_value="true"),
+            DeclareLaunchArgument(
+                "robot_bridge_host",
+                default_value="127.0.0.1",
+            ),
+            DeclareLaunchArgument("robot_bridge_port", default_value="8765"),
             DeclareLaunchArgument(
                 "world_file",
                 default_value="industrial_pgs.sdf",
@@ -49,5 +70,6 @@ def generate_launch_description():
             DeclareLaunchArgument("bridge_camera", default_value="true"),
             gazebo,
             TimerAction(period=8.0, actions=[moveit]),
+            TimerAction(period=10.0, actions=[robot_bridge]),
         ]
     )

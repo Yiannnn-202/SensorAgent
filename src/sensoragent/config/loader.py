@@ -71,5 +71,6 @@ def load_config(path: str | Path) -> SensorAgentConfig:
         integrations.get("microphone"),
         "integrations.microphone",
       ),
+      robot=_as_mapping(integrations.get("robot"), "integrations.robot"),
     ),
   )

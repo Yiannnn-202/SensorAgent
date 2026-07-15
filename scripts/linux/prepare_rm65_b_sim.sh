@@ -41,6 +41,7 @@ colcon build \
     rm_65_config \
     rm_gazebo \
     robotiq_description \
+    sensoragent_robot_bridge \
     sensoragent_rm65_b_bringup
 
 echo

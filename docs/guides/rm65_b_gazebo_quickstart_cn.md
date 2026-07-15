@@ -3,9 +3,10 @@
 本文说明如何在 **Ubuntu 22.04 + ROS 2 Humble** 环境中启动本项目的
 RM65-B、Robotiq 2F-85、Gazebo 与 MoveIt 2 仿真控制栈。
 
-> 当前可以启动 Gazebo、机械臂/夹爪 `ros2_control`、MoveIt 2 和 RViz。项目中的
-> `sensoragent_robot_bridge` 尚未实现，因此 SensorAgent 还不能直接向
-> ROS 2 下发机械臂任务。
+> 当前启动栈包含 Gazebo、机械臂/夹爪 `ros2_control`、MoveIt 2、RViz 和
+> 已实现的 `sensoragent_robot_bridge`。HTTP Bridge 默认监听
+> `http://127.0.0.1:8765`；其 Ubuntu ROS 2 运行时验收仍待完成。接口和配置见
+> [SensorAgent 仿真机器人 HTTP Bridge 指引](robot_sim_bridge_cn.md)。
 
 ## 最简使用方式
 
@@ -81,10 +82,13 @@ Robotiq 文件已经随仓库提供，不需要另行下载：
 ```text
 ros2_ws/src/robotiq_description
 ros2_ws/src/sensoragent_rm65_b_bringup
+ros2_ws/src/sensoragent_robot_bridge
 ```
 
 其中 `sensoragent_rm65_b_bringup` 将 2F-85 通过固定关节安装到 RM65-B
-末端 `Link6`，并使用一个 `gz_ros2_control` 系统统一管理机械臂和夹爪。
+末端 `Link6`，并使用一个 `gz_ros2_control` 系统统一管理机械臂和夹爪；
+`sensoragent_robot_bridge` 提供默认位于 `http://127.0.0.1:8765` 的
+HTTP-to-ROS 2 控制边界。
 
 ## 3. 安装构建和运行依赖
 
@@ -140,6 +144,7 @@ colcon build \
     rm_65_config \
     rm_gazebo \
     robotiq_description \
+    sensoragent_robot_bridge \
     sensoragent_rm65_b_bringup
 
 source install/setup.bash
@@ -252,6 +257,7 @@ ros2 pkg prefix rm_description
 ros2 pkg prefix rm_gazebo
 ros2 pkg prefix rm_65_config
 ros2 pkg prefix robotiq_description
+ros2 pkg prefix sensoragent_robot_bridge
 ros2 pkg prefix sensoragent_rm65_b_bringup
 
 ros2 control list_controllers

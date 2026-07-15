@@ -19,10 +19,12 @@ from sensoragent.integrations import (
   SoundDeviceRecorder,
   load_llm_config_from_env,
 )
+from sensoragent.integrations.robot import FakeRobotControlClient, HttpRobotControlClient
 from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.audio import AudioAnnounceSkill, AudioListenCommandSkill
 from sensoragent.skills.mock import MockPickAndPlaceSkill
+from sensoragent.skills.robot import RobotPickSkill, RobotPlaceSkill
 from sensoragent.state import InMemoryEventStream, InMemoryTaskStore
 from sensoragent.tools import ToolRegistry, ToolRuntime
 from sensoragent.tools.audio.mock import MockTranscribeTool
@@ -33,6 +35,16 @@ from sensoragent.tools.audio import (
   AudioTranscribeTool,
 )
 from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
+from sensoragent.tools.robot import (
+  GripperCloseTool,
+  GripperGetStateTool,
+  GripperOpenTool,
+  RobotGetStateTool,
+  RobotMoveJointsTool,
+  RobotMoveLinearTool,
+  RobotMovePoseTool,
+  RobotStopTool,
+)
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
@@ -58,6 +70,19 @@ AVAILABLE_SKILLS: dict[str, SkillFactory] = {
   "audio.announce": AudioAnnounceSkill,
   "audio.listen_command": AudioListenCommandSkill,
   "mock.pick_and_place": MockPickAndPlaceSkill,
+  "robot.pick": RobotPickSkill,
+  "robot.place": RobotPlaceSkill,
+}
+
+ROBOT_TOOL_FACTORIES = {
+  "robot.get_state": RobotGetStateTool,
+  "robot.move_joints": RobotMoveJointsTool,
+  "robot.move_pose": RobotMovePoseTool,
+  "robot.move_linear": RobotMoveLinearTool,
+  "robot.stop": RobotStopTool,
+  "gripper.open": GripperOpenTool,
+  "gripper.close": GripperCloseTool,
+  "gripper.get_state": GripperGetStateTool,
 }
 
 
@@ -114,9 +139,29 @@ def _build_vad_segmenter(config: SensorAgentConfig):
   )
 
 
-def _build_tool(tool_name: str, config: SensorAgentConfig):
+def _build_robot_client(config: SensorAgentConfig):
+  robot_config = config.integrations.robot
+  backend = str(robot_config.get("backend", "fake"))
+  if backend == "fake":
+    return FakeRobotControlClient(
+      dof=int(robot_config.get("dof", 6)),
+      maximum_opening=float(robot_config.get("maximum_opening", 0.0848)),
+    )
+  if backend == "http":
+    return HttpRobotControlClient(
+      endpoint=str(robot_config.get("endpoint", "http://127.0.0.1:8765")),
+      timeout_seconds=float(robot_config.get("timeout_seconds", 120.0)),
+    )
+  raise ValueError(f"Unknown robot backend: {backend}")
+
+
+def _build_tool(tool_name: str, config: SensorAgentConfig, robot_client=None):
   if tool_name in AVAILABLE_TOOLS:
     return AVAILABLE_TOOLS[tool_name]()
+  if tool_name in ROBOT_TOOL_FACTORIES:
+    if robot_client is None:
+      raise ValueError("Robot client is required for robot control tools")
+    return ROBOT_TOOL_FACTORIES[tool_name](robot_client)
   if tool_name in {
     "audio.listen_transcribe",
     "audio.listen_vad_transcribe",
@@ -167,9 +212,12 @@ def build_agent(
   logger = TaskLogger(log_path)
 
   tool_registry = ToolRegistry()
+  robot_client = None
+  if any(tool_name in ROBOT_TOOL_FACTORIES for tool_name in config.tools.enabled):
+    robot_client = _build_robot_client(config)
   for tool_name in config.tools.enabled:
     try:
-      tool_registry.register(_build_tool(tool_name, config))
+      tool_registry.register(_build_tool(tool_name, config, robot_client))
     except KeyError as exc:
       raise KeyError(f"Configured tool is not available: {tool_name}") from exc
 

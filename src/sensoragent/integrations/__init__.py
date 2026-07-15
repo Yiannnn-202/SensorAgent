@@ -26,6 +26,12 @@ from sensoragent.integrations.audio import (
   FakeAudioClient,
   LocalAudioClient,
 )
+from sensoragent.integrations.robot import (
+  FakeRobotControlClient,
+  HttpRobotControlClient,
+  RobotCommandResult,
+  RobotControlClient,
+)
 
 __all__ = [
   "AudioClient",
@@ -34,12 +40,16 @@ __all__ = [
   "AudioModelError",
   "FakeAudioClient",
   "FakeMicrophoneRecorder",
+  "FakeRobotControlClient",
+  "HttpRobotControlClient",
   "LlmConfig",
   "LlmError",
   "LocalAudioClient",
   "MicrophoneError",
   "MicrophoneRecorder",
   "OpenAICompatibleClient",
+  "RobotCommandResult",
+  "RobotControlClient",
   "SileroVadSegmenter",
   "SoundDeviceVadRecorder",
   "SoundDeviceRecorder",

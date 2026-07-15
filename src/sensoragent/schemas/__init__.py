@@ -13,6 +13,7 @@ from sensoragent.schemas.core import (
   TraceContext,
 )
 from sensoragent.schemas.plan import AgentPlan, PlanTargetKind
+from sensoragent.schemas.robot import PickPlan, PlacePlan, RobotPose
 from sensoragent.schemas.workflow import (
   ActionList,
   ActionListResult,
@@ -46,6 +47,9 @@ __all__ = [
   "AgentResponse",
   "LogRecord",
   "PlanTargetKind",
+  "PickPlan",
+  "PlacePlan",
+  "RobotPose",
   "SkillCall",
   "SkillResult",
   "SkillSpec",
