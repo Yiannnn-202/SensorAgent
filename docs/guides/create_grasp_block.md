@@ -61,7 +61,7 @@ ros2 run ros_gz_sim create \
   -name grasp_block \
   -x 0.34 \
   -y 0.20 \
-  -z 0.48
+  -z 0.34
 ```
 
 The pose format is:
@@ -72,8 +72,8 @@ x y z roll pitch yaw
 
 Change the `-x`, `-y`, and `-z` command values to choose the spawn position.
 
-The default industrial workbench surface is at `z=0.44 m`. The block is
-8 cm high, so `z=0.48 m` places its bottom on the workbench.
+The default industrial workbench surface is at `z=0.30 m`. The block is
+8 cm high, so `z=0.34 m` places its bottom on the workbench.
 
 When using `world_file:=empty_pgs.sdf`, use `z=0.04 m` instead to place the
 same block on the ground plane.

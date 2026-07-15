@@ -2,9 +2,12 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="rm65_b_robotiq_2f85">
   <xacro:arg name="gripper_mount_xyz" default="0 0 0"/>
   <xacro:arg name="gripper_mount_rpy" default="0 0 0"/>
+  <xacro:arg name="robot_mount_xyz" default="0 0 0.30"/>
+  <xacro:arg name="robot_mount_rpy" default="0 0 0"/>
 
   <link name="world"/>
   <joint name="world_to_rm65_b" type="fixed">
+    <origin xyz="$(arg robot_mount_xyz)" rpy="$(arg robot_mount_rpy)"/>
     <parent link="world"/>
     <child link="base_link"/>
   </joint>

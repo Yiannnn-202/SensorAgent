@@ -13,8 +13,8 @@ ros2_ws/src/sensoragent_rm65_b_bringup/worlds/industrial_pgs.sdf
 
 包含以下设施：
 
-- RM65-B 周围的低矮底座框；
-- 工业工作台，台面高度为 `0.44 m`；
+- 将 RM65-B 安装面抬高至 `0.30 m` 的底座；
+- 工业工作台，台面高度为 `0.30 m`；
 - 3×3 多格料箱；
 - 顶置 RGB 与深度相机及支架；
 - 地面、背景墙、方向光和工作灯；
@@ -33,6 +33,14 @@ ros2_ws/src/sensoragent_rm65_b_bringup/worlds/industrial_pgs.sdf
 
 模型使用基础几何体和简化碰撞体，尺寸均控制在 Robotiq 2F-85 的
 `84.8 mm` 最大开口范围内。
+
+RM65-B 的基座安装面与工作台顶面均为 `z=0.30 m`。工作台前沿位于机械臂
+基座前方约 `0.15 m`，为底部关节旋转保留空间。该高度写入组合 URDF 的
+`world_to_rm65_b` 固定关节，因此 Gazebo、TF、MoveIt 和 RViz 使用一致的
+机器人坐标，不应再通过 Gazebo GUI 单独拖高机器人。
+
+RM65-B 第一关节轴相对基座高约 `0.2405 m`，因此调整后第一关节轴仍比桌面
+高约 `0.24 m`，底部关节不会再次落到桌面以下。
 
 ## 2. 编译并加载场景
 
@@ -73,6 +81,9 @@ bash scripts/linux/run_rm65_b_sim.sh \
   world_file:=empty_pgs.sdf \
   bridge_camera:=false
 ```
+
+空场景仍保留机械臂底座，以匹配组合 URDF 中 `0.30 m` 的安装高度，但不加载
+工作台、料箱、零件和相机。
 
 ## 3. 相机话题
 
@@ -124,10 +135,10 @@ ros2 run ros_gz_sim create \
   -name roller_02 \
   -x 0.34 \
   -y 0.16 \
-  -z 0.482
+  -z 0.34
 ```
 
-台面顶面为 `z=0.44 m`。生成其他零件时，需要根据模型高度设置其中心
+台面顶面为 `z=0.30 m`。生成其他零件时，需要根据模型高度设置其中心
 `z`，避免模型初始状态悬空或嵌入台面。
 
 ## 5. 调整初始布局
@@ -198,7 +209,7 @@ models/
 <include>
   <uri>model://my_industrial_part</uri>
   <name>my_industrial_part_01</name>
-  <pose>0.35 0.20 0.48 0 0 0</pose>
+  <pose>0.35 0.20 0.34 0 0 0</pose>
 </include>
 ```
 

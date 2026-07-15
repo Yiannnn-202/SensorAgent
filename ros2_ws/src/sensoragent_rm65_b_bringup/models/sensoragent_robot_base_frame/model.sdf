@@ -2,42 +2,28 @@
 <sdf version="1.8">
   <model name="sensoragent_robot_base_frame">
     <static>true</static>
-    <link name="frame">
-      <collision name="front_collision">
-        <pose>0.16 0 0.04 0 0 0</pose>
-        <geometry><box><size>0.06 0.38 0.08</size></box></geometry>
+    <link name="pedestal">
+      <collision name="body_collision">
+        <pose>0 0 0.15 0 0 0</pose>
+        <geometry><box><size>0.28 0.28 0.30</size></box></geometry>
       </collision>
-      <visual name="front_visual">
-        <pose>0.16 0 0.04 0 0 0</pose>
-        <geometry><box><size>0.06 0.38 0.08</size></box></geometry>
-        <material><diffuse>0.12 0.14 0.16 1</diffuse></material>
+      <visual name="body_visual">
+        <pose>0 0 0.15 0 0 0</pose>
+        <geometry><box><size>0.28 0.28 0.30</size></box></geometry>
+        <material>
+          <ambient>0.10 0.12 0.14 1</ambient>
+          <diffuse>0.14 0.17 0.20 1</diffuse>
+          <specular>0.30 0.30 0.30 1</specular>
+        </material>
       </visual>
-      <collision name="back_collision">
-        <pose>-0.16 0 0.04 0 0 0</pose>
-        <geometry><box><size>0.06 0.38 0.08</size></box></geometry>
-      </collision>
-      <visual name="back_visual">
-        <pose>-0.16 0 0.04 0 0 0</pose>
-        <geometry><box><size>0.06 0.38 0.08</size></box></geometry>
-        <material><diffuse>0.12 0.14 0.16 1</diffuse></material>
-      </visual>
-      <collision name="left_collision">
-        <pose>0 0.16 0.04 0 0 0</pose>
-        <geometry><box><size>0.26 0.06 0.08</size></box></geometry>
-      </collision>
-      <visual name="left_visual">
-        <pose>0 0.16 0.04 0 0 0</pose>
-        <geometry><box><size>0.26 0.06 0.08</size></box></geometry>
-        <material><diffuse>0.12 0.14 0.16 1</diffuse></material>
-      </visual>
-      <collision name="right_collision">
-        <pose>0 -0.16 0.04 0 0 0</pose>
-        <geometry><box><size>0.26 0.06 0.08</size></box></geometry>
-      </collision>
-      <visual name="right_visual">
-        <pose>0 -0.16 0.04 0 0 0</pose>
-        <geometry><box><size>0.26 0.06 0.08</size></box></geometry>
-        <material><diffuse>0.12 0.14 0.16 1</diffuse></material>
+      <visual name="top_plate_visual">
+        <pose>0 0 0.295 0 0 0</pose>
+        <geometry><box><size>0.34 0.34 0.01</size></box></geometry>
+        <material>
+          <ambient>0.16 0.18 0.20 1</ambient>
+          <diffuse>0.22 0.25 0.28 1</diffuse>
+          <specular>0.45 0.45 0.45 1</specular>
+        </material>
       </visual>
     </link>
   </model>

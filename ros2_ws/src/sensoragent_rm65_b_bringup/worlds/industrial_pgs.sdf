@@ -44,7 +44,7 @@
       <direction>-0.4 0.2 -0.9</direction>
     </light>
     <light type="point" name="work_light">
-      <pose>0.45 0 1.45 0 0 0</pose>
+      <pose>0.45 0 1.31 0 0 0</pose>
       <cast_shadows>true</cast_shadows>
       <diffuse>0.85 0.85 0.82 1</diffuse>
       <specular>0.25 0.25 0.25 1</specular>
@@ -91,11 +91,11 @@
     </include>
     <include>
       <uri>model://sensoragent_workbench</uri>
-      <pose>0.47 0 0 0 0 0</pose>
+      <pose>0.55 0 0 0 0 0</pose>
     </include>
     <include>
       <uri>model://sensoragent_bin_3x3</uri>
-      <pose>0.50 -0.18 0.44 0 0 0</pose>
+      <pose>0.50 -0.18 0.30 0 0 0</pose>
     </include>
     <include>
       <uri>model://sensoragent_rgbd_rig</uri>
@@ -104,32 +104,32 @@
     <include>
       <uri>model://sensoragent_part_roller</uri>
       <name>roller_01</name>
-      <pose>0.24 0.23 0.462 1.570796 0 0</pose>
+      <pose>0.24 0.23 0.322 1.570796 0 0</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_stepped_shaft</uri>
       <name>stepped_shaft_01</name>
-      <pose>0.38 0.23 0.466 1.570796 0 0.12</pose>
+      <pose>0.38 0.23 0.326 1.570796 0 0.12</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_flange</uri>
       <name>flange_01</name>
-      <pose>0.51 0.22 0.457 0 0 0</pose>
+      <pose>0.51 0.22 0.317 0 0 0</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_hex_nut</uri>
       <name>hex_nut_01</name>
-      <pose>0.63 0.20 0.453 0 0 0.20</pose>
+      <pose>0.63 0.20 0.313 0 0 0.20</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_short_bolt</uri>
       <name>short_bolt_01</name>
-      <pose>0.28 0.08 0.467 1.570796 0 0.10</pose>
+      <pose>0.28 0.08 0.327 1.570796 0 0.10</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_gear</uri>
       <name>gear_01</name>
-      <pose>0.43 0.08 0.450 0 0 0.16</pose>
+      <pose>0.43 0.08 0.310 0 0 0.16</pose>
     </include>
   </world>
 </sdf>

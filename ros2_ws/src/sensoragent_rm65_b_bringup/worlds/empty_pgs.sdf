@@ -65,5 +65,9 @@
         </visual>
       </link>
     </model>
+
+    <include>
+      <uri>model://sensoragent_robot_base_frame</uri>
+    </include>
   </world>
 </sdf>
