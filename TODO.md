@@ -178,17 +178,22 @@ Completed:
 - [x] Implement `audio.transcribe`, `audio.speak`, and `audio.listen_transcribe`.
 - [x] Add audio configuration and fake end-to-end tests.
 - [x] Add the fixed-duration `listen-task` microphone pipeline.
+- [x] Add realtime Silero VAD microphone recording.
+- [x] Add `audio.listen_vad_transcribe` and its language-neutral contract.
+- [x] Add `audio.listen_command` and `audio.announce` skills.
+- [x] Add the voice-command acknowledgement ActionList.
+- [x] Confirm model weights and generated audio are ignored.
 
 Remaining:
 
 - [ ] Add audio tool failure-path tests.
 - [ ] Add local-only tests that skip when model assets are unavailable.
-- [ ] Decide whether higher-level audio skills are useful.
 - [ ] Decide whether TTS playback belongs in SensorAgent or the interaction frontend.
-- [ ] Add RMS or model-backed VAD if fixed-duration recording is insufficient.
 - [ ] Add optional spoken task responses only after ownership is decided.
 - [ ] Remove unused Radish-derived code and confirm no ROS 2 audio dependency remains.
-- [ ] Confirm model weights and generated audio are ignored.
+- [ ] Declare `onnxruntime` and the local audio stack in installable package metadata.
+- [ ] Decide whether Python 3.10 compatibility or a separate-process bridge will
+  connect SensorAgent to ROS 2 Humble.
 
 ## Phase 6 - API, WebSocket, and MCP service entry points
 
@@ -216,6 +221,7 @@ Goal: connect SensorAgent to modules owned by other teams through stable adapter
 - [ ] Add audio-agent adapter.
 - [ ] Add robot-runtime adapter.
 - [ ] Add simulation-runtime adapter if needed.
+- [ ] Implement real ROS 2 robot Tools instead of the current mock pick/place Tools.
 - [ ] Add mocked integration tests.
 - [ ] Add contract tests for external adapters.
 
@@ -243,8 +249,10 @@ reinforcement-learning tasks.
 - [x] Attach the 2F-85 to RM65-B `Link6` in a combined Xacro.
 - [x] Add Humble-compatible arm and gripper ros2_control configuration.
 - [x] Add combined Gazebo and MoveIt 2 launch files.
-- [ ] Validate and calibrate the gripper flange transform on Ubuntu.
+- [x] Add bounded-effort two-finger gripper control and a standard GripperCommand bridge.
+- [x] Manually verify the combined model, arm motion, and gripper open/close path on Ubuntu.
 - [ ] Validate finger contact, friction, and grasp stability in Gazebo Sim.
+- [ ] Add automated ROS 2 launch and controller smoke tests.
 - [ ] Add industrial worlds, objects, and repeatable grasp scenarios.
 - [ ] Define the Gymnasium observation, action, reward, and termination contract.
 - [ ] Implement the first RL environment and scripted baseline.

@@ -21,6 +21,7 @@ The documentation set is intentionally small.
 - [Testing](guides/testing.md)
 - [Audio](guides/audio.md)
 - [RM65-B + Robotiq 2F-85 Gazebo quickstart](guides/rm65_b_gazebo_quickstart_cn.md)
+- [Create a Gazebo grasping block](guides/create_grasp_block.md)
 
 ## Robotics source records
 

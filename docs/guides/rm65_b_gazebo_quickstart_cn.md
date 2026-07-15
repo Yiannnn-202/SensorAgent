@@ -254,7 +254,7 @@ rm_group_controller     active
 robotiq_gripper_effort_controller active
 ```
 
-## 8. 校准夹爪安装位姿
+## 8. 夹爪安装位姿状态
 
 当前组合模型按 `Link6` 与 `robotiq_85_base_link` 原点同轴、零偏置安装：
 
@@ -263,8 +263,10 @@ gripper_mount_xyz="0 0 0"
 gripper_mount_rpy="0 0 0"
 ```
 
-这足以建立运动学和控制链，但最终法兰适配器厚度与朝向仍需在 Ubuntu 的
-Gazebo/RViz 中核对。若夹爪与法兰重叠或朝向不正确，请修改：
+该位姿已经在 Ubuntu 的 Gazebo 中完成视觉检查，当前模型位置和开合方向
+正常。它仍是仿真安装参数，不代表真实法兰适配器的精确机械尺寸。
+
+若后续更换法兰、网格或真实安装结构，发现夹爪重叠或朝向不正确，请修改：
 
 ```text
 ros2_ws/src/sensoragent_rm65_b_bringup/urdf/rm65_b_robotiq_2f85.urdf.xacro

@@ -104,13 +104,43 @@ configs/audio_local.yaml
 
 ## Audio integration
 
-The audio integration is ROS-independent. `AudioClient` and microphone abstractions
-live under `src/sensoragent/integrations/`; ASR/TTS/listen tools live under
-`src/sensoragent/tools/audio/`.
+The audio integration is ROS-independent. `AudioClient`, microphone, and VAD
+abstractions live under `src/sensoragent/integrations/`; ASR/TTS/listen tools
+live under `src/sensoragent/tools/audio/`.
+
+The local command path is:
+
+```text
+16 kHz mono microphone input
+→ SoundDeviceVadRecorder
+→ Silero VAD ONNX inference
+→ utterance WAV
+→ SenseVoice through sherpa-onnx
+→ normalized command text
+→ Agent planner
+```
+
+`audio.listen_vad_transcribe` supports realtime VAD termination and per-call
+threshold, silence-tail, and padding overrides. The older fixed-duration
+`audio.listen_transcribe` remains available. Higher-level audio components
+include:
+
+- `audio.listen_command`, which normalizes one recognized command;
+- `audio.announce`, which creates task-facing speech output;
+- `audio.voice_command_ack_actionlist`, which listens and generates an
+  acknowledgement file.
+
+Local TTS supports compatible sherpa-onnx VITS layouts and a CLI path for the
+present Baker/icefall assets. SensorAgent intentionally rejects direct local
+playback, and `listen-task` does not automatically announce task results.
 
 Local model weights are runtime assets under ignored `models/` paths. Automated
 tests use fake clients and fixtures, so the default test suite does not require a
 microphone, speaker, or model weights.
+
+The audio path does not yet imply robot control. Both the static and LLM planners
+currently select only `mock.pick_place_actionlist`; recognized commands therefore
+exercise the Agent lifecycle and mock robot tools.
 
 ## Robotics simulation
 
@@ -178,16 +208,40 @@ The combined SRDF exposes:
 - `robotiq_2f85`: the end effector attached to `Link6`;
 - named `open` and `closed` gripper states.
 
-SensorAgent does not yet contain a completed ROS 2 bridge for issuing full
-robot tasks directly. Flange alignment and reinforcement-learning interfaces
-remain separate follow-up work.
+The combined model, arm trajectory execution, and gripper Action interface have
+been manually exercised on Ubuntu. Object contact and repeatable grasp stability
+still require acceptance testing.
+
+SensorAgent does not yet contain a completed ROS 2 bridge for issuing full robot
+tasks directly. `src/sensoragent/integrations/ros2/`, real robot Tools, robot
+Skills, and robot workflows are placeholders. The ROS 2 bringup package can be
+controlled directly through MoveIt and ROS 2 Actions, but it is not registered
+inside the Python Agent runtime.
+
+## Runtime compatibility boundary
+
+The current Python Agent package declares Python 3.12 and uses features such as
+`enum.StrEnum` and `datetime.UTC`. Ubuntu 22.04 with ROS 2 Humble normally ships
+Python 3.10. The audio/Agent process and ROS 2 simulation can therefore run
+separately, but an in-process `rclpy` integration needs an explicit compatibility
+decision:
+
+```text
+make SensorAgent Python 3.10 compatible
+or
+keep separate processes and define a ROS 2 / API / MCP transport boundary
+```
+
+This is a known issue, not an implemented integration.
 
 ## Reinforcement learning and simulation assets
 
 `reinforcement_learning/` and `simulation/gazebo/` currently provide tracked
-structure for future environments, policies, evaluation, worlds, models, and
-scenarios. They are not yet production runtime components. Low-level trajectory
-planning and safety remain with MoveIt 2, `ros2_control`, and the robot runtime.
+empty structure for future environments, policies, evaluation, worlds, models,
+and scenarios. No Gymnasium environment, reset interface, reward function,
+industrial world, training entry point, or evaluation harness exists yet.
+Low-level trajectory planning and safety remain with MoveIt 2, `ros2_control`,
+and the robot runtime.
 
 ## Repository layout
 

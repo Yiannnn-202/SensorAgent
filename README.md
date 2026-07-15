@@ -2,7 +2,7 @@
 
 SensorAgent is the agent-side orchestration repository for embodied tasks. It
 focuses on task understanding, skill/tool orchestration, workflow execution,
-external integrations, structured logging, and local RM65-B simulation development.
+local VAD/ASR/TTS, structured logging, and RM65-B simulation development.
 
 It does **not** own production robot drivers, firmware, physical safety, or hardware
 bringup. The included ROS 2 workspace provides a local Gazebo and MoveIt 2
@@ -26,6 +26,8 @@ SensorAgent is responsible for:
 - Vision/audio/robot tool adapters.
 - External module integration through API or MCP.
 - Agent-owned structured logging.
+- Local Silero VAD and SenseVoice ASR command intake.
+- Local file-based TTS generation through supported sherpa-onnx models.
 - Reproducible local RM65-B + Robotiq 2F-85 Gazebo and MoveIt 2 integration.
 
 SensorAgent is not responsible for:
@@ -35,6 +37,23 @@ SensorAgent is not responsible for:
 - Mechanical arm drivers or low-level control.
 - Physical robot safety.
 - Camera or hardware bringup.
+
+## Current Status
+
+| Area | Status |
+| --- | --- |
+| Agent, Tool, Skill, ActionList, and DecisionTree runtimes | Implemented |
+| Static and OpenAI-compatible LLM planning | Implemented for approved mock targets |
+| Local microphone VAD and SenseVoice ASR | Implemented |
+| Local TTS file generation | Implemented; direct playback is intentionally disabled |
+| RM65-B + Robotiq Gazebo and MoveIt stack | Implemented and manually exercised on Ubuntu |
+| Voice command to physical/simulated robot execution | Not connected |
+| Industrial Gazebo scenarios and Gymnasium RL environment | Not implemented |
+
+The audio and ROS 2 stacks currently run as separate capabilities. `listen-task`
+transcribes speech and sends the text through the Agent planner, but the only
+approved planning target is still the mock pick-and-place workflow. No production
+ROS 2 robot Tool or `sensoragent_robot_bridge` implementation exists yet.
 
 ## Repository Layout
 
@@ -79,6 +98,7 @@ Key SensorAgent documents:
 - [Architecture](docs/architecture.md)
 - [Development backlog](TODO.md)
 - [Testing guide](docs/guides/testing.md)
+- [Audio guide](docs/guides/audio.md)
 - [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
 
 ## RM65-B and Robotiq Simulation
@@ -117,9 +137,48 @@ To start Gazebo without MoveIt and RViz:
 bash scripts/linux/run_rm65_b_sim.sh start_moveit:=false
 ```
 
-The default gripper mounting transform is currently zero-offset and must be
-calibrated against the RM65-B flange in Gazebo before grasp evaluation. See the
+The combined model, arm motion, and gripper opening/closing have been manually
+exercised on Ubuntu. Repeatable object-contact and grasp-stability acceptance
+remain before this simulation should be used for reinforcement learning. See the
 [full Ubuntu guide](docs/guides/rm65_b_gazebo_quickstart_cn.md).
+
+## Local Voice Command Pipeline
+
+The local path is:
+
+```text
+microphone
+→ SoundDeviceVadRecorder
+→ Silero VAD
+→ SenseVoice ASR
+→ Agent planner
+→ approved workflow target
+```
+
+Install the Python runtime dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Place local model assets under the ignored `models/` directory as described in
+the [audio guide](docs/guides/audio.md), configure the LLM credentials in an
+ignored `.env`, and run:
+
+```bash
+PYTHONPATH=src python -m sensoragent.services.cli.main \
+  listen-task \
+  --config configs/audio_local.yaml \
+  --planner llm \
+  --duration 15
+```
+
+`--duration` is the maximum listening window. The realtime VAD recorder stops
+after speech followed by the configured silence tail.
+
+The repository also includes `audio.listen_command`, `audio.announce`, and
+`audio.voice_command_ack_actionlist`. TTS currently writes an audio file; local
+playback and automatic task-result announcements are not enabled.
 
 ## Run the Mock Pipeline
 
@@ -171,16 +230,14 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m sensoragent.services.cli.main listen-task --config configs\audio_mock.yaml --planner static --duration 1 --object-query "silver roller" --target "third bin cell"
 ```
 
-## Development Focus
+## Current Development Priorities
 
-The current development phase focuses on building the generic Agent framework:
+1. Add a real ROS 2 robot integration and stable robot Tool contracts.
+2. Connect recognized voice commands to approved robot workflows.
+3. Add industrial Gazebo worlds, objects, reset services, and repeatable scenarios.
+4. Define the Gymnasium observation, action, reward, and termination contract.
+5. Add service entry points and external vision integration.
 
-1. MCP/API collaboration mechanism.
-2. Tool and skill registries.
-3. ActionList runtime.
-4. DecisionTree runtime.
-5. Structured logger.
-6. External adapter pattern.
-7. Minimal API and CLI entry points.
-
-Competition-specific workflows should be added after the core framework is stable.
+The Python Agent package currently declares Python 3.12, while Ubuntu 22.04 and
+ROS 2 Humble normally use Python 3.10. This compatibility boundary must be
+resolved before an in-process `rclpy` adapter is added.
