@@ -96,6 +96,7 @@ Start from the documentation index:
 Key SensorAgent documents:
 
 - [Architecture](docs/architecture.md)
+- [Competition technical plan](COMPETITION_TECHNICAL_PLAN_CN.md)
 - [Development backlog](TODO.md)
 - [Testing guide](docs/guides/testing.md)
 - [Audio guide](docs/guides/audio.md)
