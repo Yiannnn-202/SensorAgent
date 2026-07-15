@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="sensoragent_part_flange">
+    <link name="part">
+      <inertial>
+        <mass>0.22</mass>
+        <inertia>
+          <ixx>0.0000750</ixx>
+          <iyy>0.0000750</iyy>
+          <izz>0.0001348</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><cylinder><radius>0.035</radius><length>0.032</length></cylinder></geometry>
+        <surface><friction><ode><mu>1.2</mu><mu2>1.2</mu2></ode></friction></surface>
+      </collision>
+      <visual name="body">
+        <pose>0 0 0.004 0 0 0</pose>
+        <geometry><cylinder><radius>0.024</radius><length>0.032</length></cylinder></geometry>
+        <material><diffuse>0.94 0.50 0.08 1</diffuse></material>
+      </visual>
+      <visual name="flange">
+        <pose>0 0 -0.010 0 0 0</pose>
+        <geometry><cylinder><radius>0.035</radius><length>0.012</length></cylinder></geometry>
+        <material><diffuse>0.94 0.50 0.08 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

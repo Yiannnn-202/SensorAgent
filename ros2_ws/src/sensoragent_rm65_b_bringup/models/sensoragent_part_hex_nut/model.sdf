@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="sensoragent_part_hex_nut">
+    <link name="part">
+      <inertial>
+        <mass>0.18</mass>
+        <inertia>
+          <ixx>0.0000564</ixx>
+          <iyy>0.0000564</iyy>
+          <izz>0.0000940</izz>
+        </inertia>
+      </inertial>
+
+      <collision name="side_0_collision">
+        <pose>0.020 0 0 0 0 1.570796</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+      </collision>
+      <collision name="side_1_collision">
+        <pose>0.010 0.01732 0 0 0 2.617994</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+      </collision>
+      <collision name="side_2_collision">
+        <pose>-0.010 0.01732 0 0 0 3.665191</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+      </collision>
+      <collision name="side_3_collision">
+        <pose>-0.020 0 0 0 0 4.712389</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+      </collision>
+      <collision name="side_4_collision">
+        <pose>-0.010 -0.01732 0 0 0 5.759587</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+      </collision>
+      <collision name="side_5_collision">
+        <pose>0.010 -0.01732 0 0 0 0.523599</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+      </collision>
+
+      <visual name="side_0_visual">
+        <pose>0.020 0 0 0 0 1.570796</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+        <material><diffuse>0.72 0.22 0.68 1</diffuse></material>
+      </visual>
+      <visual name="side_1_visual">
+        <pose>0.010 0.01732 0 0 0 2.617994</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+        <material><diffuse>0.72 0.22 0.68 1</diffuse></material>
+      </visual>
+      <visual name="side_2_visual">
+        <pose>-0.010 0.01732 0 0 0 3.665191</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+        <material><diffuse>0.72 0.22 0.68 1</diffuse></material>
+      </visual>
+      <visual name="side_3_visual">
+        <pose>-0.020 0 0 0 0 4.712389</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+        <material><diffuse>0.72 0.22 0.68 1</diffuse></material>
+      </visual>
+      <visual name="side_4_visual">
+        <pose>-0.010 -0.01732 0 0 0 5.759587</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+        <material><diffuse>0.72 0.22 0.68 1</diffuse></material>
+      </visual>
+      <visual name="side_5_visual">
+        <pose>0.010 -0.01732 0 0 0 0.523599</pose>
+        <geometry><box><size>0.031 0.009 0.025</size></box></geometry>
+        <material><diffuse>0.72 0.22 0.68 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

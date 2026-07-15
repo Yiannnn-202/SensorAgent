@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="sensoragent_part_short_bolt">
+    <link name="part">
+      <inertial>
+        <mass>0.20</mass>
+        <inertia>
+          <ixx>0.0001162</ixx>
+          <iyy>0.0001162</iyy>
+          <izz>0.0000625</izz>
+        </inertia>
+      </inertial>
+      <collision name="shaft_collision">
+        <pose>0 0 -0.0075 0 0 0</pose>
+        <geometry><cylinder><radius>0.0125</radius><length>0.065</length></cylinder></geometry>
+      </collision>
+      <collision name="head_collision">
+        <pose>0 0 0.0325 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.015</length></cylinder></geometry>
+      </collision>
+      <visual name="shaft_visual">
+        <pose>0 0 -0.0075 0 0 0</pose>
+        <geometry><cylinder><radius>0.0125</radius><length>0.065</length></cylinder></geometry>
+        <material><diffuse>0.16 0.70 0.34 1</diffuse></material>
+      </visual>
+      <visual name="head_visual">
+        <pose>0 0 0.0325 0 0 0</pose>
+        <geometry><cylinder><radius>0.025</radius><length>0.015</length></cylinder></geometry>
+        <material><diffuse>0.16 0.70 0.34 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

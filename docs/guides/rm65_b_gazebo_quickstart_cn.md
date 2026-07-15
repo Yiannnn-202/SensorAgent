@@ -169,9 +169,10 @@ Ogre 1 下默认不调用 Gazebo 的自动聚焦服务，因为该服务可能�
 边界时触发渲染器崩溃。机械臂和夹爪会直接出现在默认视口中。确认使用 Ogre 2
 且需要自动聚焦时，可传入 `auto_focus_robot:=true`。
 
-该命令会启动：
+该命令默认加载轻量工业桌面场景，并启动：
 
-- 使用 DART PGS 求解器的 Gazebo 空场景；
+- 使用 DART PGS 求解器的 Gazebo 场景；
+- 工作台、3×3 料箱、六类基础零件和顶置 RGB-D 相机；
 - RM65-B 模型；
 - 固定在 `Link6` 末端的 Robotiq 2F-85；
 - `robot_state_publisher`；
@@ -181,6 +182,18 @@ Ogre 1 下默认不调用 Gazebo 的自动聚焦服务，因为该服务可能�
 - 提供 `/robotiq_gripper_controller/gripper_cmd` 的夹爪 Action bridge。
 
 等待 Gazebo 中出现机械臂，并确认终端没有控制器加载错误。
+
+如需恢复原来的空场景：
+
+```bash
+ros2 launch sensoragent_rm65_b_bringup \
+  gazebo_robotiq_demo.launch.py \
+  world_file:=empty_pgs.sdf \
+  bridge_camera:=false
+```
+
+工业场景的模型清单、相机话题和自定义模型导入方式见
+[`industrial_gazebo_environment_cn.md`](industrial_gazebo_environment_cn.md)。
 
 PGS 求解器用于规避 Ubuntu 22.04 自带 DART 6 Dantzig 求解器的稳定性问题。
 Gazebo 中左右夹指使用独立的限力 effort 控制，夹指内部接触部件固定为刚体，

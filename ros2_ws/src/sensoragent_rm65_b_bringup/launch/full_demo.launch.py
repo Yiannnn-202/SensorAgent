@@ -25,6 +25,8 @@ def generate_launch_description():
         launch_arguments={
             "render_engine": LaunchConfiguration("render_engine"),
             "auto_focus_robot": LaunchConfiguration("auto_focus_robot"),
+            "world_file": LaunchConfiguration("world_file"),
+            "bridge_camera": LaunchConfiguration("bridge_camera"),
         }.items(),
     )
 
@@ -40,6 +42,11 @@ def generate_launch_description():
             DeclareLaunchArgument("render_engine", default_value="ogre"),
             DeclareLaunchArgument("auto_focus_robot", default_value="false"),
             DeclareLaunchArgument("start_moveit", default_value="true"),
+            DeclareLaunchArgument(
+                "world_file",
+                default_value="industrial_pgs.sdf",
+            ),
+            DeclareLaunchArgument("bridge_camera", default_value="true"),
             gazebo,
             TimerAction(period=8.0, actions=[moveit]),
         ]

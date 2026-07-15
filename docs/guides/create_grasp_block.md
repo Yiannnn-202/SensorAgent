@@ -59,9 +59,9 @@ ros2 run ros_gz_sim create \
   -world empty \
   -file /tmp/grasp_block.sdf \
   -name grasp_block \
-  -x 0.45 \
-  -y 0.25 \
-  -z 0.04
+  -x 0.34 \
+  -y 0.20 \
+  -z 0.48
 ```
 
 The pose format is:
@@ -72,5 +72,8 @@ x y z roll pitch yaw
 
 Change the `-x`, `-y`, and `-z` command values to choose the spawn position.
 
-The default position is 45 cm forward and 25 cm to the side of the robot base,
-so the block does not spawn inside or directly beneath the arm.
+The default industrial workbench surface is at `z=0.44 m`. The block is
+8 cm high, so `z=0.48 m` places its bottom on the workbench.
+
+When using `world_file:=empty_pgs.sdf`, use `z=0.04 m` instead to place the
+same block on the ground plane.

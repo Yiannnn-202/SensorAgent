@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="sensoragent_bin_3x3">
+    <static>true</static>
+    <link name="bin">
+      <collision name="bottom_collision">
+        <pose>0 0 0.005 0 0 0</pose>
+        <geometry><box><size>0.42 0.36 0.01</size></box></geometry>
+      </collision>
+      <visual name="bottom_visual">
+        <pose>0 0 0.005 0 0 0</pose>
+        <geometry><box><size>0.42 0.36 0.01</size></box></geometry>
+        <material><diffuse>0.08 0.24 0.52 1</diffuse></material>
+      </visual>
+
+      <collision name="wall_x_positive_collision">
+        <pose>0.205 0 0.045 0 0 0</pose>
+        <geometry><box><size>0.01 0.36 0.08</size></box></geometry>
+      </collision>
+      <visual name="wall_x_positive_visual">
+        <pose>0.205 0 0.045 0 0 0</pose>
+        <geometry><box><size>0.01 0.36 0.08</size></box></geometry>
+        <material><diffuse>0.08 0.24 0.52 1</diffuse></material>
+      </visual>
+      <collision name="wall_x_negative_collision">
+        <pose>-0.205 0 0.045 0 0 0</pose>
+        <geometry><box><size>0.01 0.36 0.08</size></box></geometry>
+      </collision>
+      <visual name="wall_x_negative_visual">
+        <pose>-0.205 0 0.045 0 0 0</pose>
+        <geometry><box><size>0.01 0.36 0.08</size></box></geometry>
+        <material><diffuse>0.08 0.24 0.52 1</diffuse></material>
+      </visual>
+      <collision name="wall_y_positive_collision">
+        <pose>0 0.175 0.045 0 0 0</pose>
+        <geometry><box><size>0.40 0.01 0.08</size></box></geometry>
+      </collision>
+      <visual name="wall_y_positive_visual">
+        <pose>0 0.175 0.045 0 0 0</pose>
+        <geometry><box><size>0.40 0.01 0.08</size></box></geometry>
+        <material><diffuse>0.08 0.24 0.52 1</diffuse></material>
+      </visual>
+      <collision name="wall_y_negative_collision">
+        <pose>0 -0.175 0.045 0 0 0</pose>
+        <geometry><box><size>0.40 0.01 0.08</size></box></geometry>
+      </collision>
+      <visual name="wall_y_negative_visual">
+        <pose>0 -0.175 0.045 0 0 0</pose>
+        <geometry><box><size>0.40 0.01 0.08</size></box></geometry>
+        <material><diffuse>0.08 0.24 0.52 1</diffuse></material>
+      </visual>
+
+      <collision name="divider_x_negative_collision">
+        <pose>-0.068 0 0.045 0 0 0</pose>
+        <geometry><box><size>0.008 0.34 0.07</size></box></geometry>
+      </collision>
+      <visual name="divider_x_negative_visual">
+        <pose>-0.068 0 0.045 0 0 0</pose>
+        <geometry><box><size>0.008 0.34 0.07</size></box></geometry>
+        <material><diffuse>0.10 0.30 0.62 1</diffuse></material>
+      </visual>
+      <collision name="divider_x_positive_collision">
+        <pose>0.068 0 0.045 0 0 0</pose>
+        <geometry><box><size>0.008 0.34 0.07</size></box></geometry>
+      </collision>
+      <visual name="divider_x_positive_visual">
+        <pose>0.068 0 0.045 0 0 0</pose>
+        <geometry><box><size>0.008 0.34 0.07</size></box></geometry>
+        <material><diffuse>0.10 0.30 0.62 1</diffuse></material>
+      </visual>
+      <collision name="divider_y_negative_collision">
+        <pose>0 -0.058 0.045 0 0 0</pose>
+        <geometry><box><size>0.40 0.008 0.07</size></box></geometry>
+      </collision>
+      <visual name="divider_y_negative_visual">
+        <pose>0 -0.058 0.045 0 0 0</pose>
+        <geometry><box><size>0.40 0.008 0.07</size></box></geometry>
+        <material><diffuse>0.10 0.30 0.62 1</diffuse></material>
+      </visual>
+      <collision name="divider_y_positive_collision">
+        <pose>0 0.058 0.045 0 0 0</pose>
+        <geometry><box><size>0.40 0.008 0.07</size></box></geometry>
+      </collision>
+      <visual name="divider_y_positive_visual">
+        <pose>0 0.058 0.045 0 0 0</pose>
+        <geometry><box><size>0.40 0.008 0.07</size></box></geometry>
+        <material><diffuse>0.10 0.30 0.62 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

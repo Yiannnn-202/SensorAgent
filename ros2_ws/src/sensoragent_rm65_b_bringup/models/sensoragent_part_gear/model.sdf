@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="sensoragent_part_gear">
+    <link name="part">
+      <inertial>
+        <mass>0.20</mass>
+        <inertia>
+          <ixx>0.0000718</ixx>
+          <iyy>0.0000718</iyy>
+          <izz>0.0001369</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><cylinder><radius>0.037</radius><length>0.018</length></cylinder></geometry>
+        <surface><friction><ode><mu>1.2</mu><mu2>1.2</mu2></ode></friction></surface>
+      </collision>
+      <visual name="core">
+        <geometry><cylinder><radius>0.026</radius><length>0.018</length></cylinder></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_0">
+        <pose>0.031 0 0 0 0 0</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_1">
+        <pose>0.02685 0.0155 0 0 0 0.523599</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_2">
+        <pose>0.0155 0.02685 0 0 0 1.047198</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_3">
+        <pose>0 0.031 0 0 0 1.570796</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_4">
+        <pose>-0.0155 0.02685 0 0 0 2.094395</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_5">
+        <pose>-0.02685 0.0155 0 0 0 2.617994</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_6">
+        <pose>-0.031 0 0 0 0 3.141593</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_7">
+        <pose>-0.02685 -0.0155 0 0 0 3.665191</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_8">
+        <pose>-0.0155 -0.02685 0 0 0 4.188790</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_9">
+        <pose>0 -0.031 0 0 0 4.712389</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_10">
+        <pose>0.0155 -0.02685 0 0 0 5.235988</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+      <visual name="tooth_11">
+        <pose>0.02685 -0.0155 0 0 0 5.759587</pose>
+        <geometry><box><size>0.014 0.010 0.018</size></box></geometry>
+        <material><diffuse>0.88 0.76 0.10 1</diffuse></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

@@ -31,8 +31,15 @@ def generate_launch_description():
     description_share = get_package_share_directory("rm_description")
     robotiq_share = get_package_share_directory("robotiq_description")
     ros_gz_sim_share = get_package_share_directory("ros_gz_sim")
-    world_path = os.path.join(package_share, "worlds", "empty_pgs.sdf")
+    world_path = PathJoinSubstitution(
+        [
+            package_share,
+            "worlds",
+            LaunchConfiguration("world_file"),
+        ]
+    )
     resource_paths = [
+        os.path.join(package_share, "models"),
         os.path.dirname(package_share),
         os.path.dirname(description_share),
         os.path.dirname(robotiq_share),
@@ -74,7 +81,8 @@ def generate_launch_description():
             "gz_args": [
                 "-v 4 -r --render-engine ",
                 LaunchConfiguration("render_engine"),
-                f" {world_path}",
+                " ",
+                world_path,
             ]
         }.items(),
         condition=IfCondition(LaunchConfiguration("start_gazebo")),
@@ -95,6 +103,28 @@ def generate_launch_description():
         executable="parameter_bridge",
         arguments=["/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock"],
         output="screen",
+    )
+
+    camera_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        arguments=[
+            "/industrial_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+            (
+                "/industrial_camera/camera_info"
+                "@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo"
+            ),
+            (
+                "/industrial_camera/depth_image"
+                "@sensor_msgs/msg/Image[gz.msgs.Image"
+            ),
+            (
+                "/industrial_camera/depth_camera_info"
+                "@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo"
+            ),
+        ],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("bridge_camera")),
     )
 
     spawn_robot = Node(
@@ -205,6 +235,12 @@ def generate_launch_description():
             DeclareLaunchArgument("start_gazebo", default_value="true"),
             DeclareLaunchArgument("auto_focus_robot", default_value="false"),
             DeclareLaunchArgument("render_engine", default_value="ogre"),
+            DeclareLaunchArgument(
+                "world_file",
+                default_value="industrial_pgs.sdf",
+                description="World file installed in the bringup package worlds directory.",
+            ),
+            DeclareLaunchArgument("bridge_camera", default_value="true"),
             SetEnvironmentVariable(
                 name="GZ_SIM_RESOURCE_PATH",
                 value=[
@@ -216,6 +252,7 @@ def generate_launch_description():
             gazebo,
             robot_state_publisher,
             clock_bridge,
+            camera_bridge,
             spawn_robot,
             unpause_after_spawn,
             controllers_after_unpause,

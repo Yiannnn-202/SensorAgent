@@ -4,7 +4,7 @@ project(sensoragent_rm65_b_bringup)
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY config launch urdf worlds
+  DIRECTORY config launch models urdf worlds
   DESTINATION share/${PROJECT_NAME}
 )
 
