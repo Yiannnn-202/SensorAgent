@@ -93,6 +93,16 @@ class GripperActionBridge(Node):
                     self._positions[name] = message.position[index]
                 if index < len(message.velocity):
                     self._velocities[name] = message.velocity[index]
+            if (
+                self._active_goal is None
+                and self._hold_target is None
+                and self.LEFT_JOINT in self._positions
+                and self.RIGHT_JOINT in self._positions
+            ):
+                self._hold_target = (
+                    self._positions[self.LEFT_JOINT],
+                    self._positions[self.RIGHT_JOINT],
+                )
 
     def _goal_callback(self, goal_request):
         position = goal_request.command.position

@@ -71,10 +71,58 @@
                     <mesh filename="package://robotiq_description/meshes/collision/2f_85/left_knuckle.stl" />
                 </geometry>
             </collision>
+            <visual name="finger_visual">
+                <origin xyz="0.03152616 0.0 -0.00376347" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://robotiq_description/meshes/visual/2f_85/left_finger.dae" />
+                </geometry>
+            </visual>
+            <collision name="finger_collision">
+                <origin xyz="0.03152616 0.0 -0.00376347" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://robotiq_description/meshes/collision/2f_85/left_finger.stl" />
+                </geometry>
+            </collision>
+            <visual name="finger_tip_visual">
+                <origin xyz="0.0371575 0.0 0.04342168" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://robotiq_description/meshes/visual/2f_85/left_finger_tip.dae" />
+                </geometry>
+            </visual>
+            <collision name="finger_tip_collision">
+                <origin xyz="0.0371575 0.0 0.04342168" rpy="0 0 0" />
+                <geometry>
+                    <mesh filename="package://robotiq_description/meshes/collision/2f_85/left_finger_tip.stl" />
+                </geometry>
+                <surface>
+                    <friction>
+                        <ode>
+                            <mu>2.0</mu>
+                            <mu2>2.0</mu2>
+                        </ode>
+                    </friction>
+                    <contact>
+                        <ode>
+                            <kp>1e+5</kp>
+                            <kd>1</kd>
+                            <soft_cfm>0</soft_cfm>
+                            <soft_erp>0.2</soft_erp>
+                            <minDepth>0.002</minDepth>
+                            <maxVel>0</maxVel>
+                        </ode>
+                    </contact>
+                </surface>
+            </collision>
             <inertial>
-                <origin xyz="0.01213197 0.0002 -0.00058647" rpy="0 0 0" />
-                <mass value="1.384773208e-02" />
-                <inertia ixx="3.5232e-7" iyy="2.31944e-6" izz="2.23136e-6" ixy="0.0" ixz="1.1744e-7" iyz="0" />
+                <origin xyz="0.0264604359916 -0.000657941273874 0.0321239762491" rpy="0 0 0" />
+                <mass value="0.09913738704" />
+                <inertia
+                    ixx="8.51248334e-05"
+                    iyy="9.31372494e-05"
+                    izz="1.82533927e-05"
+                    ixy="1.96405989e-07"
+                    ixz="5.82923756e-06"
+                    iyz="4.57021621e-07" />
             </inertial>
         </link>
 
@@ -89,134 +137,58 @@
                     <mesh filename="package://robotiq_description/meshes/collision/2f_85/right_knuckle.stl" />
                 </geometry>
             </collision>
-            <inertial>
-                <origin xyz="-0.01213197 0.0002 -0.00058647" rpy="0 0 0" />
-                <mass value="1.384773208e-02" />
-                <inertia ixx="3.5232e-7" iyy="2.31944e-6" izz="2.23136e-6" ixy="0.0" ixz="-1.1744e-7" iyz="0.0" />
-            </inertial>
-        </link>
-
-        <link name="${prefix}robotiq_85_left_finger_link">
-            <visual>
-                <geometry>
-                    <mesh filename="package://robotiq_description/meshes/visual/2f_85/left_finger.dae" />
-                </geometry>
-            </visual>
-            <collision>
-                <geometry>
-                    <mesh filename="package://robotiq_description/meshes/collision/2f_85/left_finger.stl" />
-                </geometry>
-            </collision>
-            <inertial>
-                <origin xyz="0.00346899 -0.00079447 0.01867121" rpy="0 0 0" />
-                <mass value="4.260376752e-02" />
-                <inertia ixx="1.385792000000000e-05" iyy="1.183208e-05" izz="5.19672e-06" ixy="0.0" ixz="-2.17264e-06" iyz="0.0" />
-            </inertial>
-        </link>
-
-        <link name="${prefix}robotiq_85_right_finger_link">
-            <visual>
+            <visual name="finger_visual">
+                <origin xyz="-0.03152616 0.0 -0.00376347" rpy="0 0 0" />
                 <geometry>
                     <mesh filename="package://robotiq_description/meshes/visual/2f_85/right_finger.dae" />
                 </geometry>
             </visual>
-            <collision>
+            <collision name="finger_collision">
+                <origin xyz="-0.03152616 0.0 -0.00376347" rpy="0 0 0" />
                 <geometry>
                     <mesh filename="package://robotiq_description/meshes/collision/2f_85/right_finger.stl" />
                 </geometry>
             </collision>
-            <inertial>
-                <origin xyz="-0.00346899 -5.53e-06 0.01867121" rpy="0 0 0" />
-                <mass value="4.260376752000000e-02" />
-                <inertia ixx="1.385792e-05" iyy="1.183208e-05" izz="5.19672e-06" ixy="0.0" ixz="2.17264e-06" iyz="0.0" />
-            </inertial>
-        </link>
-
-        <link name="${prefix}robotiq_85_left_inner_knuckle_link">
-            <inertial>
-                <origin xyz="0.01897699 0.00015001 0.02247101" rpy="0 0 0" />
-                <mass value="2.969376448e-02" />
-                <inertia ixx="9.57136e-06" iyy="8.69056e-06" izz="8.19144e-06" ixy="0.0" ixz="-3.93424e-06" iyz="0.0" />
-            </inertial>
-        </link>
-
-        <link name="${prefix}robotiq_85_right_inner_knuckle_link">
-            <inertial>
-                <origin xyz="-0.01926824 5.001e-05 0.02222178" rpy="0 0 0" />
-                <mass value="2.969376448e-02" />
-                <inertia ixx="9.42456e-06" iyy="8.69056e-06" izz="8.33824e-06" ixy="0.0" ixz="3.9636e-06" iyz="0.0" />
-            </inertial>
-        </link>
-
-        <link name="${prefix}robotiq_85_left_finger_tip_link">
-            <visual>
-                <geometry>
-                    <mesh filename="package://robotiq_description/meshes/visual/2f_85/left_finger_tip.dae" />
-                </geometry>
-            </visual>
-            <collision>
-                <geometry>
-                    <mesh filename="package://robotiq_description/meshes/collision/2f_85/left_finger_tip.stl" />
-                </geometry>
-                <surface>
-                    <friction>
-                    <ode>
-                        <mu>2.0</mu>
-                        <mu2>2.0</mu2>
-                    </ode>
-                    </friction>
-                    <contact>
-                    <ode>
-                        <kp>1e+5</kp>
-                        <kd>1</kd>
-                        <soft_cfm>0</soft_cfm>
-                        <soft_erp>0.2</soft_erp>
-                        <minDepth>0.002</minDepth>
-                        <maxVel>0</maxVel>
-                    </ode>
-                    </contact>
-                </surface>
-            </collision>
-            <inertial>
-                <origin xyz="-0.01456706 -0.0008 0.01649701" rpy="0 0 0" />
-                <mass value="4.268588744e-02" />
-                <inertia ixx="1.048152e-05" iyy="1.197888e-05" izz="4.22784e-06" ixy="0.0" ixz="3.5232e-6" iyz="0.0" />
-            </inertial>
-        </link>
-
-        <link name="${prefix}robotiq_85_right_finger_tip_link">
-            <visual>
+            <visual name="finger_tip_visual">
+                <origin xyz="-0.0371575 0.0 0.04342168" rpy="0 0 0" />
                 <geometry>
                     <mesh filename="package://robotiq_description/meshes/visual/2f_85/right_finger_tip.dae" />
                 </geometry>
             </visual>
-            <collision>
+            <collision name="finger_tip_collision">
+                <origin xyz="-0.0371575 0.0 0.04342168" rpy="0 0 0" />
                 <geometry>
                     <mesh filename="package://robotiq_description/meshes/collision/2f_85/right_finger_tip.stl" />
                 </geometry>
                 <surface>
                     <friction>
-                    <ode>
-                        <mu>2.0</mu>
-                        <mu2>2.0</mu2>
-                    </ode>
+                        <ode>
+                            <mu>2.0</mu>
+                            <mu2>2.0</mu2>
+                        </ode>
                     </friction>
                     <contact>
-                    <ode>
-                        <kp>1e+5</kp>
-                        <kd>1</kd>
-                        <soft_cfm>0</soft_cfm>
-                        <soft_erp>0.2</soft_erp>
-                        <minDepth>0.002</minDepth>
-                        <maxVel>0</maxVel>
-                    </ode>
+                        <ode>
+                            <kp>1e+5</kp>
+                            <kd>1</kd>
+                            <soft_cfm>0</soft_cfm>
+                            <soft_erp>0.2</soft_erp>
+                            <minDepth>0.002</minDepth>
+                            <maxVel>0</maxVel>
+                        </ode>
                     </contact>
                 </surface>
             </collision>
             <inertial>
-                <origin xyz="0.01456706 5e-05 0.01649701" rpy="0 0 0" />
-                <mass value="4.268588744e-02" />
-                <inertia ixx="1.048152e-05" iyy="1.197888e-05" izz="4.22784e-06" ixy="0.0" ixz="-3.5232e-06" iyz="0.0" />
+                <origin xyz="-0.0264604359916 0.000047088612006 0.0321239762491" rpy="0 0 0" />
+                <mass value="0.09913738704" />
+                <inertia
+                    ixx="8.51134272e-05"
+                    iyy="9.31372494e-05"
+                    izz="1.82419865e-05"
+                    ixy="-4.99538310e-08"
+                    ixz="-5.82923756e-06"
+                    iyz="2.72148729e-08" />
             </inertial>
         </link>
 
@@ -232,6 +204,7 @@
             <axis xyz="-1 0 0" />
             <origin xyz="0.03060114 0.0 0.05490452" rpy="0 0 0" />
             <limit lower="0.0" upper="${finger_travel}" velocity="0.05" effort="${joint_effort_limit}" />
+            <dynamics damping="5.0" friction="0.5" />
         </joint>
 
         <joint name="${prefix}robotiq_85_right_knuckle_joint" type="prismatic">
@@ -240,42 +213,7 @@
             <axis xyz="1 0 0" />
             <origin xyz="-0.03060114 0.0 0.05490452" rpy="0 0 0" />
             <limit lower="0.0" upper="${finger_travel}" velocity="0.05" effort="${joint_effort_limit}" />
-        </joint>
-
-        <joint name="${prefix}robotiq_85_left_finger_joint" type="fixed">
-            <parent link="${prefix}robotiq_85_left_knuckle_link" />
-            <child link="${prefix}robotiq_85_left_finger_link" />
-            <origin xyz="0.03152616 0.0 -0.00376347" rpy="0 0 0" />
-        </joint>
-
-        <joint name="${prefix}robotiq_85_right_finger_joint" type="fixed">
-            <parent link="${prefix}robotiq_85_right_knuckle_link" />
-            <child link="${prefix}robotiq_85_right_finger_link" />
-            <origin xyz="-0.03152616 0.0 -0.00376347" rpy="0 0 0" />
-        </joint>
-
-        <joint name="${prefix}robotiq_85_left_inner_knuckle_joint" type="fixed">
-            <parent link="${prefix}robotiq_85_base_link" />
-            <child link="${prefix}robotiq_85_left_inner_knuckle_link" />
-            <origin xyz="0.0127 0.0 0.06142" rpy="0 0 0" />
-        </joint>
-
-        <joint name="${prefix}robotiq_85_right_inner_knuckle_joint" type="fixed">
-            <parent link="${prefix}robotiq_85_base_link" />
-            <child link="${prefix}robotiq_85_right_inner_knuckle_link" />
-            <origin xyz="-0.0127 0.0 0.06142" rpy="0 0 0" />
-        </joint>
-
-        <joint name="${prefix}robotiq_85_left_finger_tip_joint" type="fixed">
-            <parent link="${prefix}robotiq_85_left_finger_link" />
-            <child link="${prefix}robotiq_85_left_finger_tip_link" />
-            <origin xyz="0.00563134 0.0 0.04718515" rpy="0 0 0" />
-        </joint>
-
-        <joint name="${prefix}robotiq_85_right_finger_tip_joint" type="fixed">
-            <parent link="${prefix}robotiq_85_right_finger_link" />
-            <child link="${prefix}robotiq_85_right_finger_tip_link" />
-            <origin xyz="-0.00563134 0.0 0.04718515" rpy="0 0 0" />
+            <dynamics damping="5.0" friction="0.5" />
         </joint>
     </xacro:macro>
 </robot>

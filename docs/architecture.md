@@ -197,9 +197,11 @@ MoveIt / direct ROS 2 Action
 ```
 
 The simulation uses two bounded-effort prismatic finger joints behind the
-standard `control_msgs/action/GripperCommand` API. Each rigid finger assembly
-moves linearly and can stop independently on contact, avoiding the
-non-physical deformation caused by velocity-driven mimic joints under load.
+standard `control_msgs/action/GripperCommand` API. Each side is collapsed into
+one rigid jaw link containing the knuckle, finger, and fingertip meshes. The
+jaw has exactly one prismatic opening degree of freedom, so it cannot rotate or
+sway relative to the gripper base. Either jaw can still stop independently on
+object contact.
 
 The combined SRDF exposes:
 

@@ -18,6 +18,9 @@ The 2F-140, Hand-E, Universal Robots adapter, physical serial driver, hardware
 activation controller, examples, and hardware tests are intentionally omitted.
 The integrated simulation replaces the upstream contact-bearing mimic linkage
 with two rigid, independently effort-controlled prismatic finger assemblies.
+A finger assembly is represented by one moving rigid link containing the
+knuckle, finger, and fingertip geometry; internal fixed-joint chains are
+removed to avoid lateral constraint jitter.
 A small ROS 2 action bridge preserves the standard `GripperCommand` interface
 while allowing either finger to stop safely on object contact.
 

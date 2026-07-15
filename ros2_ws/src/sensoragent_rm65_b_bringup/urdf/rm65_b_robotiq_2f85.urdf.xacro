@@ -65,12 +65,6 @@
   <xacro:gazebo_gripper_link link="robotiq_85_base_link"/>
   <xacro:gazebo_gripper_link link="robotiq_85_left_knuckle_link"/>
   <xacro:gazebo_gripper_link link="robotiq_85_right_knuckle_link"/>
-  <xacro:gazebo_gripper_link link="robotiq_85_left_finger_link"/>
-  <xacro:gazebo_gripper_link link="robotiq_85_right_finger_link"/>
-  <xacro:gazebo_gripper_link link="robotiq_85_left_inner_knuckle_link"/>
-  <xacro:gazebo_gripper_link link="robotiq_85_right_inner_knuckle_link"/>
-  <xacro:gazebo_gripper_link link="robotiq_85_left_finger_tip_link"/>
-  <xacro:gazebo_gripper_link link="robotiq_85_right_finger_tip_link"/>
 
   <ros2_control name="RM65BWithRobotiqSystem" type="system">
     <hardware>
