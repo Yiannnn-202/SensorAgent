@@ -43,6 +43,9 @@ from sensoragent.tools.robot import (
   RobotMoveJointsTool,
   RobotMoveLinearTool,
   RobotMovePoseTool,
+  RobotPlanOrientedPickTool,
+  RobotPlanPlaceTool,
+  RobotPlanTopDownPickTool,
   RobotStopTool,
 )
 from sensoragent.tools.vision.mock import MockDetectTool
@@ -64,6 +67,9 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
   "audio.mock_transcribe": MockTranscribeTool,
   "robot.mock_pick": MockPickTool,
   "robot.mock_place": MockPlaceTool,
+  "robot.plan_oriented_pick": RobotPlanOrientedPickTool,
+  "robot.plan_place": RobotPlanPlaceTool,
+  "robot.plan_top_down_pick": RobotPlanTopDownPickTool,
 }
 
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {

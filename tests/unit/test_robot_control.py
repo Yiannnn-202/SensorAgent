@@ -23,6 +23,7 @@ from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.robot import (
   RobotPickSkill,
   RobotPlaceSkill,
+  build_oriented_pick_plan_from_points,
   build_place_plan,
   build_top_down_pick_plan,
 )
@@ -31,6 +32,9 @@ from sensoragent.tools.robot import (
   GripperCloseTool,
   GripperGetStateTool,
   GripperOpenTool,
+  RobotPlanOrientedPickTool,
+  RobotPlanPlaceTool,
+  RobotPlanTopDownPickTool,
   RobotGetStateTool,
   RobotMoveJointsTool,
   RobotMoveLinearTool,
@@ -99,6 +103,9 @@ class RobotControlTest(TestCase):
     bundle = build_agent_from_config(ROOT / "configs" / "robot_mock.yaml")
 
     self.assertIn("robot.move_pose", bundle.tool_registry.names())
+    self.assertIn("robot.plan_top_down_pick", bundle.tool_registry.names())
+    self.assertIn("robot.plan_oriented_pick", bundle.tool_registry.names())
+    self.assertIn("robot.plan_place", bundle.tool_registry.names())
     self.assertIn("gripper.close", bundle.tool_registry.names())
     self.assertIn("robot.pick", bundle.skill_registry.names())
     self.assertIn("robot.place", bundle.skill_registry.names())
@@ -205,3 +212,77 @@ class RobotControlTest(TestCase):
     self.assertEqual(pick.approach.position, (0.4, 0.1, 0.4))
     self.assertEqual(pick.approach.orientation, pose.orientation)
     self.assertEqual(place.retreat.frame_id, "world")
+
+  def test_top_down_pick_and_place_planning_tools_emit_plans(self) -> None:
+    registry = ToolRegistry()
+    registry.register(RobotPlanTopDownPickTool())
+    registry.register(RobotPlanPlaceTool())
+    runtime = ToolRuntime(registry, TaskLogger(), ContractValidator(ROOT / "contracts"))
+    trace = TraceContext()
+    pose = {
+      "position": [0.4, 0.1, 0.2],
+      "orientation": [0.0, 0.0, 0.0, 1.0],
+      "frame_id": "base_link",
+    }
+
+    pick = runtime.invoke(
+      "robot.plan_top_down_pick",
+      {"grasp_pose": pose, "approach_distance": 0.2},
+      trace,
+    )
+    place = runtime.invoke(
+      "robot.plan_place",
+      {"place_pose": pose, "clearance": 0.1},
+      trace,
+    )
+
+    self.assertTrue(pick.success)
+    self.assertEqual(pick.output["plan"]["approach"]["position"], [0.4, 0.1, 0.4])
+    self.assertTrue(place.success)
+    self.assertEqual(place.output["plan"]["retreat"]["position"], [0.4, 0.1, 0.30000000000000004])
+
+  def test_top_down_pick_tool_accepts_vision_pose_3d(self) -> None:
+    registry = ToolRegistry()
+    registry.register(RobotPlanTopDownPickTool())
+    runtime = ToolRuntime(registry, TaskLogger(), ContractValidator(ROOT / "contracts"))
+
+    result = runtime.invoke(
+      "robot.plan_top_down_pick",
+      {
+        "pose_3d": [0.42, -0.13, 0.08, 0.0, 0.0, 1.57],
+        "position_offset": [0.0, 0.0, 0.02],
+      },
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["grasp_pose"]["position"], [0.42, -0.13, 0.1])
+    self.assertEqual(result.output["grasp_pose"]["orientation"], [0.0, 1.0, 0.0, 0.0])
+    self.assertEqual(result.output["plan"]["pregrasp"]["position"], [0.42, -0.13, 0.13])
+
+  def test_oriented_pick_planner_builds_plan_from_point_cloud(self) -> None:
+    points = []
+    for y in [index * 0.01 for index in range(-20, 21)]:
+      radius = 0.03 if y >= 0 else 0.01
+      points.extend(
+        [
+          [0.4 + radius, y, 0.2],
+          [0.4 - radius, y, 0.2],
+          [0.4, y, 0.2 + radius],
+          [0.4, y, 0.2 - radius],
+        ]
+      )
+
+    plan = build_oriented_pick_plan_from_points(points)
+
+    self.assertGreater(plan.grasp.position[1], -0.01)
+    self.assertEqual(plan.grasp.frame_id, "base_link")
+
+    registry = ToolRegistry()
+    registry.register(RobotPlanOrientedPickTool())
+    runtime = ToolRuntime(registry, TaskLogger(), ContractValidator(ROOT / "contracts"))
+    result = runtime.invoke("robot.plan_oriented_pick", {"points": points}, TraceContext())
+
+    self.assertTrue(result.success)
+    self.assertIn("plan", result.output)
+    self.assertEqual(set(result.output["plan"]), {"approach", "pregrasp", "grasp", "lift"})

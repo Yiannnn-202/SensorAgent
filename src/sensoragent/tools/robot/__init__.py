@@ -10,6 +10,11 @@ from sensoragent.tools.robot.control import (
   RobotMovePoseTool,
   RobotStopTool,
 )
+from sensoragent.tools.robot.planning import (
+  RobotPlanOrientedPickTool,
+  RobotPlanPlaceTool,
+  RobotPlanTopDownPickTool,
+)
 
 __all__ = [
   "GripperCloseTool",
@@ -19,5 +24,8 @@ __all__ = [
   "RobotMoveJointsTool",
   "RobotMoveLinearTool",
   "RobotMovePoseTool",
+  "RobotPlanOrientedPickTool",
+  "RobotPlanPlaceTool",
+  "RobotPlanTopDownPickTool",
   "RobotStopTool",
 ]
