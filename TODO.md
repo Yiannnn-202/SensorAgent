@@ -233,15 +233,35 @@ Goal: connect SensorAgent to modules owned by other teams through stable adapter
 
 Goal: implement competition-specific task logic after the generic framework is stable.
 
-- [ ] Define industrial pick-and-place task schema.
-- [ ] Add industrial pick-and-place ActionList workflow.
-- [ ] Add industrial pick-and-place DecisionTree workflow.
-- [ ] Add visual verification workflow branch.
-- [ ] Add retry and recovery branches.
-- [ ] Add task log export for reports and replay.
-- [ ] Add evaluation metrics logging.
-- [ ] Add demo CLI/API command for the competition task.
-- [ ] Add fixture-based e2e tests for competition task logic.
+- [ ] Define the industrial pick-and-place task schema: intent, object category,
+  attributes, target bin cell, constraints, allowed skills, and retry policy.
+- [ ] Define the world-state schema needed by task decomposition: object instances,
+  confidence, 3D pose, bin cells, robot state, gripper state, and task state.
+- [ ] Add the L1 fixed industrial pick-and-place ActionList workflow as the
+  deterministic baseline.
+- [ ] Add the L2 industrial DecisionTree workflow with detect, plan-pick, pick,
+  verify-grasp, plan-place, place, verify-place, success, and failure nodes.
+- [ ] Add visual verification workflow branches for grasp verification and target
+  bin-cell placement verification.
+- [ ] Add classified recovery branches for object-not-found, path-planning failure,
+  pick failure, dropped object, wrong-bin placement, and pose abnormality.
+- [ ] Add a constrained planner prompt/schema that can only select approved
+  workflows, skills, and failure-recovery policies.
+- [ ] Add fixture-based planner tests for standard commands, synonymous commands,
+  ambiguous commands, missing target information, and invalid object categories.
+- [ ] Add fixture-based DecisionTree e2e tests for every required failure type.
+- [ ] Add task log export for report tables and replay, including parsed intent,
+  selected plan, node results, failure type, recovery attempts, and final status.
+- [ ] Add evaluation metrics logging for parse accuracy, sequence validity,
+  sequence completeness, robot-logic consistency, branch coverage, end-to-end
+  success rate, recovery success rate, recovery gain, and average recovery cost.
+- [ ] Add an experiment runner that batches fixed ActionList, pure LLM ActionList,
+  rule/HTN ActionList, LLM + DecisionTree, and LLM + DecisionTree + visual
+  verification baselines on the same fixture set.
+- [ ] Add a demo CLI/API command for the competition task that can run in mock,
+  Gazebo/MoveIt, and later physical-robot modes.
+- [ ] Save report-ready CSV/JSONL summaries and failure-case artifacts for the
+  technical report and demonstration video.
 
 ## Robotics simulation and learning environment
 
