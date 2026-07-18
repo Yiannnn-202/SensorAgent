@@ -1,11 +1,14 @@
 """Trajectory timing helpers independent of ROS message imports."""
 
 
+MAX_SPEED = 2.0
+
+
 def scale_joint_trajectory_speed(trajectory, speed: float) -> None:
     """Scale joint trajectory timing, velocity, and acceleration in place."""
 
-    if speed <= 0.0 or speed > 1.0:
-        raise ValueError("speed must be greater than 0 and at most 1")
+    if speed <= 0.0 or speed > MAX_SPEED:
+        raise ValueError(f"speed must be greater than 0 and at most {MAX_SPEED:g}")
 
     for point in trajectory.points:
         total_nanoseconds = (

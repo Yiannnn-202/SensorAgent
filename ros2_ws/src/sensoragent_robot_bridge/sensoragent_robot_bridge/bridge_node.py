@@ -36,8 +36,12 @@ from sensoragent_robot_bridge.gripper_mapping import (
     opening_to_closure,
 )
 from sensoragent_robot_bridge.trajectory_scaling import (
+    MAX_SPEED,
     scale_joint_trajectory_speed,
 )
+
+
+MOVEIT_MAX_SCALING_FACTOR = 1.0
 
 
 def _response(
@@ -276,7 +280,7 @@ class RobotBridgeNode(Node):
         timeout: float,
     ):
         self._set_pending_action(key)
-        if not client.wait_for_server(timeout_sec=5.0):
+        if not client.wait_for_server(timeout_sec=min(timeout, 15.0)):
             self._clear_pending_action(key, clear_cancel_request=True)
             return None, "ACTION_SERVER_UNAVAILABLE"
 
@@ -352,8 +356,8 @@ class RobotBridgeNode(Node):
     @staticmethod
     def _speed(value: Any) -> float:
         speed = float(value)
-        if speed <= 0.0 or speed > 1.0:
-            raise ValueError("speed must be greater than 0 and at most 1")
+        if speed <= 0.0 or speed > MAX_SPEED:
+            raise ValueError(f"speed must be greater than 0 and at most {MAX_SPEED:g}")
         return speed
 
     def _move_group_goal(
@@ -367,8 +371,8 @@ class RobotBridgeNode(Node):
         goal.request.goal_constraints = [constraints]
         goal.request.num_planning_attempts = self._planning_attempts
         goal.request.allowed_planning_time = self._planning_time
-        goal.request.max_velocity_scaling_factor = speed
-        goal.request.max_acceleration_scaling_factor = speed
+        goal.request.max_velocity_scaling_factor = min(speed, MOVEIT_MAX_SCALING_FACTOR)
+        goal.request.max_acceleration_scaling_factor = min(speed, MOVEIT_MAX_SCALING_FACTOR)
         goal.planning_options.plan_only = False
         goal.planning_options.look_around = False
         goal.planning_options.replan = True
@@ -623,8 +627,8 @@ class RobotBridgeNode(Node):
         speed = float(payload.get("speed", 0.5))
         if force < 0.0 or force > 1.0:
             raise ValueError("force must be between 0 and 1")
-        if speed <= 0.0 or speed > 1.0:
-            raise ValueError("speed must be greater than 0 and at most 1")
+        if speed <= 0.0 or speed > MAX_SPEED:
+            raise ValueError(f"speed must be greater than 0 and at most {MAX_SPEED:g}")
 
         if not self._command_lock.acquire(blocking=False):
             return _response(False, error_code="ROBOT_BUSY", message="Robot is busy.")
@@ -789,6 +793,24 @@ class RobotBridgeNode(Node):
     def get_gripper_state(self) -> dict:
         return _response(True, state=self._gripper_state())
 
+    def get_ready(self) -> dict:
+        state = {
+            "move_action": self._move_group_client.server_is_ready(),
+            "execute_trajectory": self._execute_client.server_is_ready(),
+            "gripper_cmd": self._gripper_client.server_is_ready(),
+            "cartesian_path": self._cartesian_client.service_is_ready(),
+        }
+        return _response(
+            all(state.values()),
+            error_code="OK" if all(state.values()) else "ROS_INTERFACE_UNAVAILABLE",
+            message=(
+                "All ROS interfaces are ready."
+                if all(state.values())
+                else "One or more ROS interfaces are not ready."
+            ),
+            state=state,
+        )
+
     def start_http_server(self) -> None:
         handler = self._build_http_handler()
         self._http_server = ThreadingHTTPServer(
@@ -848,6 +870,9 @@ class RobotBridgeNode(Node):
                     return
                 if self.path == "/state":
                     self._write_json(200, bridge.get_state())
+                    return
+                if self.path == "/ready":
+                    self._write_json(200, bridge.get_ready())
                     return
                 if self.path == "/gripper/state":
                     self._write_json(200, bridge.get_gripper_state())

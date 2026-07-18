@@ -178,22 +178,43 @@ def generate_launch_description():
         output="screen",
     )
 
-    spawn_controllers = Node(
+    controller_spawner_common_args = [
+        "--controller-manager",
+        "/controller_manager",
+        "--controller-manager-timeout",
+        "120",
+        "--switch-timeout",
+        "120",
+        "--service-call-timeout",
+        "30",
+    ]
+
+    spawn_joint_state_broadcaster = Node(
         package="controller_manager",
         executable="spawner",
         arguments=[
             "joint_state_broadcaster",
+            *controller_spawner_common_args,
+        ],
+        output="screen",
+    )
+
+    spawn_arm_controller = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=[
             "rm_group_controller",
+            *controller_spawner_common_args,
+        ],
+        output="screen",
+    )
+
+    spawn_gripper_controller = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=[
             "robotiq_gripper_effort_controller",
-            "--controller-manager",
-            "/controller_manager",
-            "--controller-manager-timeout",
-            "120",
-            "--switch-timeout",
-            "120",
-            "--service-call-timeout",
-            "30",
-            "--activate-as-group",
+            *controller_spawner_common_args,
         ],
         output="screen",
     )
@@ -214,12 +235,21 @@ def generate_launch_description():
     controllers_after_unpause = RegisterEventHandler(
         OnProcessExit(
             target_action=unpause_world,
-            on_exit=[TimerAction(period=2.0, actions=[spawn_controllers])],
+            on_exit=[
+                TimerAction(
+                    period=2.0,
+                    actions=[
+                        spawn_joint_state_broadcaster,
+                        spawn_arm_controller,
+                        spawn_gripper_controller,
+                    ],
+                )
+            ],
         )
     )
     gripper_bridge_after_controllers = RegisterEventHandler(
         OnProcessExit(
-            target_action=spawn_controllers,
+            target_action=spawn_gripper_controller,
             on_exit=[TimerAction(period=1.0, actions=[gripper_action_bridge])],
         )
     )

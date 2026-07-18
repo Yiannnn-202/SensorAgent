@@ -20,6 +20,7 @@ from sensoragent_robot_bridge.gripper_mapping import (
   opening_to_closure,
 )
 from sensoragent_robot_bridge.trajectory_scaling import (
+  MAX_SPEED,
   scale_joint_trajectory_speed,
 )
 
@@ -37,6 +38,7 @@ class RobotBridgePackageTest(TestCase):
       / "sensoragent_rm65_b_bringup"
       / "launch"
       / "full_demo.launch.py",
+      ROOT / "scripts" / "linux" / "test_gazebo_pick_pipeline.py",
     ]
 
     for path in paths:
@@ -72,3 +74,18 @@ class RobotBridgePackageTest(TestCase):
     self.assertEqual(point.time_from_start.nanosec, 0)
     self.assertEqual(point.velocities, [1.0, -1.0])
     self.assertEqual(point.accelerations, [1.0, -1.0])
+
+  def test_cartesian_trajectory_accepts_maximum_speed_two(self) -> None:
+    point = SimpleNamespace(
+      time_from_start=SimpleNamespace(sec=2, nanosec=0),
+      velocities=[1.0],
+      accelerations=[1.0],
+    )
+    trajectory = SimpleNamespace(points=[point])
+
+    scale_joint_trajectory_speed(trajectory, MAX_SPEED)
+
+    self.assertEqual(point.time_from_start.sec, 1)
+    self.assertEqual(point.time_from_start.nanosec, 0)
+    self.assertEqual(point.velocities, [2.0])
+    self.assertEqual(point.accelerations, [4.0])
