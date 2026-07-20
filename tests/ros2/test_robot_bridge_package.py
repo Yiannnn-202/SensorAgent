@@ -39,6 +39,8 @@ class RobotBridgePackageTest(TestCase):
       / "launch"
       / "full_demo.launch.py",
       ROOT / "scripts" / "linux" / "test_gazebo_pick_pipeline.py",
+      ROOT / "scripts" / "linux" / "test_gazebo_place_pipeline.py",
+      ROOT / "scripts" / "linux" / "test_gazebo_pick_place_pipeline.py",
     ]
 
     for path in paths:

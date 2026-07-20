@@ -24,6 +24,7 @@ The documentation set is intentionally small.
 - [SensorAgent simulation robot HTTP bridge](guides/robot_sim_bridge_cn.md)
 - [Industrial tabletop Gazebo environment](guides/industrial_gazebo_environment_cn.md)
 - [Gazebo pick pipeline test script](guides/gazebo_pick_pipeline_test.md)
+- [Gazebo pick and place pipeline test scripts](guides/gazebo_pick_place_pipeline_test.md)
 - [Create a Gazebo grasping block](guides/create_grasp_block.md)
 
 ## Robotics source records
