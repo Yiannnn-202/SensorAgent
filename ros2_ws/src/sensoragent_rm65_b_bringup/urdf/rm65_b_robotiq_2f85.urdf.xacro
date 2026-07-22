@@ -2,6 +2,8 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="rm65_b_robotiq_2f85">
   <xacro:arg name="gripper_mount_xyz" default="0 0 0"/>
   <xacro:arg name="gripper_mount_rpy" default="0 0 0"/>
+  <xacro:arg name="gripper_tcp_xyz" default="0 0 0.10"/>
+  <xacro:arg name="gripper_tcp_rpy" default="0 0 0"/>
   <xacro:arg name="robot_mount_xyz" default="0 0 0.18"/>
   <xacro:arg name="robot_mount_rpy" default="0 0 0"/>
 
@@ -24,6 +26,13 @@
     finger_travel="0.0424">
     <origin xyz="$(arg gripper_mount_xyz)" rpy="$(arg gripper_mount_rpy)"/>
   </xacro:robotiq_gripper>
+
+  <link name="robotiq_85_tcp"/>
+  <joint name="robotiq_85_tcp_joint" type="fixed">
+    <origin xyz="$(arg gripper_tcp_xyz)" rpy="$(arg gripper_tcp_rpy)"/>
+    <parent link="robotiq_85_base_link"/>
+    <child link="robotiq_85_tcp"/>
+  </joint>
 
   <gazebo reference="base_link">
     <self_collide>false</self_collide>

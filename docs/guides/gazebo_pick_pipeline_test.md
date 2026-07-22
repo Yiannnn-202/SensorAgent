@@ -107,8 +107,8 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/test_gazebo_pick_pipeline.py \
 Expected Gazebo behavior:
 
 1. The gripper opens.
-2. The arm moves above the target.
-3. The arm descends toward the grasp pose.
+2. The arm moves to a high safe pose above the target.
+3. The arm descends vertically through approach and pregrasp poses.
 4. The gripper closes.
 5. The arm lifts.
 
@@ -159,10 +159,17 @@ The default industrial world includes these approximate Gazebo/world positions:
 --diagnose-only            # only test arm motion
 --arm-diagnostic           # run arm diagnostic before the pick
 --speed 2                  # motion speed; default is 2
---position-offset 0 0 0.02 # offset added before planning
+--pick-descent-speed 1.5   # vertical descent from approach to grasp
+--position-offset 0 0 0.03 # visual object XYZ to gripper TCP grasp pose
+--approach-distance 0.10   # vertical approach distance above grasp
+--pregrasp-distance 0.04   # vertical pregrasp distance above grasp
 --close-opening 0.02       # gripper opening after close command, in metres
 --json-out logs/tasks/gazebo_pick_test.json
 ```
+
+The robot bridge commands the virtual `robotiq_85_tcp` frame at the gripper
+fingertips, not the arm flange. This lets MoveIt plan with the gripper TCP
+instead of letting the fingers hang below a `Link6` target and touch the table.
 
 Example with diagnostic and JSON output:
 

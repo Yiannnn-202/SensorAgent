@@ -68,7 +68,7 @@ class RobotBridgeNode(Node):
         self.declare_parameter("bind_host", "127.0.0.1")
         self.declare_parameter("bind_port", 8765)
         self.declare_parameter("base_frame", "base_link")
-        self.declare_parameter("end_effector_link", "Link6")
+        self.declare_parameter("end_effector_link", "robotiq_85_tcp")
         self.declare_parameter("move_group", "rm_group")
         self.declare_parameter(
             "joint_names",
@@ -84,12 +84,14 @@ class RobotBridgeNode(Node):
         )
         self.declare_parameter("maximum_gripper_opening", 0.0848)
         self.declare_parameter("maximum_gripper_effort", 20.0)
-        self.declare_parameter("planning_attempts", 5)
-        self.declare_parameter("planning_time", 5.0)
+        self.declare_parameter("planning_attempts", 10)
+        self.declare_parameter("planning_time", 10.0)
         self.declare_parameter("motion_timeout", 90.0)
         self.declare_parameter("gripper_timeout", 15.0)
         self.declare_parameter("cartesian_max_step", 0.01)
         self.declare_parameter("cartesian_min_fraction", 0.98)
+        self.declare_parameter("position_tolerance", 0.005)
+        self.declare_parameter("orientation_tolerance", 0.20)
 
         self._bind_host = str(self.get_parameter("bind_host").value)
         self._bind_port = int(self.get_parameter("bind_port").value)
@@ -124,6 +126,12 @@ class RobotBridgeNode(Node):
         )
         self._cartesian_min_fraction = float(
             self.get_parameter("cartesian_min_fraction").value
+        )
+        self._position_tolerance = float(
+            self.get_parameter("position_tolerance").value
+        )
+        self._orientation_tolerance = float(
+            self.get_parameter("orientation_tolerance").value
         )
 
         self._move_group_client = ActionClient(self, MoveGroup, "/move_action")
@@ -317,7 +325,7 @@ class RobotBridgeNode(Node):
         self._clear_active_goal(key, goal_handle)
         status_error = self._result_status_error(result_response.status)
         if status_error is not None:
-            return None, status_error
+            return result_response.result, status_error
         return result_response.result, None
 
     def _pose_from_payload(self, value: Any) -> tuple[Pose, str]:
@@ -402,6 +410,13 @@ class RobotBridgeNode(Node):
                 self._set_arm_status("canceling")
             else:
                 self._set_arm_status("error")
+            if result is not None and hasattr(result, "error_code"):
+                return _response(
+                    False,
+                    error_code=f"MOVEIT_{result.error_code.val}",
+                    message=f"{error}: MoveIt planning or execution failed.",
+                    state=self._state(),
+                )
             return _response(False, error_code=error, message=error)
         if result.error_code.val != MoveItErrorCodes.SUCCESS:
             self._set_arm_status("error")
@@ -474,7 +489,7 @@ class RobotBridgeNode(Node):
         position.weight = 1.0
         primitive = SolidPrimitive()
         primitive.type = SolidPrimitive.SPHERE
-        primitive.dimensions = [0.002]
+        primitive.dimensions = [self._position_tolerance]
         region_pose = Pose()
         region_pose.position = pose.position
         region_pose.orientation.w = 1.0
@@ -486,9 +501,9 @@ class RobotBridgeNode(Node):
         orientation.header.frame_id = frame_id
         orientation.link_name = self._end_effector_link
         orientation.orientation = pose.orientation
-        orientation.absolute_x_axis_tolerance = 0.01
-        orientation.absolute_y_axis_tolerance = 0.01
-        orientation.absolute_z_axis_tolerance = 0.01
+        orientation.absolute_x_axis_tolerance = self._orientation_tolerance
+        orientation.absolute_y_axis_tolerance = self._orientation_tolerance
+        orientation.absolute_z_axis_tolerance = self._orientation_tolerance
         orientation.weight = 1.0
         constraints.orientation_constraints.append(orientation)
 

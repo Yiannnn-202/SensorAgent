@@ -54,6 +54,37 @@ class RobotBridgePackageTest(TestCase):
     self.assertIn("control_msgs", dependencies)
     self.assertIn("tf2_ros", dependencies)
 
+  def test_moveit_targets_gripper_tcp_not_flange(self) -> None:
+    bringup_root = ROOT / "ros2_ws" / "src" / "sensoragent_rm65_b_bringup"
+    urdf = (bringup_root / "urdf" / "rm65_b_robotiq_2f85.urdf.xacro").read_text(
+      encoding="utf-8"
+    )
+    srdf = (bringup_root / "config" / "rm65_b_robotiq_2f85.srdf").read_text(
+      encoding="utf-8"
+    )
+    bridge_config = (BRIDGE_ROOT / "config" / "robot_bridge.yaml").read_text(
+      encoding="utf-8"
+    )
+
+    self.assertIn('<link name="robotiq_85_tcp"/>', urdf)
+    self.assertIn('tip_link="robotiq_85_tcp"', srdf)
+    self.assertIn('end_effector_link: "robotiq_85_tcp"', bridge_config)
+    self.assertIn("orientation_tolerance: 0.20", bridge_config)
+    self.assertIn("position_tolerance: 0.005", bridge_config)
+
+  def test_robotiq_fingers_use_high_friction(self) -> None:
+    robotiq = (
+      ROOT
+      / "ros2_ws"
+      / "src"
+      / "robotiq_description"
+      / "urdf"
+      / "robotiq_2f_85_macro.urdf.xacro"
+    ).read_text(encoding="utf-8")
+
+    self.assertGreaterEqual(robotiq.count("<mu>5.0</mu>"), 4)
+    self.assertGreaterEqual(robotiq.count("<mu2>5.0</mu2>"), 4)
+
   def test_gripper_mapping_matches_simulated_action_semantics(self) -> None:
     maximum = 0.0848
 

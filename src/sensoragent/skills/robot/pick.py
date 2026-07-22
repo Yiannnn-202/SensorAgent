@@ -19,6 +19,7 @@ class RobotPickSkill:
   def run(self, call: SkillCall, context: SkillContext) -> SkillResult:
     plan = PickPlan.from_dict(call.input.get("plan"))
     speed = call.input.get("speed", 0.2)
+    descent_speed = call.input.get("descent_speed", speed)
     completed_steps: list[str] = []
     steps = [
       (
@@ -33,9 +34,9 @@ class RobotPickSkill:
       (
         "move_pregrasp",
         "robot.move_linear",
-        {"pose": plan.pregrasp.to_dict(), "speed": speed},
+        {"pose": plan.pregrasp.to_dict(), "speed": descent_speed},
       ),
-      ("move_grasp", "robot.move_linear", {"pose": plan.grasp.to_dict(), "speed": speed}),
+      ("move_grasp", "robot.move_linear", {"pose": plan.grasp.to_dict(), "speed": descent_speed}),
       (
         "close_gripper",
         "gripper.close",

@@ -80,9 +80,12 @@ def _build_parser() -> argparse.ArgumentParser:
     "--position-offset",
     type=float,
     nargs=3,
-    default=[0.0, 0.0, 0.02],
+    default=[0.0, 0.0, 0.08],
     metavar=("DX", "DY", "DZ"),
-    help="Offset added to the input place position before planning.",
+    help=(
+      "Offset added to the input place position before planning. The default "
+      "keeps the gripper TCP above the 0.30 m workbench before release."
+    ),
   )
   parser.add_argument(
     "--orientation",
@@ -95,10 +98,23 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--frame-id", default="base_link")
   parser.add_argument("--object-id", default="gazebo_test_object")
   parser.add_argument("--target", default="gazebo_test_place")
-  parser.add_argument("--clearance", type=float, default=0.08)
+  parser.add_argument(
+    "--clearance",
+    type=float,
+    default=0.15,
+    help="Vertical approach/retreat clearance above the adjusted place pose.",
+  )
   parser.add_argument("--speed", type=float, default=2.0)
   parser.add_argument("--open-opening", type=float, default=0.0848)
   parser.add_argument("--gripper-speed", type=float, default=0.5)
+  parser.add_argument(
+    "--pre-place-joints",
+    type=float,
+    nargs=6,
+    default=None,
+    metavar=("J1", "J2", "J3", "J4", "J5", "J6"),
+    help="Optional joint-space staging pose before the place approach. Disabled by default.",
+  )
   parser.add_argument("--execute", action="store_true")
   parser.add_argument("--skip-bridge-check", action="store_true")
   parser.add_argument("--wait-bridge-seconds", type=float, default=30.0)
@@ -176,6 +192,8 @@ def main() -> int:
       "open_opening": args.open_opening,
       "gripper_speed": args.gripper_speed,
     }
+    if args.pre_place_joints is not None:
+      place_input["pre_approach_joints"] = [float(value) for value in args.pre_place_joints]
     _print_section("place execution input", place_input)
     place = bundle.skill_runtime.invoke("robot.place", place_input, trace)
     results["executed"] = True

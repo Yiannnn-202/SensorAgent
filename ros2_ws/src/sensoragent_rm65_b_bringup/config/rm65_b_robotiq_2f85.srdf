@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <robot name="rm65_b_robotiq_2f85">
   <group name="rm_group">
-    <chain base_link="base_link" tip_link="Link6"/>
+    <chain base_link="base_link" tip_link="robotiq_85_tcp"/>
   </group>
   <group name="gripper">
     <joint name="robotiq_85_left_knuckle_joint"/>
@@ -27,7 +27,7 @@
 
   <end_effector
     name="robotiq_2f85"
-    parent_link="Link6"
+    parent_link="robotiq_85_tcp"
     group="gripper"
     parent_group="rm_group"/>
 

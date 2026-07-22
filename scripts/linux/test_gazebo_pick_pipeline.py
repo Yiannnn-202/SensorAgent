@@ -311,9 +311,11 @@ def _build_parser() -> argparse.ArgumentParser:
     "--position-offset",
     type=float,
     nargs=3,
-    default=[0.0, 0.0, 0.02],
+    default=[0.0, 0.0, 0.03],
     metavar=("DX", "DY", "DZ"),
-    help="Offset added to the input position before planning.",
+    help=(
+      "Offset from visual object XYZ to the gripper TCP grasp pose."
+    ),
   )
   parser.add_argument(
     "--orientation",
@@ -326,9 +328,15 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--frame-id", default="base_link")
   parser.add_argument("--object-id", default="gazebo_test_object")
   parser.add_argument("--approach-distance", type=float, default=0.10)
-  parser.add_argument("--pregrasp-distance", type=float, default=0.03)
-  parser.add_argument("--lift-height", type=float, default=0.10)
+  parser.add_argument("--pregrasp-distance", type=float, default=0.04)
+  parser.add_argument("--lift-height", type=float, default=0.12)
   parser.add_argument("--speed", type=float, default=2.0)
+  parser.add_argument(
+    "--pick-descent-speed",
+    type=float,
+    default=1.5,
+    help="Speed for the vertical descent from approach to pregrasp/grasp.",
+  )
   parser.add_argument("--open-opening", type=float, default=0.0848)
   parser.add_argument("--close-opening", type=float, default=0.02)
   parser.add_argument("--gripper-speed", type=float, default=0.5)
@@ -419,6 +427,8 @@ def main() -> int:
   orientation = _float_quad(args.orientation, "--orientation")
   if args.speed <= 0.0 or args.speed > 2.0:
     raise ValueError("--speed must be greater than 0 and at most 2")
+  if args.pick_descent_speed <= 0.0 or args.pick_descent_speed > 2.0:
+    raise ValueError("--pick-descent-speed must be greater than 0 and at most 2")
 
   config = _load_agent_config(config_path, None if args.mock else endpoint)
   bundle = build_agent(config)
@@ -493,6 +503,7 @@ def main() -> int:
       "object_id": args.object_id,
       "plan": pick_plan,
       "speed": args.speed,
+      "descent_speed": args.pick_descent_speed,
       "open_opening": args.open_opening,
       "close_opening": args.close_opening,
       "gripper_speed": args.gripper_speed,

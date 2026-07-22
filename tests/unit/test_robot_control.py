@@ -47,6 +47,7 @@ def _build_runtime():
   client = FakeRobotControlClient()
   registry = ToolRegistry()
   for tool in (
+    RobotMoveJointsTool(client),
     RobotMovePoseTool(client),
     RobotMoveLinearTool(client),
     GripperOpenTool(client),
@@ -109,6 +110,40 @@ class RobotControlTest(TestCase):
     self.assertIn("gripper.close", bundle.tool_registry.names())
     self.assertIn("robot.pick", bundle.skill_registry.names())
     self.assertIn("robot.place", bundle.skill_registry.names())
+
+  def test_place_skill_accepts_pre_approach_joints(self) -> None:
+    client, runtime = _build_runtime()
+    trace = TraceContext()
+    place = RobotPose(
+      position=(0.50, -0.20, 0.36),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+
+    result = runtime.invoke(
+      "robot.place",
+      {
+        "object_id": "roller_01",
+        "target": "bin_2_3",
+        "plan": build_place_plan(place).to_dict(),
+        "pre_approach_joints": [0.2, 0.0, 0.0, 0.0, 0.0, 0.0],
+      },
+      trace,
+    )
+
+    self.assertTrue(result.success)
+    self.assertEqual(
+      result.output["completed_steps"],
+      [
+        "move_pre_approach_joints",
+        "move_approach",
+        "move_place",
+        "open_gripper",
+        "retreat",
+      ],
+    )
+    state = client.get_state().state
+    self.assertEqual(state["arm"]["pose"], build_place_plan(place).retreat.to_dict())
+    self.assertEqual(state["arm"]["joints"], [0.2, 0.0, 0.0, 0.0, 0.0, 0.0])
 
   def test_http_backend_maps_pose_motion_to_bridge_request(self) -> None:
     response = Mock()

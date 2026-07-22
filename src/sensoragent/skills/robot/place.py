@@ -20,7 +20,17 @@ class RobotPlaceSkill:
     plan = PlacePlan.from_dict(call.input.get("plan"))
     speed = call.input.get("speed", 0.2)
     completed_steps: list[str] = []
-    steps = [
+    steps = []
+    pre_approach_joints = call.input.get("pre_approach_joints")
+    if pre_approach_joints is not None:
+      steps.append(
+        (
+          "move_pre_approach_joints",
+          "robot.move_joints",
+          {"joints": pre_approach_joints, "speed": speed},
+        )
+      )
+    steps.extend([
       ("move_approach", "robot.move_pose", {"pose": plan.approach.to_dict(), "speed": speed}),
       ("move_place", "robot.move_linear", {"pose": plan.place.to_dict(), "speed": speed}),
       (
@@ -32,7 +42,7 @@ class RobotPlaceSkill:
         },
       ),
       ("retreat", "robot.move_linear", {"pose": plan.retreat.to_dict(), "speed": speed}),
-    ]
+    ])
 
     for step_name, tool_name, input_data in steps:
       result = context.tool_runtime.invoke(tool_name, input_data, call.trace)
