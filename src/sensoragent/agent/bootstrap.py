@@ -24,7 +24,12 @@ from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.audio import AudioAnnounceSkill, AudioListenCommandSkill
 from sensoragent.skills.mock import MockPickAndPlaceSkill
-from sensoragent.skills.robot import RobotPickSkill, RobotPlaceSkill
+from sensoragent.skills.robot import (
+  RobotPickSkill,
+  RobotPlaceSkill,
+  RobotVerifyGraspSkill,
+  RobotVerifyPlaceSkill,
+)
 from sensoragent.state import InMemoryEventStream, InMemoryTaskStore
 from sensoragent.tools import ToolRegistry, ToolRuntime
 from sensoragent.tools.audio.mock import MockTranscribeTool
@@ -46,11 +51,14 @@ from sensoragent.tools.robot import (
   RobotPlanOrientedPickTool,
   RobotPlanPlaceTool,
   RobotPlanTopDownPickTool,
+  RobotResolvePlaceTargetTool,
   RobotStopTool,
+  default_place_target_registry,
 )
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
+  build_industrial_pick_place_actionlist,
   build_mock_pick_place_actionlist,
   build_voice_command_ack_actionlist,
 )
@@ -70,6 +78,9 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
   "robot.plan_oriented_pick": RobotPlanOrientedPickTool,
   "robot.plan_place": RobotPlanPlaceTool,
   "robot.plan_top_down_pick": RobotPlanTopDownPickTool,
+  "robot.resolve_place_target": lambda: RobotResolvePlaceTargetTool(
+    default_place_target_registry()
+  ),
 }
 
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {
@@ -78,6 +89,8 @@ AVAILABLE_SKILLS: dict[str, SkillFactory] = {
   "mock.pick_and_place": MockPickAndPlaceSkill,
   "robot.pick": RobotPickSkill,
   "robot.place": RobotPlaceSkill,
+  "robot.verify_grasp": RobotVerifyGraspSkill,
+  "robot.verify_place": RobotVerifyPlaceSkill,
 }
 
 ROBOT_TOOL_FACTORIES = {
@@ -242,6 +255,7 @@ def build_agent(
   actionlists = {
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
+    "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,
@@ -255,7 +269,10 @@ def build_agent(
   event_stream = InMemoryEventStream()
   planner = None
   if planner_mode == "llm":
-    planner = LLMPlanner(OpenAICompatibleClient(load_llm_config_from_env()))
+    planner = LLMPlanner(
+      OpenAICompatibleClient(load_llm_config_from_env()),
+      allowed_targets=tuple(actionlists.keys()),
+    )
   elif planner_mode != "static":
     raise ValueError(f"Unknown planner mode: {planner_mode}")
   agent = AgentRuntime(

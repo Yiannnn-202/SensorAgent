@@ -409,3 +409,76 @@ DeepSeek 实际收到的 user_prompt：
 1. **verify 判据**：一期先用 `gripper.opening` 阈值。真机是否已有力矩/接近觉数据可以复核？
 2. **`plan_top_down_pick` / `plan_place` 的返回结构**：文档里用 `{{ pick_plan.plan }}` 假设它们
    返回 `{"plan": {...}}`。落地前请对齐 `contracts/tools/robot.plan_*.schema.json`。
+
+
+## 9. 总结
+
+这是一份工程落地方案文档，描述了如何把自然语言指令（「把滚柱放到 bin_cell_3」）接通到工业机器人的完整执行链路。
+
+  ---
+  文档做了什么
+
+  背景：SensorAgent 已有 LLM Planner、LLM 接入（DeepSeek）、ActionList Runtime 等基础组件，但它们还没有串成一条完整的工业场景流水线。
+
+  ---
+  一共做了 4 件具体的事：
+
+  1. 升级 Planner Prompt（src/sensoragent/agent/prompts/intent_to_workflow.md）
+  - 改写 system prompt，让 DeepSeek 把中文/英文自然语言解析成结构化 intent（object + action + target），再映射到对应 workflow，最终返回
+  AgentPlan JSON。
+
+  2. 在 bootstrap 里显式传 allowed_targets（bootstrap.py:257）
+  - 把 industrial.pick_place_actionlist 和 mock.pick_place_actionlist 加入白名单，防止 LLM 乱选目标；当前缺失这一传参导致只能走 mock。
+
+  3. 新增两个验证 skill（src/sensoragent/skills/robot/verify.py）
+  - robot.verify_grasp：抓取后读夹爪开口判断是否夹住物体
+  - robot.verify_place：放置后读夹爪开口判断是否已释放
+  - 两者都复用现有 gripper.get_state tool，不引入新依赖
+
+  4. 新增工业 ActionList（src/sensoragent/workflows/actionlists/industrial.py）
+  - industrial.pick_place_actionlist，完整 7 步流程：detect_object → plan_pick → pick → verify_grasp → plan_place → place → verify_place
+  - 任意步失败立刻短路（stop_on_failure=True），上下文通过 {{ path.field }} 模板传递
+
+  ---
+  配套内容：
+  - 第 5 节定义了失败处理约定（短路策略，一期不做自动重试）
+  - 第 6 节给出了 3 个单测 + 1 个可选 e2e 测试的计划
+  - 第 7、8 节列出了后续扩展点和两个待确认问题（verify 判据、plan 返回结构）
+
+
+
+## 10.logs
+
+2026/7/22 George-Lin-encx做了以下调整：
+  、 Let me plan out the changes:
+
+  1. src/sensoragent/agent/prompts/intent_to_workflow.md - replace with new prompt
+  2. src/sensoragent/skills/robot/verify.py - new file with verify_grasp, verify_place skills
+  3. src/sensoragent/skills/robot/__init__.py - export new skills
+  4. src/sensoragent/tools/robot/place_targets.py - new file with resolve_place_target tool
+  5. src/sensoragent/tools/robot/__init__.py - export new tool
+  6. contracts/tools/robot.resolve_place_target.schema.json - contract
+  7. src/sensoragent/workflows/actionlists/industrial.py - new file
+  8. src/sensoragent/workflows/actionlists/__init__.py - export
+  9. src/sensoragent/workflows/__init__.py - export
+  10. src/sensoragent/agent/bootstrap.py - register new tool, skill, actionlist, and pass allowed_targets
+
+  Let me also check what tools init looks like.
+
+  Read 2 files (ctrl+o to expand)
+
+● Now I have a complete picture. Key issue I need to address: robot.plan_place expects a place_pose (RobotPose dict), not a target string. I
+  need to add a robot.resolve_place_target tool that resolves a target string (like bin_cell_3) to a place_pose.
+
+  Let me start implementing. Plan of attack:
+
+  1. Update prompt file
+  2. Create verify.py skill file with two skills
+  3. Update skills/robot/init.py to export
+  4. Create resolve_place_target.py tool with a static registry
+  5. Update tools/robot/init.py to export
+  6. Create contract for the new tool
+  7. Create industrial.py actionlist
+  8. Update actionlists/init.py
+  9. Update workflows/init.py
+  10. Update bootstrap.py: register tool, register skill, register actionlist, pass allowed_targets to LLMPlanner

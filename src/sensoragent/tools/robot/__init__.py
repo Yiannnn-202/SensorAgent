@@ -10,6 +10,10 @@ from sensoragent.tools.robot.control import (
   RobotMovePoseTool,
   RobotStopTool,
 )
+from sensoragent.tools.robot.place_targets import (
+  RobotResolvePlaceTargetTool,
+  default_place_target_registry,
+)
 from sensoragent.tools.robot.planning import (
   RobotPlanOrientedPickTool,
   RobotPlanPlaceTool,
@@ -27,5 +31,7 @@ __all__ = [
   "RobotPlanOrientedPickTool",
   "RobotPlanPlaceTool",
   "RobotPlanTopDownPickTool",
+  "RobotResolvePlaceTargetTool",
   "RobotStopTool",
+  "default_place_target_registry",
 ]

@@ -1,0 +1,32 @@
+{
+  "name": "robot.resolve_place_target",
+  "version": "0.1.0",
+  "description": "Resolve a place-target identifier (e.g. bin_cell_3) into a place pose from a preconfigured registry.",
+  "input_schema": {
+    "type": "object",
+    "required": ["target"],
+    "properties": {
+      "target": {
+        "type": "string",
+        "description": "Place-target identifier registered in the runtime."
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["target", "place_pose"],
+    "properties": {
+      "target": {"type": "string"},
+      "place_pose": {
+        "type": "object",
+        "required": ["position", "orientation", "frame_id"],
+        "properties": {
+          "position": {"type": "array", "items": {"type": "number"}},
+          "orientation": {"type": "array", "items": {"type": "number"}},
+          "frame_id": {"type": "string"}
+        }
+      }
+    }
+  },
+  "errors": ["UNKNOWN_TARGET", "INVALID_TARGET"]
+}
