@@ -164,3 +164,78 @@ task_created → task_started → task_planned
 2. 加 `industrial.pick_only_actionlist` / `industrial.place_only_actionlist`，Prompt 里让 LLM 按 `intent.action` 选择。
 3. 挂 `industrial.retry_pick_place_tree`（DecisionTree），`verify_grasp.failure → retry` 一次。
 4. `AgentPlan` 加 `intent: dict | None` 字段，让 intent 从 `reason` 字符串升级为一等公民。
+
+---
+
+## 五、The remaining SIM tasks
+
+### 一、需要补的功能（按优先级）
+
+#### P0：视觉层要能拿到 Gazebo 里的真实位姿
+
+现状：`vision.mock_detect` 返回硬编码 `[0.42, -0.13, 0.08, 0, 0, 1.57]`，跟 Gazebo 世界里的物体位置无关。
+
+为什么必须：ActionList 的 step 2 `plan_pick` 完全依赖 `object.pose_3d`，如果这个不对，抓的位置永远是错的。
+
+队友那边怎么绕过的：`test_gazebo_pick_place_pipeline.py` 直接从 CLI 传 `--pick-world-position`，跳过了视觉层。这个路径 LLM 走不通。
+
+有两种落地方案：
+
+| 方案 | 工作量 | 特点 |
+|------|--------|------|
+| A：`vision.world_lookup` — 从 Gazebo 的 `/gazebo/get_entity_state` 或 tf 拿实体位姿，按 `object_query` 匹配实体名 | 中 | 真闭环，检测层可复用到真机换掉即可 |
+| B：`vision.config_detect` — 从 yaml 里读一张 `{object_query: pose}` 表，返回固定位姿 | 小 | 一小时能跑通端到端，但物体不能移动 |
+
+建议先做 B，把 ActionList 端到端跑通；后面再把 B 换成 A。
+
+#### P1：place target 寄存器要匹配 Gazebo 世界的工作台
+
+现状：我给的 `bin_cell_*` 用了占位坐标（z=0.05），队友文档明确说工作台在 world z = 0.30 m、robot_mount_z = 0.18，所以 base_link 下 z 应该 ≈ 0.12（还得加 `--place-offset 0 0 0.08` 让 TCP 悬在工作台上方）。
+
+要做：把 `default_place_target_registry` 的坐标改成跟 industrial world 一致；或者更好，从 `configs/robot_sim.yaml` 的一个 `place_targets:` 段读。
+
+顺带：orientation 也要跟队友脚本一致 `[0, 1, 0, 0]`（这个我已经设了）。
+
+#### P2：Industrial ActionList 需要传 position_offset 和其他参数给 plan_pick / plan_place
+
+现状：`robot.plan_top_down_pick` 支持 `position_offset`、`approach_distance`、`pregrasp_distance`、`lift_height`；`robot.plan_place` 支持 `clearance`。队友脚本默认值：`pick-offset 0 0 0.03`、`approach 0.10`、`pregrasp 0.04`、`lift 0.12`、`place-clearance 0.15`、`place-offset 0 0 0.08`。
+
+要做：ActionList step 里把这些参数填上，否则用 `plan_top_down_pick` 默认（approach=0.10, pregrasp=0.03, lift=0.10, offset=0），会跟 sim 里已验证的默认差一截。
+
+#### P3：需要一个端到端 sim runner 脚本
+
+现状：没有走 `industrial.pick_place_actionlist` 的入口脚本。
+
+要做：写 `scripts/linux/run_industrial_actionlist_sim.py`，形态类似：
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
+  --utterance "把滚柱放到 bin_cell_3" \
+  --config configs/robot_sim.yaml \
+  --planner llm \
+  --execute
+```
+
+内部就是 `build_agent_from_env(..., planner_mode="llm")` + `bundle.agent.run_task(utterance)`，加上 bridge 探活（复用 `_check_bridge` / `_wait_for_ready`）。
+
+#### P4：verify 判据阈值要匹配 Robotiq 2f_85
+
+现状：`verify_grasp` 用 `[0.002, 0.08]`，`verify_place` 用 `≥ 0.05`。Robotiq 2f_85 全开 0.0848，队友脚本 `--close-opening 0.02`。判据应该 OK，但真机上物体宽度决定 opening，需要跑一次 sim 看实际值。
+
+要做：跑一次 pipeline，把 `gripper.get_state` 的返回值打出来对齐阈值；必要时在 ActionList 里通过 `min_opening`/`max_opening`/`open_threshold` 覆盖。
+
+#### P5：Industrial world 目前是空的
+
+现状：`simulation/gazebo/worlds/industrial/` 只有 `.gitkeep`。队友的 sim 依赖 `run_rm65_b_sim.sh` 启动的默认 world 里已经有测试物体（`--pick-world-position 0.24 0.23 0.322` 是有效的）。
+
+要做：确认默认 world 里的物体命名（供 P0-A 的 `vision.world_lookup` 用），并在文档里写清楚 `object_query="roller"` 对应哪个 Gazebo entity。这个是 nice-to-have，做完 B 方案后再决定要不要升到 A。
+
+---
+
+### 二、建议的推进顺序
+
+1. **P1 + P0-B（半天）**：把 bin 坐标改对 + 加 `vision.config_detect`（配一张物体表）→ 用 static planner 直接跑 `industrial.pick_place_actionlist` 到 sim，验证 8 步链路能过。
+2. **P2（半小时）**：往 ActionList 的 plan step 里补参数，跟队友已调好的 sim 默认对齐。
+3. **P3（一小时）**：写 sim runner 脚本，跑 `planner_mode="static"`，再切 `"llm"` 用 DeepSeek。
+4. **P4（跑一次记 log）**：真跑一遍看 `gripper.get_state` 数字调阈值。
+5. **P0-A（后续）**：等 B 通了再考虑接 Gazebo 实体查询。
