@@ -55,13 +55,14 @@ from sensoragent.tools.robot import (
   RobotStopTool,
   default_place_target_registry,
 )
-from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
+from sensoragent.tools.vision import VisionConfigDetectTool, VisionOpenVocabularyDetectTool
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
   build_industrial_pick_only_actionlist,
   build_industrial_pick_place_actionlist,
   build_industrial_place_only_actionlist,
+  build_industrial_vision_pick_place_actionlist,
   build_mock_pick_place_actionlist,
   build_voice_command_ack_actionlist,
 )
@@ -84,13 +85,27 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
 }
 
 
-SCENE_TOOL_NAMES = {"vision.config_detect", "robot.resolve_place_target"}
+SCENE_TOOL_NAMES = {
+  "vision.config_detect",
+  "vision.open_vocab_detect",
+  "robot.resolve_place_target",
+}
 
 
 def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
   if tool_name == "vision.config_detect":
     catalog = config.scene.objects or {}
     return VisionConfigDetectTool(catalog)
+  if tool_name == "vision.open_vocab_detect":
+    vision_config = config.integrations.vision
+    return VisionOpenVocabularyDetectTool(
+      model_path=str(vision_config.get("model_path", "models/vision/yoloe.pt")),
+      backend=str(vision_config.get("backend", "yoloe")),
+      camera_info_path=vision_config.get("camera_info_path"),
+      camera_info=vision_config.get("camera_info"),
+      t_base_camera=vision_config.get("T_base_camera"),
+      depth_window=int(vision_config.get("depth_window", 7)),
+    )
   if tool_name == "robot.resolve_place_target":
     targets = config.scene.place_targets or default_place_target_registry()
     return RobotResolvePlaceTargetTool(targets)
@@ -273,6 +288,7 @@ def build_agent(
     "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(),
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
     "industrial.place_only_actionlist": build_industrial_place_only_actionlist(),
+    "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,

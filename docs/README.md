@@ -23,6 +23,8 @@ The documentation set is intentionally small.
 - [RM65-B + Robotiq 2F-85 Gazebo quickstart](guides/rm65_b_gazebo_quickstart_cn.md)
 - [SensorAgent simulation robot HTTP bridge](guides/robot_sim_bridge_cn.md)
 - [Industrial tabletop Gazebo environment](guides/industrial_gazebo_environment_cn.md)
+- [Open-vocabulary vision Tool](guides/vision_open_vocab_cn.md)
+- [Gazebo RGB-D vision ActionList test](guides/gazebo_vision_actionlist_test.md)
 - [Gazebo pick pipeline test script](guides/gazebo_pick_pipeline_test.md)
 - [Gazebo pick and place pipeline test scripts](guides/gazebo_pick_place_pipeline_test.md)
 - [Create a Gazebo grasping block](guides/create_grasp_block.md)

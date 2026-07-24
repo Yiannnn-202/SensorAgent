@@ -36,3 +36,10 @@ class ConfigLoaderTest(TestCase):
 
     self.assertIn("vision.mock_detect", bundle.tool_registry.names())
     self.assertIn("mock.pick_and_place", bundle.skill_registry.names())
+
+  def test_load_robot_sim_vision_config(self) -> None:
+    config = load_config(ROOT / "configs" / "robot_sim.yaml")
+
+    self.assertEqual(config.integrations.vision["backend"], "yoloe")
+    self.assertEqual(config.integrations.vision["model_path"], "models/vision/yoloe.pt")
+    self.assertIn("vision.open_vocab_detect", config.tools.enabled)

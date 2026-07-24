@@ -1,0 +1,32 @@
+{
+  "name": "vision.open_vocab_detect",
+  "version": "0.1.0",
+  "description": "Detect an object from a text query using an open-vocabulary vision backend.",
+  "input_schema": {
+    "type": "object",
+    "required": ["query"],
+    "properties": {
+      "query": {"type": "string"},
+      "image_path": {"type": "string"},
+      "depth_path": {"type": "string"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["found", "label", "confidence", "source"],
+    "properties": {
+      "found": {"type": "boolean"},
+      "label": {"type": "string"},
+      "confidence": {"type": "number"},
+      "source": {"type": "string"},
+      "object_id": {"type": "string"},
+      "bbox_2d": {"type": "array", "items": {"type": "number"}},
+      "mask_path": {"type": "string"},
+      "position_camera": {"type": "array", "items": {"type": "number"}},
+      "position_base": {"type": "array", "items": {"type": "number"}},
+      "pose_3d": {"type": "array", "items": {"type": "number"}},
+      "model_path": {"type": "string"}
+    }
+  },
+  "errors": ["VISION_MODEL_NOT_READY", "OBJECT_NOT_FOUND", "INVALID_QUERY"]
+}
