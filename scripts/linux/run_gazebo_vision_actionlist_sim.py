@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import subprocess
 import sys
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 
@@ -23,7 +25,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from test_gazebo_pick_pipeline import _check_bridge, _load_agent_config, _print_section, _wait_for_bridge, _wait_for_ready  # noqa: E402
 
 from sensoragent.agent import build_agent  # noqa: E402
-from sensoragent.schemas import AgentRequest, TraceContext  # noqa: E402
+from sensoragent.schemas import TraceContext  # noqa: E402
 
 
 ACTIONLIST_NAME = "industrial.vision_pick_place_actionlist"
@@ -52,14 +54,69 @@ def _build_parser() -> argparse.ArgumentParser:
   return parser
 
 
-def _capture_frame(frame_dir: Path) -> dict:
-  script = ROOT / "scripts" / "linux" / "capture_gazebo_rgbd_frame.py"
+def _python_can_capture(executable: Path) -> bool:
   completed = subprocess.run(
-    ["python3", str(script), "--out-dir", str(frame_dir)],
-    check=True,
+    [
+      str(executable),
+      "-c",
+      "import numpy, rclpy; from sensor_msgs.msg import CameraInfo, Image",
+    ],
     text=True,
     capture_output=True,
   )
+  return completed.returncode == 0
+
+
+def _capture_python() -> str:
+  candidates: list[Path] = []
+  for env_name in ("SENSORAGENT_ROS_PYTHON", "ROS_PYTHON"):
+    value = os.environ.get(env_name)
+    if value:
+      candidates.append(Path(value))
+  if shutil.which("python3"):
+    candidates.append(Path(shutil.which("python3") or "python3"))
+  candidates.append(
+    Path.home()
+    / "snap"
+    / "copilot-cli"
+    / "common"
+    / "micromamba"
+    / "envs"
+    / "sensoragent-ros-humble"
+    / "bin"
+    / "python"
+  )
+
+  seen: set[str] = set()
+  for candidate in candidates:
+    key = str(candidate)
+    if key in seen:
+      continue
+    seen.add(key)
+    if candidate.exists() and _python_can_capture(candidate):
+      return str(candidate)
+  raise RuntimeError(
+    "No Python interpreter with numpy, rclpy, and sensor_msgs was found. "
+    "Set SENSORAGENT_ROS_PYTHON to the ROS environment Python, for example "
+    "~/snap/copilot-cli/common/micromamba/envs/sensoragent-ros-humble/bin/python."
+  )
+
+
+def _capture_frame(frame_dir: Path) -> dict:
+  script = ROOT / "scripts" / "linux" / "capture_gazebo_rgbd_frame.py"
+  capture_python = _capture_python()
+  completed = subprocess.run(
+    [capture_python, str(script), "--out-dir", str(frame_dir)],
+    text=True,
+    capture_output=True,
+  )
+  if completed.returncode != 0:
+    raise RuntimeError(
+      "RGB-D frame capture failed.\n"
+      f"python: {capture_python}\n"
+      f"stdout:\n{completed.stdout}\n"
+      f"stderr:\n{completed.stderr}"
+    )
   try:
     return json.loads(completed.stdout)
   except json.JSONDecodeError:
@@ -106,6 +163,8 @@ def main() -> int:
     "image_path": manifest["image_path"],
     "depth_path": manifest["depth_path"],
     "camera_info_path": manifest["camera_info_path"],
+    "T_base_camera": manifest.get("T_base_camera")
+    or config.integrations.vision.get("T_base_camera"),
   }
   _print_section(
     "vision actionlist input",
@@ -116,19 +175,21 @@ def main() -> int:
       "input": action_input,
     },
   )
-  response = bundle.agent.handle(
-    AgentRequest(
-      actionlist=ACTIONLIST_NAME,
-      input=action_input,
-      trace=TraceContext(),
-    )
-  )
-  summary = response.to_dict()
+  trace = TraceContext()
+  actionlist = bundle.actionlists[ACTIONLIST_NAME]
+  result = bundle.actionlist_runtime.run(actionlist, action_input, trace)
+  summary = {
+    "success": result.success,
+    "error": result.error,
+    "result": result.output,
+    "steps": [asdict(step) for step in result.steps],
+    "trace": trace.to_dict(),
+  }
   _print_section("summary", summary)
   if args.json_out is not None:
     args.json_out.parent.mkdir(parents=True, exist_ok=True)
     args.json_out.write_text(_json_dump(summary), encoding="utf-8")
-  return 0 if response.success else 1
+  return 0 if result.success else 1
 
 
 if __name__ == "__main__":

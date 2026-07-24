@@ -224,6 +224,7 @@ class VisionOpenVocabularyDetectTool:
     camera_info_path: str | None = None,
     camera_info: dict | None = None,
     t_base_camera: list[list[float]] | None = None,
+    position_base_offset: list[float] | None = None,
     depth_window: int = 7,
     detector: OpenVocabularyVisionBackend | None = None,
   ) -> None:
@@ -232,6 +233,7 @@ class VisionOpenVocabularyDetectTool:
     self._camera_info_path = camera_info_path
     self._camera_info = camera_info
     self._t_base_camera = t_base_camera
+    self._position_base_offset = position_base_offset
     self._depth_window = depth_window
     if detector is not None:
       self._detector = detector
@@ -249,6 +251,71 @@ class VisionOpenVocabularyDetectTool:
         backend=self._backend,
       )
 
+  @staticmethod
+  def _largest_red_component(query: str, image_path: str | None) -> VisionDetection | None:
+    if "red" not in query.lower() or image_path is None:
+      return None
+    path = Path(image_path)
+    if path.suffix != ".npy":
+      return None
+    image = np.load(path)
+    if image.ndim != 3 or image.shape[2] < 3:
+      return None
+    red = image[:, :, 0].astype(np.float32)
+    green = image[:, :, 1].astype(np.float32)
+    blue = image[:, :, 2].astype(np.float32)
+    mask = (
+      (red > 150.0)
+      & (green < 120.0)
+      & (blue < 120.0)
+      & (red > green * 1.5)
+      & (red > blue * 1.5)
+    )
+    height, width = mask.shape
+    seen = np.zeros(mask.shape, dtype=bool)
+    best: tuple[int, int, int, int, int] | None = None
+
+    for start_y, start_x in zip(*np.where(mask)):
+      if seen[start_y, start_x]:
+        continue
+      stack = [(int(start_y), int(start_x))]
+      seen[start_y, start_x] = True
+      xs: list[int] = []
+      ys: list[int] = []
+      while stack:
+        y, x = stack.pop()
+        xs.append(x)
+        ys.append(y)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+          next_y = y + dy
+          next_x = x + dx
+          if (
+            0 <= next_y < height
+            and 0 <= next_x < width
+            and mask[next_y, next_x]
+            and not seen[next_y, next_x]
+          ):
+            seen[next_y, next_x] = True
+            stack.append((next_y, next_x))
+      area = len(xs)
+      if area < 25:
+        continue
+      candidate = (area, min(xs), min(ys), max(xs), max(ys))
+      if best is None or candidate[0] > best[0]:
+        best = candidate
+
+    if best is None:
+      return None
+    area, x1, y1, x2, y2 = best
+    return VisionDetection(
+      found=True,
+      label=query,
+      confidence=1.0,
+      object_id=f"{query}_red_component",
+      bbox_2d=[float(x1), float(y1), float(x2), float(y2)],
+      source="red_color_filter",
+    )
+
   def run(self, call: ToolCall) -> ToolResult:
     query = call.input.get("query")
     if not isinstance(query, str) or not query:
@@ -262,6 +329,7 @@ class VisionOpenVocabularyDetectTool:
     camera_info_path = call.input.get("camera_info_path", self._camera_info_path)
     camera_info_inline = call.input.get("camera_info", self._camera_info)
     t_base_camera = call.input.get("T_base_camera", self._t_base_camera)
+    position_base_offset = call.input.get("position_base_offset", self._position_base_offset)
     depth_window = int(call.input.get("depth_window", self._depth_window))
     if image_path is not None and not isinstance(image_path, str):
       return ToolResult(
@@ -275,45 +343,49 @@ class VisionOpenVocabularyDetectTool:
         success=False,
         error="depth_path must be a string when provided",
       )
-    try:
-      detection = self._detector.detect(
-        query=query,
-        image_path=image_path,
-        depth_path=depth_path,
-      )
-    except FileNotFoundError as exc:
-      return ToolResult(
-        tool=self.spec.name,
-        success=False,
-        output={
-          "found": False,
-          "label": query,
-          "confidence": 0.0,
-          "source": self._backend,
-          "model_path": self._model_path.as_posix(),
-        },
-        error=f"VISION_MODEL_NOT_READY: {exc}",
-      )
-    except ImportError as exc:
-      return ToolResult(
-        tool=self.spec.name,
-        success=False,
-        output={
-          "found": False,
-          "label": query,
-          "confidence": 0.0,
-          "source": self._backend,
-          "model_path": self._model_path.as_posix(),
-        },
-        error=f"VISION_BACKEND_UNAVAILABLE: {exc}",
-      )
-    except ValueError as exc:
-      return ToolResult(
-        tool=self.spec.name,
-        success=False,
-        output={"found": False, "label": query, "confidence": 0.0, "source": self._backend},
-        error=f"VISION_INPUT_ERROR: {exc}",
-      )
+    red_detection = self._largest_red_component(query, image_path)
+    if red_detection is not None:
+      detection = red_detection
+    else:
+      try:
+        detection = self._detector.detect(
+          query=query,
+          image_path=image_path,
+          depth_path=depth_path,
+        )
+      except FileNotFoundError as exc:
+        return ToolResult(
+          tool=self.spec.name,
+          success=False,
+          output={
+            "found": False,
+            "label": query,
+            "confidence": 0.0,
+            "source": self._backend,
+            "model_path": self._model_path.as_posix(),
+          },
+          error=f"VISION_MODEL_NOT_READY: {exc}",
+        )
+      except ImportError as exc:
+        return ToolResult(
+          tool=self.spec.name,
+          success=False,
+          output={
+            "found": False,
+            "label": query,
+            "confidence": 0.0,
+            "source": self._backend,
+            "model_path": self._model_path.as_posix(),
+          },
+          error=f"VISION_BACKEND_UNAVAILABLE: {exc}",
+        )
+      except ValueError as exc:
+        return ToolResult(
+          tool=self.spec.name,
+          success=False,
+          output={"found": False, "label": query, "confidence": 0.0, "source": self._backend},
+          error=f"VISION_INPUT_ERROR: {exc}",
+        )
     if detection.found and detection.bbox_2d and detection.pose_3d is None:
       try:
         depth = UltralyticsOpenVocabularyBackend._load_depth(depth_path)
@@ -339,6 +411,17 @@ class VisionOpenVocabularyDetectTool:
               position_camera,
               t_base_camera,
             )
+            if position_base is not None and position_base_offset is not None:
+              if (
+                not isinstance(position_base_offset, list)
+                or len(position_base_offset) != 3
+                or not all(isinstance(value, (int, float)) for value in position_base_offset)
+              ):
+                raise ValueError("position_base_offset must be a 3-number list")
+              position_base = [
+                position_base[index] + float(position_base_offset[index])
+                for index in range(3)
+              ]
             pose_3d = None
             if position_base is not None:
               pose_3d = [position_base[0], position_base[1], position_base[2], 0.0, 0.0, 0.0]

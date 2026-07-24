@@ -104,6 +104,7 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       camera_info_path=vision_config.get("camera_info_path"),
       camera_info=vision_config.get("camera_info"),
       t_base_camera=vision_config.get("T_base_camera"),
+      position_base_offset=vision_config.get("position_base_offset"),
       depth_window=int(vision_config.get("depth_window", 7)),
     )
   if tool_name == "robot.resolve_place_target":

@@ -127,6 +127,24 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("bridge_camera")),
     )
 
+    camera_static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=[
+            "0.47",
+            "0.0",
+            "1.06",
+            "-0.7071067811865475",
+            "0.7071067811865476",
+            "0.0",
+            "0.0",
+            "world",
+            "sensoragent_rgbd_rig/rig/depth_camera",
+        ],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("bridge_camera")),
+    )
+
     spawn_robot = Node(
         package="ros_gz_sim",
         executable="create",
@@ -283,6 +301,7 @@ def generate_launch_description():
             robot_state_publisher,
             clock_bridge,
             camera_bridge,
+            camera_static_tf,
             spawn_robot,
             unpause_after_spawn,
             controllers_after_unpause,

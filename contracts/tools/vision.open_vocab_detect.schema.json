@@ -8,7 +8,18 @@
     "properties": {
       "query": {"type": "string"},
       "image_path": {"type": "string"},
-      "depth_path": {"type": "string"}
+      "depth_path": {"type": "string"},
+      "camera_info_path": {"type": "string"},
+      "camera_info": {"type": "object"},
+      "T_base_camera": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {"type": "number"}
+        }
+      },
+      "position_base_offset": {"type": "array", "items": {"type": "number"}},
+      "depth_window": {"type": "number"}
     }
   },
   "output_schema": {

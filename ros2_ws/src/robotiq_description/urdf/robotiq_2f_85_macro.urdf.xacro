@@ -85,8 +85,8 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>5.0</mu>
-                            <mu2>5.0</mu2>
+                            <mu>12.0</mu>
+                            <mu2>12.0</mu2>
                         </ode>
                     </friction>
                 </surface>
@@ -105,8 +105,8 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>5.0</mu>
-                            <mu2>5.0</mu2>
+                            <mu>12.0</mu>
+                            <mu2>12.0</mu2>
                         </ode>
                     </friction>
                     <contact>
@@ -159,8 +159,8 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>5.0</mu>
-                            <mu2>5.0</mu2>
+                            <mu>12.0</mu>
+                            <mu2>12.0</mu2>
                         </ode>
                     </friction>
                 </surface>
@@ -179,8 +179,8 @@
                 <surface>
                     <friction>
                         <ode>
-                            <mu>5.0</mu>
-                            <mu2>5.0</mu2>
+                            <mu>12.0</mu>
+                            <mu2>12.0</mu2>
                         </ode>
                     </friction>
                     <contact>

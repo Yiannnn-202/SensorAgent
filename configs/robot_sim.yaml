@@ -35,13 +35,17 @@ integrations:
     backend: yoloe
     model_path: models/vision/yoloe.pt
     depth_window: 7
-    # Approximate fixed Gazebo transform from camera optical coordinates to
-    # base_link. This is intended for first-pass simulation experiments; replace
-    # with calibrated/TF-derived values when the perception stack is finalized.
+    # Fixed Gazebo transform from ROS optical camera coordinates to base_link,
+    # derived from sensoragent_rgbd_rig/model.sdf:
+    #   camera origin in world: (0.47, 0.0, 1.06)
+    #   base_link origin in world: (0.0, 0.0, 0.18)
+    #   optical +X image-right -> base -Y
+    #   optical +Y image-down  -> base -X
+    #   optical +Z depth       -> base -Z
     T_base_camera:
-      - [0.0, 0.0, 1.0, 0.47]
+      - [0.0, -1.0, 0.0, 0.47]
       - [-1.0, 0.0, 0.0, 0.0]
-      - [0.0, -1.0, 0.0, 0.88]
+      - [0.0, 0.0, -1.0, 0.88]
       - [0.0, 0.0, 0.0, 1.0]
 
 scene:

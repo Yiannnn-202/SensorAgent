@@ -43,6 +43,18 @@ class _FakeBoxOnlyBackend:
     )
 
 
+class _FakeWrongBoxBackend:
+  def detect(self, *, query: str, image_path: str | None, depth_path: str | None) -> VisionDetection:
+    return VisionDetection(
+      found=True,
+      label=query,
+      confidence=0.9,
+      object_id=f"{query}_wrong",
+      bbox_2d=[0.0, 0.0, 1.0, 1.0],
+      source="fake_yoloe",
+    )
+
+
 class VisionOpenVocabularyToolTest(TestCase):
   def test_placeholder_reports_model_not_ready(self) -> None:
     result = VisionOpenVocabularyDetectTool(
@@ -128,6 +140,92 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertEqual(result.output["position_camera"], [0.0, 0.0, 1.0])
     self.assertEqual(result.output["position_base"], [0.1, 0.2, 1.3])
     self.assertEqual(result.output["pose_3d"], [0.1, 0.2, 1.3, 0.0, 0.0, 0.0])
+
+  def test_depth_projection_applies_position_base_offset(self) -> None:
+    import json
+    import tempfile
+    import numpy as np
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      root = Path(temp_dir)
+      depth_path = root / "depth.npy"
+      camera_info_path = root / "camera_info.json"
+      np.save(depth_path, np.ones((5, 5), dtype=np.float32))
+      camera_info_path.write_text(
+        json.dumps({"k": [100.0, 0.0, 2.0, 0.0, 100.0, 2.0, 0.0, 0.0, 1.0]}),
+        encoding="utf-8",
+      )
+
+      result = VisionOpenVocabularyDetectTool(
+        detector=_FakeBoxOnlyBackend(),
+        t_base_camera=[
+          [1.0, 0.0, 0.0, 0.1],
+          [0.0, 1.0, 0.0, 0.2],
+          [0.0, 0.0, 1.0, 0.3],
+          [0.0, 0.0, 0.0, 1.0],
+        ],
+        position_base_offset=[0.01, -0.02, 0.03],
+      ).run(
+        ToolCall(
+          tool="vision.open_vocab_detect",
+          input={
+            "query": "roller",
+            "image_path": "rgb.npy",
+            "depth_path": str(depth_path),
+            "camera_info_path": str(camera_info_path),
+          },
+          trace=TraceContext(),
+        )
+      )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["position_base"], [0.11, 0.18000000000000002, 1.33])
+    self.assertEqual(result.output["pose_3d"], [0.11, 0.18000000000000002, 1.33, 0.0, 0.0, 0.0])
+
+  def test_red_query_uses_largest_red_component(self) -> None:
+    import json
+    import tempfile
+    import numpy as np
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      root = Path(temp_dir)
+      image_path = root / "rgb.npy"
+      depth_path = root / "depth.npy"
+      camera_info_path = root / "camera_info.json"
+      image = np.zeros((16, 16, 3), dtype=np.uint8)
+      image[1:3, 1:3] = [220, 20, 20]
+      image[8:14, 7:13] = [230, 30, 30]
+      np.save(image_path, image)
+      np.save(depth_path, np.ones((16, 16), dtype=np.float32))
+      camera_info_path.write_text(
+        json.dumps({"k": [100.0, 0.0, 0.0, 0.0, 100.0, 0.0, 0.0, 0.0, 1.0]}),
+        encoding="utf-8",
+      )
+
+      result = VisionOpenVocabularyDetectTool(
+        detector=_FakeWrongBoxBackend(),
+        t_base_camera=[
+          [1.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0, 0.0],
+          [0.0, 0.0, 0.0, 1.0],
+        ],
+      ).run(
+        ToolCall(
+          tool="vision.open_vocab_detect",
+          input={
+            "query": "red roller",
+            "image_path": str(image_path),
+            "depth_path": str(depth_path),
+            "camera_info_path": str(camera_info_path),
+          },
+          trace=TraceContext(),
+        )
+      )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["source"], "red_color_filter")
+    self.assertEqual(result.output["bbox_2d"], [7.0, 8.0, 12.0, 13.0])
 
   def test_robot_sim_config_registers_open_vocab_tool(self) -> None:
     config = build_agent_from_config(ROOT / "configs" / "robot_sim.yaml")
