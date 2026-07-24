@@ -22,6 +22,7 @@ class AgentPlan:
   target: str
   input: dict = field(default_factory=dict)
   reason: str = ""
+  intent: dict | None = None
 
   def to_dict(self) -> dict:
     return asdict(self)

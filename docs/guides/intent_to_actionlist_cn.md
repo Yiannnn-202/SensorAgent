@@ -48,15 +48,17 @@ Sim baseline 记录：`logs/tasks/industrial_sim_run_v8.json` — success=true�
 
 ## 2. Intent Schema
 
-不改 `AgentPlan` schema。intent 是 LLM 内部的中间产物，落到 `AgentPlan.reason` 里做 trace，
-`AgentPlan.input` 是扁平参数直接喂 ActionList。
+`AgentPlan` 有 `intent: dict | None` 一等字段（默认 `None`；`StaticPlanner` 保持 `None`
+不影响旧路径）。`LLMPlanner` 优先从 LLM 输出的顶级 `intent` 字段读取；如果没有则 fallback
+到 `reason` 字符串里正则解析 `intent={...}`（兼容 prompt v2 遗留输出）。
 
-```json
-{
-  "object": "滚柱",            // 保留操作员用词
+```python
+plan.intent = {
+  "object": "滚柱",            # 保留操作员用词
   "action": "pick" | "place" | "pick_place",
-  "target": "bin_cell_3"       // 目的地 id 或空字符串
+  "target": "bin_cell_3"       # 目的地 id 或空字符串
 }
+plan.reason = "operator wants ... pick-and-place workflow selected."  # 纯自然语言，不再夹 JSON
 ```
 
 映射规则（一期只做 pick_place）：

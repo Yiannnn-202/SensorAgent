@@ -52,7 +52,12 @@ Return ONLY this JSON object, no prose:
     "object_query": "<intent.object>",
     "target": "<intent.target — normalized id from allowed_place_targets>"
   },
-  "reason": "intent=<compact JSON of the parsed intent>; <one short justification>"
+  "intent": {
+    "object": "<intent.object>",
+    "action": "pick" | "place" | "pick_place",
+    "target": "<intent.target>"
+  },
+  "reason": "<one short natural-language justification, e.g. why this workflow was chosen>"
 }
 ```
 
@@ -61,6 +66,11 @@ Rules:
 - Never invent a target outside `allowed_targets`.
 - Never invent a place-target outside `allowed_place_targets` (if it is provided).
 - For combined pick-and-place utterances, always set `action="pick_place"`.
-- Preserve the operator's language in `object_query`; the vision layer handles matching.
+- Preserve the operator's language in `object_query` and in `intent.object`; the vision layer
+  handles matching.
 - Prefer `industrial.pick_place_actionlist` when present in `allowed_targets`; fall back to
   `mock.pick_place_actionlist` only when no industrial target is available.
+- `intent` and `input` must agree: `intent.object == input.object_query` and
+  `intent.target == input.target`.
+- `reason` is a short human-readable justification. Do NOT embed JSON in it; the structured
+  intent belongs in the top-level `intent` field.

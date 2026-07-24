@@ -61,3 +61,55 @@ class LLMPlannerTest(TestCase):
 
     with self.assertRaises(ValueError):
       planner.plan("do something unsafe", {})
+
+  def test_llm_planner_reads_top_level_intent(self) -> None:
+    client = FakeJsonClient(
+      {
+        "target_kind": "actionlist",
+        "target": "mock.pick_place_actionlist",
+        "input": {"object_query": "roller", "target": "bin_cell_3"},
+        "intent": {
+          "object": "roller",
+          "action": "pick_place",
+          "target": "bin_cell_3",
+        },
+        "reason": "Standard pick-and-place.",
+      }
+    )
+    plan = LLMPlanner(client).plan("put roller into bin_cell_3", {})
+    self.assertEqual(plan.intent, {
+      "object": "roller",
+      "action": "pick_place",
+      "target": "bin_cell_3",
+    })
+
+  def test_llm_planner_falls_back_to_intent_in_reason(self) -> None:
+    """Legacy prompt v2 kept intent inside reason. Fallback path must still parse it."""
+
+    client = FakeJsonClient(
+      {
+        "target_kind": "actionlist",
+        "target": "mock.pick_place_actionlist",
+        "input": {"object_query": "滚柱", "target": "bin_cell_3"},
+        "reason": (
+          "intent={\"object\":\"滚柱\",\"action\":\"pick_place\",\"target\":\"bin_cell_3\"};"
+          " place operation."
+        ),
+      }
+    )
+    plan = LLMPlanner(client).plan("把滚柱放到 bin_cell_3", {})
+    self.assertIsNotNone(plan.intent)
+    self.assertEqual(plan.intent["action"], "pick_place")
+    self.assertEqual(plan.intent["target"], "bin_cell_3")
+
+  def test_llm_planner_intent_defaults_to_none(self) -> None:
+    client = FakeJsonClient(
+      {
+        "target_kind": "actionlist",
+        "target": "mock.pick_place_actionlist",
+        "input": {"object_query": "roller", "target": ""},
+        "reason": "no intent field, no fallback string",
+      }
+    )
+    plan = LLMPlanner(client).plan("something", {})
+    self.assertIsNone(plan.intent)

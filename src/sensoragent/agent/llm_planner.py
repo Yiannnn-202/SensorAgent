@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Protocol
 
@@ -14,6 +15,29 @@ class JsonPlanningClient(Protocol):
 
   def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
     """Return a JSON object from an LLM call."""
+
+
+_INTENT_IN_REASON_PATTERN = re.compile(r"intent=(\{.*?\})", re.DOTALL)
+
+
+def _extract_intent(raw_plan: dict) -> dict | None:
+  """Prefer a top-level intent object; fall back to intent=... in reason."""
+
+  candidate = raw_plan.get("intent")
+  if isinstance(candidate, dict):
+    return candidate
+
+  reason = raw_plan.get("reason", "")
+  if not isinstance(reason, str):
+    return None
+  match = _INTENT_IN_REASON_PATTERN.search(reason)
+  if match is None:
+    return None
+  try:
+    parsed = json.loads(match.group(1))
+  except json.JSONDecodeError:
+    return None
+  return parsed if isinstance(parsed, dict) else None
 
 
 class LLMPlanner:
@@ -58,4 +82,5 @@ class LLMPlanner:
       target=target,
       input=plan_input,
       reason=str(raw_plan.get("reason", "")),
+      intent=_extract_intent(raw_plan),
     )

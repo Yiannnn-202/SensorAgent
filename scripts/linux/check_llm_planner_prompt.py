@@ -94,6 +94,7 @@ def main() -> int:
     print(f"raw JSON: {_fmt(client.last_raw)}")
     print(f"AgentPlan.target       = {plan.target}")
     print(f"AgentPlan.input        = {_fmt(plan.input)}")
+    print(f"AgentPlan.intent       = {_fmt(plan.intent)}")
     print(f"AgentPlan.reason       = {plan.reason}")
 
     object_query = plan.input.get("object_query", "")
