@@ -198,3 +198,58 @@ detect → plan_pick → pick(6 sub) → verify_grasp
 
 - 队友设的，稳定性优先
 - 如果需要放宽，改 `ros2_ws/.../robot_bridge.yaml` 的 `cartesian_min_fraction`
+
+---
+
+# LLM 端到端 sim baseline（2026-07-24 补记）
+
+Prompt v2（`allowed_place_targets` + action 定义 + 目的地规范化规则）配合 `vision.config_detect`
+的子串匹配、`robot.resolve_place_target` 的白名单命中，用 `--planner llm` 在 Gazebo sim
+上跑了 6 条不同措辞的 utterance，**全部 succeeded**。
+
+## 验证矩阵
+
+| # | 语言/语气 | 物件 | 目的地表述 | 规范化到 | pose_3d (base_link) | 结果 | Log |
+|---|-----------|------|-----------|---------|---------------------|------|-----|
+| 1 | 中精 | 滚柱 | `bin_cell_3` | bin_cell_3 | (0.24, 0.23, 0.142) | ✓ | logs/tasks/llm_sim_run.json |
+| 2 | 中口 | 那个银色的滚柱 | `第三个格子` | bin_cell_3 | (0.24, 0.23, 0.142) | ✓ | logs/tasks/llm_sim_colloquial.json |
+| 3 | 英口 | silver roller | `cell 3` | bin_cell_3 | (0.24, 0.23, 0.142) | ✓ | logs/tasks/llm_sim_english.json |
+| 4 | 英口 | roller | `bin 2` | bin_cell_2 | (0.24, 0.23, 0.142) | ✓ | logs/tasks/llm_sim_bin2.json |
+| 5 | 中精 | 螺栓 | `3 号格子` | bin_cell_3 | (0.28, 0.08, 0.147) | ✓ | logs/tasks/llm_sim_bolt.json |
+| 6 | 英口 | bolt | `bin 2` | bin_cell_2 | (0.28, 0.08, 0.147) | ✓ | logs/tasks/llm_sim_bolt_bin2.json |
+
+覆盖：**2 物件 × 2 目的地 × 中/英 × 精确/口语化**。
+
+## 每条 utterance 的 LLM 解析结果
+
+| # | Utterance | `object_query` | `target` | catalog 匹配 |
+|---|-----------|----------------|----------|--------------|
+| 1 | "把滚柱放到 bin_cell_3" | `滚柱` | `bin_cell_3` | `滚柱` (直接命中) |
+| 2 | "把那个银色的滚柱拿过去放到第三个格子" | `那个银色的滚柱` | `bin_cell_3` | `滚柱` (子串) |
+| 3 | "put the silver roller into cell 3" | `silver roller` | `bin_cell_3` | `roller` (子串) |
+| 4 | "please drop the roller in bin 2" | `roller` | `bin_cell_2` | `roller` (直接) |
+| 5 | "请把螺栓放进 3 号格子" | `螺栓` | `bin_cell_3` | `螺栓` (直接) |
+| 6 | "grab the bolt and put it in bin 2" | `bolt` | `bin_cell_2` | `short_bolt` (子串) |
+
+## 结论
+
+- **DeepSeek 中英文口语解析稳定**：6/6 都能正确落到 `industrial.pick_place_actionlist`。
+- **目的地规范化稳定**：`第三个格子`/`cell 3`/`bin 2`/`3 号格子` 都被规范化到 yaml 白名单 id。
+- **物理执行稳定**：11 步 ActionList 全部通过，`verify_grasp.held=True`、`verify_place.released=True`。
+- **中英文物件别名策略生效**：yaml 里 `roller / silver_roller / 滚柱 / short_bolt / 螺栓` 多别名 + `vision.config_detect` 的子串匹配一起兜住了所有 LLM 输出。
+
+## 已知不覆盖的边界
+
+- `gear` 在 (0.43, 0.08) — top-down pick workspace 边缘，Cartesian pregrasp fraction 0.000
+- `bin_cell_1` 在 (0.36, -0.30) — 超出 RM65 top-down 可达域，OMPL abort
+- 这两个是**物理可达性**问题，不影响 LLM 层的稳定性；实际使用时保证 utterance 落到可达组合即可。
+
+## 用于复现
+
+```bash
+bash scripts/linux/run_rm65_b_sim.sh        # 每轮之间需重启
+# 另一终端
+PYTHONPATH=src .venv/bin/python scripts/linux/run_industrial_actionlist_sim.py \
+  --planner llm --utterance "put the silver roller into cell 3" --execute \
+  --json-out logs/tasks/reproduce.json
+```
