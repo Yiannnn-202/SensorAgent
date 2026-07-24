@@ -76,10 +76,10 @@ Pipeline 的机制没问题（Round 1 完全 clean）。这两个 round 暴露�
 
 ### 1. 指令解析层（Prompt + LLMPlanner）
 
-- `src/sensoragent/agent/prompts/intent_to_workflow.md` 已升级为工业 intent 解析版
+- `src/sensoragent/agent/prompts/intent_to_workflow.md` 已升级为 Prompt v2（工业 intent 解析 + `allowed_place_targets` + action 定义 + 目的地规范化规则）
 - `LLMPlanner.allowed_targets` 已从 `bootstrap.py` 传入 `tuple(actionlists.keys())`
 - DeepSeek 集成走 `OpenAICompatibleClient`
-- 单测通过（未在 sim 中实测 LLM 路径）
+- 单测通过；sim 端到端也已验证（见下文 LLM baseline，6/6 utterance 成功）
 
 ### 2. Vision 层（P0-B）
 
@@ -143,34 +143,40 @@ detect → plan_pick → pick(6 sub) → verify_grasp
 
 - rebase 到 `origin/main` 上（含队友 `4977b16` pre_approach_joints 改进），已 force-push 到 `george-sim-test`
 
+### 12. LLM 端到端 sim baseline
+
+- Prompt v2 + `vision.config_detect` 子串匹配 + `resolve_place_target` 白名单
+- 6 条 utterance（中/英 × 精确/口语化 × 2 物件 × 2 bin）全部 succeeded
+- 详见下文"LLM 端到端 sim baseline"章节
+
 ---
 
-## 二、推进 LLM planner 前还没做的事
+## 二、下一步（LLM 层已推进后剩下的方向）
 
-按重要性排序：
+原先列在这里的 A/B/C/D（LLM sim 实测、prompt sanity check、`_dispatch_via_planner` 路径实测、`.env` API key 就绪）**已全部由"LLM 端到端 sim baseline"那节的 6/6 成功用例覆盖**，从待办中移除。
 
-### A. 用 LLM planner 至少在 sim 里跑通一次（核心遗留）
+现在真正剩下的：
 
-- 目前所有 sim 验证都用 `--planner static`
-- 需要用 `--planner llm --utterance "把滚柱放到 bin_cell_3"` 跑一次 `--execute`，看 DeepSeek 输出的 intent 是不是能被 LLMPlanner 落成 `AgentPlan(target=industrial.pick_place_actionlist, input={"object_query":"滚柱","target":"bin_cell_3"})`，然后端到端跑完 sim
-- 你 `.env` 里需要有 `SENSORAGENT_LLM_API_KEY`
-- 这是"LLM planner 已推进"的最小验证
+### A. 覆盖更多物件 / 目的地组合
 
-### B. Prompt 层的 sanity check
+- 目前 baseline 只覆盖了 `roller` + `bolt`、`bin_cell_2` + `bin_cell_3`
+- 需要把 catalog 里其他物件（gear、short_bolt 独立、其它 SKU）与其它 bin 组合都跑一遍，摸清 LLM × 物理可达域的完整覆盖矩阵
+- 依赖三、E/F 的物理约束先摸清楚
 
-- Prompt 里说 preserve operator's language in `object_query`，但 yaml 里 catalog 是 `滚柱: ...`, `silver_roller: ...`, `roller: ...` — 三个 key 指向同一个 pose
-- LLM 会输出 `"object_query": "滚柱"` 还是 `"roller"`？如果 LLM 判断规范化成英文，那我的中文 key 用不上；如果保留中文，那英文 key 用不上
-- 需要跑一次实测确认，必要时改 prompt
+### B. 失败路径下的 LLM/agent 行为
 
-### C. Sim runner 的 LLM 分支代码路径没实测
+- 目前 6/6 全绿，但 LLM 输出白名单外的 target、resolve_place_target 失败、verify_grasp 判定失败等 edge case 未验证
+- 应该构造几条"故意错"的 utterance（比如指向不存在的物件/bin），看 planner 是不是稳当地 raise，agent 有没有正确把失败上报
 
-- `_dispatch_via_planner` 走 `bundle.agent.run_task(user_input, input_data)`，这条 path 我从来没在 sim 里跑过
-- 里面有个 `if task.plan.target != ACTIONLIST_NAME: raise` 硬约束，如果 LLM 返回别的 workflow name 会直接崩
+### C. Sim world 重置能力
 
-### D. .env / API key 就绪状态未确认
+- 见三、G：目前 world 不能自动重置，多轮跑要重启 sim
+- 短期给 sim runner 加"跑完把物件复位"的能力，或者让 `--reset-home` 顺带调 gazebo service 复位物件
 
-- 你有没有 DeepSeek API key 已配置？我这边没法验证 `SENSORAGENT_LLM_API_KEY` 环境变量
-- 需要你手动确认 `.env` 有内容，或者你想切别的 provider（`SENSORAGENT_LLM_PROVIDER`）
+### D. LLM 输出稳定性回归
+
+- Prompt v2 已经稳，但换模型 / 换温度 / 大量并发时是否退化未知
+- 需要一个可自动跑的 utterance 回归集（就把 baseline 那 6 条 + 几条 negative case 变成 pytest）
 
 ---
 
