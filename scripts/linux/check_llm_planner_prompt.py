@@ -37,10 +37,18 @@ UTTERANCES = [
   "pick the roller and place into bin_cell_3",
   "put the silver roller into cell 3",
   "把那个银色的滚柱拿过去放到第三个格子",
+  # pick-only cases
+  "just grab the roller",
+  "先把滚柱抓起来",
+  # place-only cases
+  "release what you are holding into bin_cell_3",
+  "把手里的东西放到 3 号格子",
 ]
 
 ALLOWED_TARGETS = (
   "industrial.pick_place_actionlist",
+  "industrial.pick_only_actionlist",
+  "industrial.place_only_actionlist",
   "mock.pick_place_actionlist",
   "audio.voice_command_ack_actionlist",
 )

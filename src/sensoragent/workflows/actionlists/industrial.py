@@ -149,3 +149,136 @@ def build_industrial_pick_place_actionlist() -> ActionList:
       ),
     ],
   )
+
+
+def build_industrial_pick_only_actionlist() -> ActionList:
+  """Pick an object and hold it. No destination is required; the arm ends at the
+  lift pose with the gripper closed on the object."""
+
+  return ActionList(
+    name="industrial.pick_only_actionlist",
+    description="Industrial pick with grasp verification; arm ends holding the object.",
+    inputs={"object_query": "string"},
+    tags=("industrial", "pick", "verify"),
+    steps=[
+      ActionStep(
+        name="detect_object",
+        kind=ActionStepKind.TOOL,
+        target="vision.config_detect",
+        input={"query": "{{ object_query }}"},
+        save_as="object",
+      ),
+      ActionStep(
+        name="plan_pick",
+        kind=ActionStepKind.TOOL,
+        target="robot.plan_top_down_pick",
+        input={
+          "pose_3d": "{{ object.pose_3d }}",
+          "position_offset": PICK_POSITION_OFFSET,
+          "approach_distance": PICK_APPROACH_DISTANCE,
+          "pregrasp_distance": PICK_PREGRASP_DISTANCE,
+          "lift_height": PICK_LIFT_HEIGHT,
+        },
+        save_as="pick_plan",
+      ),
+      ActionStep(
+        name="pick",
+        kind=ActionStepKind.SKILL,
+        target="robot.pick",
+        input={
+          "plan": "{{ pick_plan.plan }}",
+          "object_id": "{{ object.object_id }}",
+          "speed": PICK_SPEED,
+          "descent_speed": PICK_DESCENT_SPEED,
+          "close_opening": GRIPPER_CLOSE_OPENING,
+        },
+        save_as="pick_result",
+      ),
+      ActionStep(
+        name="verify_grasp",
+        kind=ActionStepKind.SKILL,
+        target="robot.verify_grasp",
+        input={},
+        save_as="grasp_check",
+      ),
+    ],
+  )
+
+
+def build_industrial_place_only_actionlist() -> ActionList:
+  """Place a held object into a named destination. Assumes the arm is already
+  gripping the payload (verify_grasp is not run at entry — the caller is
+  responsible for ensuring the object is held)."""
+
+  return ActionList(
+    name="industrial.place_only_actionlist",
+    description="Industrial place: staging joints → descent → release → retreat, with verify_place.",
+    inputs={"target": "string"},
+    tags=("industrial", "place", "verify"),
+    steps=[
+      ActionStep(
+        name="resolve_place_target",
+        kind=ActionStepKind.TOOL,
+        target="robot.resolve_place_target",
+        input={"target": "{{ target }}"},
+        save_as="place_target",
+      ),
+      ActionStep(
+        name="plan_place",
+        kind=ActionStepKind.TOOL,
+        target="robot.plan_place",
+        input={
+          "place_pose": "{{ place_target.place_pose }}",
+          "clearance": PLACE_CLEARANCE,
+        },
+        save_as="place_plan",
+      ),
+      ActionStep(
+        name="place_pre_approach_joints",
+        kind=ActionStepKind.TOOL,
+        target="robot.move_joints",
+        input={
+          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "speed": PLACE_SPEED,
+          "wait": True,
+        },
+      ),
+      ActionStep(
+        name="place_move_place",
+        kind=ActionStepKind.TOOL,
+        target="robot.move_pose",
+        input={
+          "pose": "{{ place_plan.plan.place }}",
+          "speed": PLACE_SPEED,
+          "wait": True,
+        },
+      ),
+      ActionStep(
+        name="place_open_gripper",
+        kind=ActionStepKind.TOOL,
+        target="gripper.open",
+        input={
+          "opening": GRIPPER_OPEN_OPENING,
+          "speed": GRIPPER_SPEED,
+        },
+        stop_on_failure=False,
+      ),
+      ActionStep(
+        name="place_retreat",
+        kind=ActionStepKind.TOOL,
+        target="robot.move_joints",
+        input={
+          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "speed": PLACE_SPEED,
+          "wait": True,
+        },
+      ),
+      ActionStep(
+        name="verify_place",
+        kind=ActionStepKind.SKILL,
+        target="robot.verify_place",
+        input={},
+        save_as="place_check",
+      ),
+    ],
+  )

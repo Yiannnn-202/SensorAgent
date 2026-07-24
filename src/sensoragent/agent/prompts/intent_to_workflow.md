@@ -31,16 +31,25 @@ Your job:
    - `pick`: only grasp, no destination mentioned. Rare.
    - `place`: only release, when the operator is already holding an object. Rare.
 
-2. Choose exactly one workflow id from `allowed_targets` that fulfills the intent.
+2. Choose exactly one workflow id from `allowed_targets` that fulfills the intent. Use these
+   correspondences when the ids are available:
+   - `intent.action == "pick_place"` → `industrial.pick_place_actionlist`
+   - `intent.action == "pick"`       → `industrial.pick_only_actionlist`
+   - `intent.action == "place"`      → `industrial.place_only_actionlist`
+   Fall back to `mock.pick_place_actionlist` only when no industrial target is available.
 3. Normalize the destination string. If `allowed_place_targets` is provided, `input.target`
    MUST be one of those ids exactly (e.g. `bin_cell_3`), even if the operator said "cell 3"
    or "第三个格子". Map obvious synonyms:
      - "cell N" / "第 N 个格子" / "第 N 号" → `bin_cell_N`
      - "bin N" / "N 号 bin" → `bin_cell_N`
      - "near the pick area" / "抓取区旁边" → `near_pick`
-   If no reasonable mapping exists, leave `input.target=""` so downstream validation surfaces
-   the gap.
-4. Fill the workflow input parameters.
+   If the workflow does not need a destination (pick-only), set `input.target=""` and
+   `intent.target=""`. If a destination is required but no reasonable mapping exists, leave
+   `input.target=""` so downstream validation surfaces the gap.
+4. Fill the workflow input parameters. Only include the fields the chosen workflow needs:
+   - `industrial.pick_place_actionlist`: `{object_query, target}`
+   - `industrial.pick_only_actionlist`:  `{object_query}`
+   - `industrial.place_only_actionlist`: `{target}`
 
 Return ONLY this JSON object, no prose:
 

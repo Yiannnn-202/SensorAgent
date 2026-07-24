@@ -59,7 +59,9 @@ from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
+  build_industrial_pick_only_actionlist,
   build_industrial_pick_place_actionlist,
+  build_industrial_place_only_actionlist,
   build_mock_pick_place_actionlist,
   build_voice_command_ack_actionlist,
 )
@@ -269,6 +271,8 @@ def build_agent(
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
     "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(),
+    "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
+    "industrial.place_only_actionlist": build_industrial_place_only_actionlist(),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,
