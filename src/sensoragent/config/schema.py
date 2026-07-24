@@ -48,6 +48,7 @@ class SensorAgentIntegrationsConfig:
   audio: dict = field(default_factory=dict)
   microphone: dict = field(default_factory=dict)
   robot: dict = field(default_factory=dict)
+  vision: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

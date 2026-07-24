@@ -1,8 +1,11 @@
 # Runtime logs
 logs/
 
-# Local model weights and runtime assets
-/models/
+# Local model weights and runtime assets. Keep directory structure and docs.
+/models/**/*
+!/models/**/
+!/models/**/.gitkeep
+!/models/**/README.md
 
 # Python
 __pycache__/

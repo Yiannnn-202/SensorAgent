@@ -17,6 +17,7 @@ tools:
     - gripper.close
     - gripper.get_state
     - vision.config_detect
+    - vision.open_vocab_detect
 
 skills:
   enabled:
@@ -30,6 +31,18 @@ integrations:
     backend: http
     endpoint: http://127.0.0.1:8765
     timeout_seconds: 120.0
+  vision:
+    backend: yoloe
+    model_path: models/vision/yoloe.pt
+    depth_window: 7
+    # Approximate fixed Gazebo transform from camera optical coordinates to
+    # base_link. This is intended for first-pass simulation experiments; replace
+    # with calibrated/TF-derived values when the perception stack is finalized.
+    T_base_camera:
+      - [0.0, 0.0, 1.0, 0.47]
+      - [-1.0, 0.0, 0.0, 0.0]
+      - [0.0, -1.0, 0.0, 0.88]
+      - [0.0, 0.0, 0.0, 1.0]
 
 scene:
   # Object catalog for vision.config_detect. Positions are in base_link metres.
