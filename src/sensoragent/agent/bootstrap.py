@@ -59,7 +59,9 @@ from sensoragent.tools.vision import VisionConfigDetectTool, VisionOpenVocabular
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
+  build_industrial_pick_only_actionlist,
   build_industrial_pick_place_actionlist,
+  build_industrial_place_only_actionlist,
   build_industrial_vision_pick_place_actionlist,
   build_mock_pick_place_actionlist,
   build_voice_command_ack_actionlist,
@@ -285,6 +287,8 @@ def build_agent(
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
     "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(),
+    "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
+    "industrial.place_only_actionlist": build_industrial_place_only_actionlist(),
     "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(),
   }
   decision_tree_runtime = DecisionTreeRuntime(
@@ -299,9 +303,13 @@ def build_agent(
   event_stream = InMemoryEventStream()
   planner = None
   if planner_mode == "llm":
+    place_targets = tuple(
+      (config.scene.place_targets or default_place_target_registry()).keys()
+    )
     planner = LLMPlanner(
       OpenAICompatibleClient(load_llm_config_from_env()),
       allowed_targets=tuple(actionlists.keys()),
+      allowed_place_targets=place_targets,
     )
   elif planner_mode != "static":
     raise ValueError(f"Unknown planner mode: {planner_mode}")

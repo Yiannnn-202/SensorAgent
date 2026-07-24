@@ -226,3 +226,105 @@ class LLMPlannerAllowedTargetsTest(TestCase):
     )
     with self.assertRaises(ValueError):
       planner.plan("do something unsafe", {})
+
+
+class IndustrialPickOnlyTest(TestCase):
+  def test_pick_only_runs_four_steps(self) -> None:
+    from sensoragent.workflows.actionlists.industrial import (
+      build_industrial_pick_only_actionlist,
+    )
+
+    detect = lambda _i: {
+      "found": True,
+      "label": "roller",
+      "confidence": 1.0,
+      "object_id": "roller",
+      "pose_3d": [0.24, 0.23, 0.142, 0.0, 0.0, 0.0],
+    }
+    plan_pick = lambda _i: {"plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}}
+    tool_runtime = _StubRuntime({
+      "vision.config_detect": detect,
+      "robot.plan_top_down_pick": plan_pick,
+      "gripper.get_state": lambda _i: {
+        "completed": True, "message": "", "state": {"opening": 0.03},
+      },
+    })
+    pick = lambda _i: {"picked": True, "completed_steps": ["open_gripper"]}
+    verify_grasp = lambda _i: _StubResult(
+      success=True, output={"held": True, "opening": 0.03},
+    )
+    skill_runtime = _StubRuntime({
+      "robot.pick": pick,
+      "robot.verify_grasp": verify_grasp,
+    })
+    runtime = ActionListRuntime(tool_runtime, skill_runtime, _NullLogger())
+    result = runtime.run(
+      build_industrial_pick_only_actionlist(),
+      {"object_query": "roller"},
+      TraceContext(),
+    )
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(
+      [s.step for s in result.steps],
+      ["detect_object", "plan_pick", "pick", "verify_grasp"],
+    )
+    self.assertNotIn("robot.resolve_place_target", [c[0] for c in tool_runtime.calls])
+    self.assertNotIn("robot.verify_place", [c[0] for c in skill_runtime.calls])
+
+
+class IndustrialPlaceOnlyTest(TestCase):
+  def test_place_only_runs_seven_steps(self) -> None:
+    from sensoragent.workflows.actionlists.industrial import (
+      build_industrial_place_only_actionlist,
+    )
+
+    resolve = lambda input_data: {
+      "target": input_data["target"],
+      "place_pose": {
+        "position": [0.36, -0.06, 0.30],
+        "orientation": [0.9962, -0.0872, 0.0, 0.0],
+        "frame_id": "base_link",
+      },
+    }
+    plan_place = lambda _i: {
+      "plan": {
+        "approach": {"position": [0.36, -0.06, 0.45], "orientation": [0.9962, -0.0872, 0.0, 0.0], "frame_id": "base_link"},
+        "place":    {"position": [0.36, -0.06, 0.30], "orientation": [0.9962, -0.0872, 0.0, 0.0], "frame_id": "base_link"},
+        "retreat":  {"position": [0.36, -0.06, 0.45], "orientation": [0.9962, -0.0872, 0.0, 0.0], "frame_id": "base_link"},
+      }
+    }
+    tool_runtime = _StubRuntime({
+      "robot.resolve_place_target": resolve,
+      "robot.plan_place": plan_place,
+      "robot.move_joints": lambda _i: {"completed": True, "message": "", "state": {}},
+      "robot.move_pose":   lambda _i: {"completed": True, "message": "", "state": {}},
+      "gripper.open":      lambda _i: {"completed": True, "message": "", "state": {"opening": 0.08}},
+      "gripper.get_state": lambda _i: {
+        "completed": True, "message": "", "state": {"opening": 0.08},
+      },
+    })
+    verify_place = lambda _i: _StubResult(
+      success=True, output={"released": True, "opening": 0.08},
+    )
+    skill_runtime = _StubRuntime({"robot.verify_place": verify_place})
+    runtime = ActionListRuntime(tool_runtime, skill_runtime, _NullLogger())
+    result = runtime.run(
+      build_industrial_place_only_actionlist(),
+      {"target": "bin_cell_3"},
+      TraceContext(),
+    )
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(
+      [s.step for s in result.steps],
+      [
+        "resolve_place_target",
+        "plan_place",
+        "place_pre_approach_joints",
+        "place_move_place",
+        "place_open_gripper",
+        "place_retreat",
+        "verify_place",
+      ],
+    )
+    self.assertNotIn("vision.config_detect", [c[0] for c in tool_runtime.calls])
+    self.assertNotIn("robot.verify_grasp", [c[0] for c in skill_runtime.calls])

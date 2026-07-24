@@ -75,17 +75,22 @@ class RobotBridgePackageTest(TestCase):
     self.assertIn("position_tolerance: 0.005", bridge_config)
 
   def test_robotiq_fingers_use_high_friction(self) -> None:
-    robotiq = (
+    robotiq_path = (
       ROOT
       / "ros2_ws"
       / "src"
       / "robotiq_description"
       / "urdf"
       / "robotiq_2f_85_macro.urdf.xacro"
-    ).read_text(encoding="utf-8")
+    )
+    root = ET.parse(robotiq_path).getroot()
+    mu_values = [float(node.text) for node in root.iter("mu") if node.text]
+    mu2_values = [float(node.text) for node in root.iter("mu2") if node.text]
 
-    self.assertGreaterEqual(robotiq.count("<mu>5.0</mu>"), 4)
-    self.assertGreaterEqual(robotiq.count("<mu2>5.0</mu2>"), 4)
+    self.assertGreaterEqual(len(mu_values), 4)
+    self.assertGreaterEqual(len(mu2_values), 4)
+    self.assertTrue(all(value >= 5.0 for value in mu_values))
+    self.assertTrue(all(value >= 5.0 for value in mu2_values))
 
   def test_gripper_mapping_matches_simulated_action_semantics(self) -> None:
     maximum = 0.0848
