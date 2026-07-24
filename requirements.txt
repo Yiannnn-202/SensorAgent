@@ -1,10 +1,10 @@
 # Core runtime
+numpy>=1.26
 PyYAML>=6.0
 requests>=2.32
 
 # LLM / HTTP-compatible integrations
 
 # Audio runtime
-numpy>=1.26
 sounddevice>=0.4.6
 sherpa-onnx
