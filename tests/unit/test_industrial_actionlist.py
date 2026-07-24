@@ -70,17 +70,39 @@ def _make_runtimes(*, opening_after_pick: float, opening_after_place: float):
     }
 
   def plan_place(_input):
-    return {"plan": {"approach": {}, "place": {}, "retreat": {}}}
+    return {
+      "plan": {
+        "approach": {"position": [0.36, -0.06, 0.35], "orientation": [0, 1, 0, 0], "frame_id": "base_link"},
+        "place": {"position": [0.36, -0.06, 0.20], "orientation": [0, 1, 0, 0], "frame_id": "base_link"},
+        "retreat": {"position": [0.36, -0.06, 0.35], "orientation": [0, 1, 0, 0], "frame_id": "base_link"},
+      }
+    }
+
+  def move_joints(_input):
+    return {"completed": True, "message": "", "state": {}}
+
+  def move_pose(_input):
+    return {"completed": True, "message": "", "state": {}}
+
+  def move_linear(_input):
+    return {"completed": True, "message": "", "state": {}}
+
+  def gripper_open(_input):
+    return {"completed": True, "message": "", "state": {"opening": 0.0848}}
 
   def gripper_state(_input):
     return {"completed": True, "message": "", "state": next(gripper_states)}
 
   tool_runtime = _StubRuntime({
-    "vision.mock_detect": detect,
+    "vision.config_detect": detect,
     "robot.plan_top_down_pick": plan_pick,
     "robot.resolve_place_target": resolve_target,
     "robot.plan_place": plan_place,
     "gripper.get_state": gripper_state,
+    "robot.move_joints": move_joints,
+    "robot.move_pose": move_pose,
+    "robot.move_linear": move_linear,
+    "gripper.open": gripper_open,
   })
 
   def pick(_input):
@@ -149,7 +171,10 @@ class IndustrialActionListTest(TestCase):
         "verify_grasp",
         "resolve_place_target",
         "plan_place",
-        "place",
+        "place_pre_approach_joints",
+        "place_move_place",
+        "place_open_gripper",
+        "place_retreat",
         "verify_place",
       ],
     )
@@ -162,7 +187,7 @@ class IndustrialActionListTest(TestCase):
     self.assertFalse(result.success)
     self.assertEqual(result.steps[-1].step, "verify_grasp")
     self.assertNotIn("robot.plan_place", [call[0] for call in tool_runtime.calls])
-    self.assertNotIn("robot.place", [call[0] for call in skill_runtime.calls])
+    self.assertNotIn("robot.move_joints", [call[0] for call in tool_runtime.calls])
 
 
 class LLMPlannerAllowedTargetsTest(TestCase):

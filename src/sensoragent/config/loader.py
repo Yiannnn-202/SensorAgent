@@ -10,6 +10,7 @@ import yaml
 from sensoragent.config.schema import (
   AgentConfig,
   LoggingConfig,
+  SceneConfig,
   SensorAgentIntegrationsConfig,
   SensorAgentConfig,
   SkillsConfig,
@@ -46,6 +47,7 @@ def load_config(path: str | Path) -> SensorAgentConfig:
   skills = _as_mapping(raw.get("skills"), "skills")
   logging = _as_mapping(raw.get("logging"), "logging")
   integrations = _as_mapping(raw.get("integrations"), "integrations")
+  scene = _as_mapping(raw.get("scene"), "scene")
 
   return SensorAgentConfig(
     agent=AgentConfig(
@@ -72,5 +74,9 @@ def load_config(path: str | Path) -> SensorAgentConfig:
         "integrations.microphone",
       ),
       robot=_as_mapping(integrations.get("robot"), "integrations.robot"),
+    ),
+    scene=SceneConfig(
+      objects=_as_mapping(scene.get("objects"), "scene.objects"),
+      place_targets=_as_mapping(scene.get("place_targets"), "scene.place_targets"),
     ),
   )

@@ -51,6 +51,14 @@ class SensorAgentIntegrationsConfig:
 
 
 @dataclass(frozen=True)
+class SceneConfig:
+  """Static scene catalog used by config-driven detection and place targets."""
+
+  objects: dict = field(default_factory=dict)
+  place_targets: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class SensorAgentConfig:
   """Top-level SensorAgent configuration."""
 
@@ -61,3 +69,4 @@ class SensorAgentConfig:
   integrations: SensorAgentIntegrationsConfig = field(
     default_factory=SensorAgentIntegrationsConfig
   )
+  scene: SceneConfig = field(default_factory=SceneConfig)

@@ -16,7 +16,7 @@ tools:
     - gripper.open
     - gripper.close
     - gripper.get_state
-    - vision.mock_detect
+    - vision.config_detect
 
 skills:
   enabled:
@@ -30,6 +30,68 @@ integrations:
     backend: http
     endpoint: http://127.0.0.1:8765
     timeout_seconds: 120.0
+
+scene:
+  # Object catalog for vision.config_detect. Positions are in base_link metres.
+  # Derived from ros2_ws/.../worlds/industrial_pgs.sdf spawn poses using
+  # base_link z = world z - robot_mount_z (0.18).
+  # Workbench top at base_link z ≈ 0.12; object centres sit slightly above it.
+  objects:
+    roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
+    silver_roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
+    滚柱: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
+    stepped_shaft: [0.38, 0.23, 0.146, 0.0, 0.0, 0.0]
+    阶梯轴: [0.38, 0.23, 0.146, 0.0, 0.0, 0.0]
+    flange: [0.51, 0.22, 0.137, 0.0, 0.0, 0.0]
+    法兰: [0.51, 0.22, 0.137, 0.0, 0.0, 0.0]
+    short_bolt: [0.28, 0.08, 0.147, 0.0, 0.0, 0.0]
+    螺栓: [0.28, 0.08, 0.147, 0.0, 0.0, 0.0]
+    gear: [0.43, 0.08, 0.130, 0.0, 0.0, 0.0]
+    齿轮: [0.43, 0.08, 0.130, 0.0, 0.0, 0.0]
+
+  # Named place targets. Poses are TCP release poses in base_link.
+  # bin_3x3 is spawned at world (0.50, -0.18, 0.30); each cell is 0.14 x 0.12
+  # with walls 0.08 m tall (bin floor at base_link z ≈ 0.12, wall top ≈ 0.20).
+  # We target the front row (X = 0.36) for best reach on RM65-B; TCP height
+  # 0.30 keeps the gripper ~0.10 m above the wall top so MoveIt does not flag
+  # the fingertips as colliding with the bin walls (object free-falls into the
+  # cell after release).
+  #
+  # Orientation matches what PLACE_PRE_APPROACH_JOINTS reaches: 180° rotation
+  # around ~+X (gripper down, wrist twist aligned with the staging joints).
+  # Matching the staging orientation lets robot.move_linear interpolate only
+  # position between staging and place, which MoveIt handles reliably.
+  place_targets:
+    bin_cell_1:
+      position: [0.36, -0.30, 0.30]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    bin_cell_2:
+      position: [0.36, -0.18, 0.30]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    bin_cell_3:
+      position: [0.36, -0.06, 0.30]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    # Middle row cells sit further out; use only when reach allows.
+    bin_cell_4:
+      position: [0.50, -0.30, 0.30]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    bin_cell_5:
+      position: [0.50, -0.18, 0.30]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    bin_cell_6:
+      position: [0.50, -0.06, 0.30]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    # Reachable fallback near the pick area (mirrors teammate's near_pick offset).
+    near_pick:
+      position: [0.34, 0.11, 0.30]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
 
 logging:
   level: info

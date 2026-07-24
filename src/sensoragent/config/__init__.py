@@ -5,6 +5,7 @@ from sensoragent.config.loader import load_config
 from sensoragent.config.schema import (
   AgentConfig,
   LoggingConfig,
+  SceneConfig,
   SensorAgentIntegrationsConfig,
   SensorAgentConfig,
   SkillsConfig,
@@ -14,6 +15,7 @@ from sensoragent.config.schema import (
 __all__ = [
   "AgentConfig",
   "LoggingConfig",
+  "SceneConfig",
   "SensorAgentIntegrationsConfig",
   "SensorAgentConfig",
   "SkillsConfig",

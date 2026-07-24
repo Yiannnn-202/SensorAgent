@@ -1,0 +1,27 @@
+{
+  "name": "vision.config_detect",
+  "version": "0.1.0",
+  "description": "Return a preconfigured pose for a known object query, backed by a static catalog.",
+  "input_schema": {
+    "type": "object",
+    "required": ["query"],
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Natural-language object query."
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["found", "label", "confidence"],
+    "properties": {
+      "found": {"type": "boolean"},
+      "label": {"type": "string"},
+      "confidence": {"type": "number"},
+      "object_id": {"type": "string"},
+      "pose_3d": {"type": "array", "items": {"type": "number"}}
+    }
+  },
+  "errors": ["OBJECT_NOT_FOUND", "INVALID_QUERY"]
+}

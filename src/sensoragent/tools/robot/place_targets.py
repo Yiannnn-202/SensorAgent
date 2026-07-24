@@ -51,7 +51,12 @@ class RobotResolvePlaceTargetTool:
 
 
 def default_place_target_registry() -> dict[str, dict]:
-  """Static bin-cell layout for the industrial demo."""
+  """Static bin-cell layout for the industrial demo.
+
+  Coordinates are TCP release poses in base_link. Workbench top sits at
+  base_link z ≈ 0.12; z = 0.22 keeps the gripper TCP roughly 0.10 m above the
+  workbench when releasing, matching the sim scripts' default place clearance.
+  """
 
   def pose(x: float, y: float, z: float) -> dict:
     return {
@@ -61,8 +66,8 @@ def default_place_target_registry() -> dict[str, dict]:
     }
 
   return {
-    "bin_cell_1": pose(0.40, -0.20, 0.05),
-    "bin_cell_2": pose(0.40, 0.00, 0.05),
-    "bin_cell_3": pose(0.40, 0.20, 0.05),
-    "conveyor": pose(0.55, 0.00, 0.05),
+    "bin_cell_1": pose(0.42, -0.15, 0.22),
+    "bin_cell_2": pose(0.42, 0.00, 0.22),
+    "bin_cell_3": pose(0.42, 0.15, 0.22),
+    "conveyor": pose(0.50, 0.10, 0.22),
   }

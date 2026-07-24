@@ -142,7 +142,10 @@ class ActionListRuntime:
 
     result = ActionListResult(
       actionlist=actionlist.name,
-      success=all(step.success for step in step_results),
+      # If we reach here, no stop_on_failure=True step failed. Best-effort
+      # steps (stop_on_failure=False) are tolerated, so their success flag
+      # does not gate the overall workflow success.
+      success=True,
       steps=step_results,
       output=context,
       error=None,

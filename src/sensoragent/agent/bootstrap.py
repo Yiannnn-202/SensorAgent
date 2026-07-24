@@ -55,6 +55,7 @@ from sensoragent.tools.robot import (
   RobotStopTool,
   default_place_target_registry,
 )
+from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
@@ -78,10 +79,20 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
   "robot.plan_oriented_pick": RobotPlanOrientedPickTool,
   "robot.plan_place": RobotPlanPlaceTool,
   "robot.plan_top_down_pick": RobotPlanTopDownPickTool,
-  "robot.resolve_place_target": lambda: RobotResolvePlaceTargetTool(
-    default_place_target_registry()
-  ),
 }
+
+
+SCENE_TOOL_NAMES = {"vision.config_detect", "robot.resolve_place_target"}
+
+
+def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
+  if tool_name == "vision.config_detect":
+    catalog = config.scene.objects or {}
+    return VisionConfigDetectTool(catalog)
+  if tool_name == "robot.resolve_place_target":
+    targets = config.scene.place_targets or default_place_target_registry()
+    return RobotResolvePlaceTargetTool(targets)
+  raise KeyError(f"Not a scene tool: {tool_name}")
 
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {
   "audio.announce": AudioAnnounceSkill,
@@ -175,6 +186,8 @@ def _build_robot_client(config: SensorAgentConfig):
 
 
 def _build_tool(tool_name: str, config: SensorAgentConfig, robot_client=None):
+  if tool_name in SCENE_TOOL_NAMES:
+    return _build_scene_tool(tool_name, config)
   if tool_name in AVAILABLE_TOOLS:
     return AVAILABLE_TOOLS[tool_name]()
   if tool_name in ROBOT_TOOL_FACTORIES:
