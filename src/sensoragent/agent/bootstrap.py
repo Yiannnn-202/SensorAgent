@@ -282,9 +282,13 @@ def build_agent(
   event_stream = InMemoryEventStream()
   planner = None
   if planner_mode == "llm":
+    place_targets = tuple(
+      (config.scene.place_targets or default_place_target_registry()).keys()
+    )
     planner = LLMPlanner(
       OpenAICompatibleClient(load_llm_config_from_env()),
       allowed_targets=tuple(actionlists.keys()),
+      allowed_place_targets=place_targets,
     )
   elif planner_mode != "static":
     raise ValueError(f"Unknown planner mode: {planner_mode}")

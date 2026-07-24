@@ -24,12 +24,14 @@ class LLMPlanner:
     client: JsonPlanningClient,
     prompt_path: Path | None = None,
     allowed_targets: tuple[str, ...] = ("mock.pick_place_actionlist",),
+    allowed_place_targets: tuple[str, ...] = (),
   ) -> None:
     self._client = client
     self._prompt_path = prompt_path or (
       Path(__file__).parent / "prompts" / "intent_to_workflow.md"
     )
     self._allowed_targets = allowed_targets
+    self._allowed_place_targets = allowed_place_targets
 
   def plan(self, user_input: str, input_data: dict) -> AgentPlan:
     system_prompt = self._prompt_path.read_text(encoding="utf-8")
@@ -38,6 +40,7 @@ class LLMPlanner:
         "user_input": user_input,
         "initial_input": input_data,
         "allowed_targets": list(self._allowed_targets),
+        "allowed_place_targets": list(self._allowed_place_targets),
       },
       ensure_ascii=False,
       indent=2,

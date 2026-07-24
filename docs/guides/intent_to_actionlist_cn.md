@@ -1,484 +1,254 @@
 # 指令解析 → intent → ActionList 落地方案
 
-## 0. 背景
+_最近更新_：2026-07-24（对应 `george-sim-test` 分支）
 
-SensorAgent 已经具备：
+## 0. 现状 TL;DR
 
-- `LLMPlanner`（`src/sensoragent/agent/llm_planner.py`）：把 LLM 返回的 JSON 校验成 `AgentPlan`。
-- `OpenAICompatibleClient`（`src/sensoragent/integrations/llm.py`）：DeepSeek 接入完成，`SENSORAGENT_LLM_*` 环境变量已生效，`temperature=0`、`response_format={"type":"json_object"}`。
-- `ActionListRuntime`（`src/sensoragent/workflows/actionlists/runtime.py`）：顺序执行、支持 `{{ path.field }}` 模板、`save_as` 上下文注入、`stop_on_failure` 短路。
-- `AgentRuntime.run_task`（`src/sensoragent/agent/runtime.py:199`）：`user_input → planner.plan → selector.select → dispatch(actionlist)` 已经串通。
-- 现成 skill：`robot.pick`、`robot.place`；现成 tool：`vision.mock_detect`、`robot.plan_top_down_pick`、`robot.plan_place`、`gripper.get_state` 等。
-
-**目标**：让操作员说一句「把滚柱放到 bin_cell_3」，DeepSeek 输出结构化 intent，Runtime 落到工业场景的 ActionList
-（`pick → verify_grasp → place → verify_place`），每一步都能被 trace 到，失败时短路返回。
-
----
+- 端到端管道**已跑通** Gazebo sim baseline：`roller → bin_cell_3` 11 步全绿。
+- 中英文指令的 LLM 解析尚未在 sim 中实测（下一步）。
+- 已知硬件边界：部分物件位置和 bin 位置对 RM65-B top-down 抓取超出可达域，需要 workspace 内的组合。
 
 ## 1. 全链路时序
 
 ```
 operator utterance
-      │
-      ▼
-AgentRuntime.run_task(user_input, input_data)
-      │
-      ▼
-LLMPlanner.plan()                       # llm_planner.py:34
-      │  system_prompt = intent_to_workflow.md
-      │  user_prompt   = {user_input, initial_input, allowed_targets}
-      │  temperature=0, response_format=json_object
-      ▼
-DeepSeek returns JSON:
-{
-  "target_kind": "actionlist",
-  "target": "industrial.pick_place_actionlist",
-  "input":  {"object_query": "滚柱", "target": "bin_cell_3"},
-  "reason": "intent={\"object\":\"滚柱\",\"action\":\"pick_place\",\"target\":\"bin_cell_3\"}; ..."
-}
-      │
-      ▼
-AgentPlan(target_kind=ACTIONLIST, target=..., input=..., reason=...)
-      │  → allowed_targets 白名单校验 (llm_planner.py:47)
-      │  → event_stream.publish("task_planned", trace, {"plan": ...})
-      ▼
-AgentRuntime._handle_actionlist()       # runtime.py:64
-      ▼
-ActionListRuntime.run(industrial.pick_place_actionlist, input, trace)
-      │
-      ├── detect_object    (tool  vision.mock_detect)      → object
-      ├── plan_pick        (tool  robot.plan_top_down_pick)→ pick_plan
-      ├── pick             (skill robot.pick)              → pick_result
-      ├── verify_grasp     (skill robot.verify_grasp)      → grasp_check  ← 新增
-      ├── plan_place       (tool  robot.plan_place)        → place_plan
-      ├── place            (skill robot.place)             → place_result
-      └── verify_place     (skill robot.verify_place)      → place_check  ← 新增
-      │
-      ▼
-ActionListResult(success, steps=[...], output={...上下文...})
-      │
-      ▼
-task.mark(SUCCEEDED|FAILED), event_stream.publish(...)
+  │
+  ▼ AgentRuntime.run_task(user_input, input_data)
+  │
+  ▼ LLMPlanner.plan()                              # llm_planner.py
+  │  system_prompt = intent_to_workflow.md
+  │  user_prompt   = {user_input, initial_input, allowed_targets}
+  │  DeepSeek 返回 JSON: target_kind/target/input/reason
+  │
+  ▼ AgentPlan → allowed_targets 白名单校验
+  │  event_stream.publish("task_planned", ...)
+  │
+  ▼ AgentRuntime._handle_actionlist()
+  │
+  ▼ ActionListRuntime.run(industrial.pick_place_actionlist, input, trace)
+    │
+    ├─ detect_object        (tool  vision.config_detect)      → object
+    ├─ plan_pick            (tool  robot.plan_top_down_pick)  → pick_plan
+    ├─ pick                 (skill robot.pick, 6 sub-steps)   → pick_result
+    ├─ verify_grasp         (skill robot.verify_grasp)        → grasp_check
+    ├─ resolve_place_target (tool  robot.resolve_place_target)→ place_target
+    ├─ plan_place           (tool  robot.plan_place)          → place_plan
+    ├─ place_pre_approach_joints (tool robot.move_joints)     # 中转关节位
+    ├─ place_move_place     (tool  robot.move_pose OMPL)      # 到 bin 上方
+    ├─ place_open_gripper   (tool  gripper.open)              # stop_on_failure=False
+    ├─ place_retreat        (tool  robot.move_joints)         # 关节退位
+    └─ verify_place         (skill robot.verify_place)        → place_check
+    │
+    ▼ ActionListResult(success, steps=[...], output={context})
+  │
+  ▼ task.mark(SUCCEEDED|FAILED), event_stream.publish(...)
 ```
 
----
+Sim baseline 记录：`logs/tasks/industrial_sim_run_v8.json` — success=true。
 
-## 2. 结构化 intent 定义
+## 2. Intent Schema
 
-不改 `AgentPlan` 的 schema，把 intent 作为 planner 的中间产物：LLM 内部解析出 intent，
-再由 intent 决定填给哪个 workflow、参数如何映射。intent 结构以字符串形式塞进 `AgentPlan.reason`
-供 trace 记录，`ActionList` 只吃**扁平化后的执行参数**。
-
-**intent schema（约定，不落到代码）**：
+不改 `AgentPlan` schema。intent 是 LLM 内部的中间产物，落到 `AgentPlan.reason` 里做 trace，
+`AgentPlan.input` 是扁平参数直接喂 ActionList。
 
 ```json
 {
-  "object": "滚柱",
+  "object": "滚柱",            // 保留操作员用词
   "action": "pick" | "place" | "pick_place",
-  "target": "bin_cell_3"
+  "target": "bin_cell_3"       // 目的地 id 或空字符串
 }
 ```
 
-**映射规则**：
+映射规则（一期只做 pick_place）：
 
-| action        | target workflow                          | ActionList input                                        |
-|---------------|------------------------------------------|---------------------------------------------------------|
-| `pick_place`  | `industrial.pick_place_actionlist`       | `{object_query: intent.object, target: intent.target}`  |
-| `pick`        | （后续）`industrial.pick_only_actionlist` | `{object_query: intent.object}`                         |
-| `place`       | （后续）`industrial.place_only_actionlist`| `{object_id: ..., target: intent.target}`               |
+| action | target workflow | ActionList input |
+|--------|-----------------|------------------|
+| `pick_place` | `industrial.pick_place_actionlist` | `{object_query, target}` |
 
-一期只做 `pick_place`。`pick`/`place` 单独跑的场景后续再补 ActionList，不影响本次改动。
+## 3. 落地组件详解
 
----
+### 3.1 Planner Prompt
 
-## 3. 落地改动清单
+`src/sensoragent/agent/prompts/intent_to_workflow.md`。要求 LLM：
+- 解析 utterance 到 `{object, action, target}` intent
+- 从 `allowed_targets` 白名单选一个 workflow
+- 保留操作员语言在 `object_query`（vision 层做匹配）
+- 组合 pick-and-place 时 `action="pick_place"`
 
-按修改幅度从小到大排列。
+### 3.2 LLMPlanner 集成
 
-### 3.1 升级 Planner Prompt
+- `src/sensoragent/agent/llm_planner.py`：LLM 输出 → `AgentPlan` 校验
+- `src/sensoragent/integrations/llm.py`：`OpenAICompatibleClient` 走 DeepSeek
+- `bootstrap.py:LLMPlanner(..., allowed_targets=tuple(actionlists.keys()))` 白名单已就位
+- 环境变量：`SENSORAGENT_LLM_API_KEY` / `SENSORAGENT_LLM_BASE_URL` / `SENSORAGENT_LLM_MODEL`
 
-**文件**：`src/sensoragent/agent/prompts/intent_to_workflow.md`（替换）
+### 3.3 Vision 层：`vision.config_detect`
 
-```markdown
-# Intent to Workflow Planner Prompt
+`src/sensoragent/tools/vision/config_detect.py`。替代 `vision.mock_detect`，从
+`configs/robot_sim.yaml` 的 `scene.objects` 段读取物体表，支持：
+- 中英文物体名（`roller`, `silver_roller`, `滚柱` 都指向同一 pose）
+- 大小写 / 子串匹配
 
-You are the SensorAgent planner for an industrial pick-and-place cell.
+Contract：`contracts/tools/vision.config_detect.schema.json`。
 
-Input JSON:
-- user_input: raw operator utterance (Chinese or English)
-- initial_input: {} or task-scope defaults
-- allowed_targets: whitelist of workflow ids you may return
+### 3.4 Scene 配置层
 
-Task:
-1. Parse the utterance into an intent:
-   { "object": "<object phrase, keep operator wording>",
-     "action": "pick" | "place" | "pick_place",
-     "target": "<bin/location id or empty string>" }
-2. Choose one target from allowed_targets that fulfills the intent.
-3. Fill the workflow input contract for that target.
+新增 `SensorAgentConfig.scene: SceneConfig(objects, place_targets)`：
 
-Return ONLY this JSON:
+- `src/sensoragent/config/schema.py`：`SceneConfig` dataclass
+- `src/sensoragent/config/loader.py`：YAML 加载
+- `bootstrap.py:_build_scene_tool`：把 scene 数据注入到 `vision.config_detect` /
+  `robot.resolve_place_target`
 
-{
-  "target_kind": "actionlist",
-  "target": "<one of allowed_targets>",
-  "input": {
-    "object_query": "<intent.object>",
-    "target": "<intent.target>"
-  },
-  "reason": "intent=<compact JSON of the parsed intent>; <one short sentence>"
-}
+`configs/robot_sim.yaml` 的 `scene:` 段已配好 5 种 industrial world 物件 + 7 个 place target。
 
-Rules:
-- Never invent a target outside allowed_targets.
-- For combined pick-and-place utterances, always set action="pick_place".
-- Preserve the operator's language in object_query; vision handles matching.
-- If the destination is missing but the target workflow requires one, leave input.target="" and let downstream validation surface it.
+### 3.5 Place target 寄存器：`robot.resolve_place_target`
+
+`src/sensoragent/tools/robot/place_targets.py`。把 `bin_cell_3` 字符串解析成
+具体的 `RobotPose`。默认注册表在代码里；yaml `scene.place_targets` 会覆盖默认。
+
+Contract：`contracts/tools/robot.resolve_place_target.schema.json`。
+
+### 3.6 Industrial ActionList（11 步）
+
+`src/sensoragent/workflows/actionlists/industrial.py`。关键设计决策：
+
+- **place 阶段展开在 ActionList 内**（不用 `robot.place` skill），为了灵活控制每步失败策略。
+- **`place_pre_approach_joints`**：关节空间中转位 `[-0.17, -0.57, -0.61, 0, -1.96, 0]`，
+  把 arm 摆到 bin 上方 gripper-down 姿态。避开 pick lift → bin approach 的 OMPL 大幅重定向。
+- **`place_move_place`**：`robot.move_pose` OMPL 到 bin_cell 上方（不用 Cartesian，避免起点漂移导致的 IK 中断）。
+- **`place_open_gripper`**：`stop_on_failure=False`，允许 Robotiq bridge 报 stall 但物件已释放。
+- **`place_retreat`**：`robot.move_joints` 回到 staging，不用 Cartesian/OMPL（避免物件释放后 planning scene 变化引起的失败）。
+
+### 3.7 Verify 层
+
+- `robot.verify_grasp`：`gripper.get_state.state.opening` ∈ `[0.002, 0.08]` → 判定夹住
+- `robot.verify_place`：`opening ≥ 0.05` → 判定释放
+
+`src/sensoragent/skills/robot/verify.py`。判据可通过 ActionList step 输入覆盖。
+
+### 3.8 ActionListRuntime 语义
+
+`src/sensoragent/workflows/actionlists/runtime.py`。修正：`success` 只由 `stop_on_failure=True`
+的 step 决定；best-effort step 失败不拉低整体 success。让 `place_open_gripper` 报 stall 但
+verify_place 通过的场景返回 `success=True`。
+
+### 3.9 Sim runner 脚本
+
+`scripts/linux/run_industrial_actionlist_sim.py`：
+- `--planner static|llm`
+- `--execute` / `--json-out`
+- `--reset-home`（默认 True）：跑前先把 arm 移回 all-zeros，避免上次遗留状态干扰 IK
+
+## 4. 关键 sim 参数（`robot_sim.yaml` scene）
+
+### 4.1 Objects catalog（world 坐标 → base_link，减去 mount_z=0.18）
+
+| 名称 | pose_3d（base_link） | 说明 |
+|------|---------------------|------|
+| roller / silver_roller / 滚柱 | `[0.24, 0.23, 0.142]` | baseline，可达 |
+| stepped_shaft / 阶梯轴 | `[0.38, 0.23, 0.146]` | 未测 |
+| flange / 法兰 | `[0.51, 0.22, 0.137]` | 未测 |
+| short_bolt / 螺栓 | `[0.28, 0.08, 0.147]` | 可 pick，place 需要可达 bin |
+| gear / 齿轮 | `[0.43, 0.08, 0.130]` | pick 边缘 workspace，Cartesian descent 挂 |
+
+### 4.2 Place targets（TCP 释放位姿）
+
+- z=0.30（base_link）：bin 壁顶 0.20 上方 0.10m，避免 MoveIt 判 finger-wall 碰撞
+- orientation `(0.9962, -0.0872, 0, 0)`：匹配 staging pose 到达时的实际姿态，避开 IK 奇异
+
+| 名称 | position | 可达性 |
+|------|----------|--------|
+| bin_cell_2 | `[0.36, -0.18, 0.30]` | ✓（已验证从 staging OMPL 通） |
+| bin_cell_3 | `[0.36, -0.06, 0.30]` | ✓（baseline） |
+| bin_cell_1 | `[0.36, -0.30, 0.30]` | ✗（Y=-0.30 超出 RM65 top-down 可达域） |
+| bin_cell_4/5/6 | X=0.50（中排） | 未测 |
+| near_pick | `[0.34, 0.11, 0.30]` | ✓（fallback） |
+
+## 5. Sim 实测结果
+
+### 5.1 Baseline
+
+`Round 1: roller → bin_cell_3`：**success**。
+- pick 6 步 ✓，`verify_grasp opening=0.0397, held=True`
+- place 5 步 ✓，`verify_place opening=0.0847, released=True`
+- arm 返回 staging，gripper 全开
+
+### 5.2 边界发现
+
+- `Round 2: gear → bin_cell_2`：pick.move_pregrasp Cartesian fraction 0.000 —
+  gear 在 workspace 边缘，approach 找得到 IK 但 descent 一步都走不了。
+- `Round 3: short_bolt → bin_cell_1`：pick 成功；place 因 bin_cell_1 Y=-0.30
+  超出 top-down 可达域，OMPL 直接 abort。
+
+**结论**：管道机制没问题；失败纯是 RM65 + top-down gripper-down 姿态的物理可达域限制。
+
+## 6. 已知限制与短期对策
+
+| 问题 | 现象 | 短期对策 |
+|------|------|----------|
+| IK 奇异 `(0, 1, 0, 0)` | OMPL 找不到解 | 用 5° tilt / 微扰动 quaternion |
+| Cartesian planner 严格阈值 0.98 | 偶发失败 | Place 阶段改用 OMPL 而非 Cartesian |
+| 抓物件时 OMPL 拒绝规划 | 起点判 in-collision | 用 move_joints 中转关节位、Cartesian 到近 target |
+| 单 staging pose 覆盖有限 | bin_cell_1 够不到 | 只用 bin_cell_2/3 作为主要目的地 |
+| gear 位置抓不了 | workspace 边缘 | 后续换 oriented pick 或调 pick offset |
+| Sim world 物件不自动 reset | 跑一次后 roller 在 bin 里 | 每轮之间重启 sim |
+
+## 7. 使用方式
+
+### 7.1 环境准备
+
+`.env`（`.env.example` 复制）：
+
+```
+SENSORAGENT_LLM_API_KEY=<your DeepSeek key>
+SENSORAGENT_LLM_BASE_URL=https://api.deepseek.com
+SENSORAGENT_LLM_MODEL=deepseek-chat
 ```
 
-### 3.2 显式声明 `allowed_targets`
+依赖：`.venv/bin/pip install -r requirements.txt` + 补装 `numpy`（planning.py 依赖，建议加进 requirements）。
 
-**文件**：`src/sensoragent/agent/bootstrap.py:257`
+### 7.2 启 Gazebo sim
 
-```python
-if planner_mode == "llm":
-  planner = LLMPlanner(
-    OpenAICompatibleClient(load_llm_config_from_env()),
-    allowed_targets=(
-      "industrial.pick_place_actionlist",
-      "mock.pick_place_actionlist",
-    ),
-  )
+```bash
+# 一次性
+bash scripts/linux/prepare_rm65_b_sim.sh
+# 每次跑之前
+bash scripts/linux/run_rm65_b_sim.sh
 ```
 
-`LLMPlanner.__init__` 早已支持该参数（`llm_planner.py:26`），只是当前 bootstrap 没传，因此 DeepSeek 只会走
-`mock.pick_place_actionlist`。
+`curl http://127.0.0.1:8765/ready` 确认四个 interface 都 true。
 
-### 3.3 新增两个 verify skill
+### 7.3 跑 baseline（static planner）
 
-复用现有 `gripper.get_state`，避免引入新的 contract。真机迁移时把判据换成力矩/视觉即可。
-
-**新文件**：`src/sensoragent/skills/robot/verify.py`
-
-```python
-"""Grasp and place verification skills."""
-
-from __future__ import annotations
-
-from sensoragent.schemas import SkillCall, SkillResult, SkillSpec
-from sensoragent.skills.base import SkillContext
-
-
-class RobotVerifyGraspSkill:
-  spec = SkillSpec(
-    name="robot.verify_grasp",
-    description="Confirm an object is held by reading gripper state.",
-    tags=("robot", "verify"),
-  )
-
-  def run(self, call: SkillCall, context: SkillContext) -> SkillResult:
-    min_opening = float(call.input.get("min_opening", 0.002))
-    max_opening = float(call.input.get("max_opening", 0.08))
-    state = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
-    if not state.success:
-      return SkillResult(skill=self.spec.name, success=False, error=state.error)
-    opening = float(state.output.get("state", {}).get("opening", 0.0))
-    held = min_opening <= opening <= max_opening
-    return SkillResult(
-      skill=self.spec.name,
-      success=held,
-      output={"held": held, "opening": opening},
-      error=None if held else f"grasp not detected (opening={opening:.4f})",
-    )
-
-
-class RobotVerifyPlaceSkill:
-  spec = SkillSpec(
-    name="robot.verify_place",
-    description="Confirm the object was released by reading gripper state.",
-    tags=("robot", "verify"),
-  )
-
-  def run(self, call: SkillCall, context: SkillContext) -> SkillResult:
-    open_threshold = float(call.input.get("open_threshold", 0.05))
-    state = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
-    if not state.success:
-      return SkillResult(skill=self.spec.name, success=False, error=state.error)
-    opening = float(state.output.get("state", {}).get("opening", 0.0))
-    released = opening >= open_threshold
-    return SkillResult(
-      skill=self.spec.name,
-      success=released,
-      output={"released": released, "opening": opening},
-      error=None if released else f"place not confirmed (opening={opening:.4f})",
-    )
+```bash
+PYTHONPATH=src .venv/bin/python scripts/linux/run_industrial_actionlist_sim.py \
+  --planner static --object-query roller --target bin_cell_3 --execute \
+  --json-out logs/tasks/baseline.json
 ```
 
-**导出**：`src/sensoragent/skills/robot/__init__.py` 加：
+### 7.4 跑 LLM planner（尚未实测）
 
-```python
-from sensoragent.skills.robot.verify import RobotVerifyGraspSkill, RobotVerifyPlaceSkill
+```bash
+PYTHONPATH=src .venv/bin/python scripts/linux/run_industrial_actionlist_sim.py \
+  --planner llm --utterance "把滚柱放到 bin_cell_3" --execute \
+  --json-out logs/tasks/llm_run.json
 ```
 
-**注册**：`src/sensoragent/agent/bootstrap.py:75` 的 `AVAILABLE_SKILLS` 增加：
+### 7.5 离线 prompt 校验（不用 sim）
 
-```python
-"robot.verify_grasp": RobotVerifyGraspSkill,
-"robot.verify_place": RobotVerifyPlaceSkill,
+```bash
+PYTHONPATH=src .venv/bin/python scripts/linux/check_llm_planner_prompt.py
 ```
 
-### 3.4 新增工业 ActionList
+## 8. 后续可选项
 
-**新文件**：`src/sensoragent/workflows/actionlists/industrial.py`
+优先级从高到低：
 
-```python
-"""Industrial pick-and-place ActionList."""
-
-from sensoragent.schemas import ActionList, ActionStep, ActionStepKind
-
-
-def build_industrial_pick_place_actionlist() -> ActionList:
-  return ActionList(
-    name="industrial.pick_place_actionlist",
-    description="Industrial pick → verify_grasp → place → verify_place.",
-    inputs={"object_query": "string", "target": "string"},
-    tags=("industrial", "pick-place"),
-    steps=[
-      ActionStep(
-        name="detect_object",
-        kind=ActionStepKind.TOOL,
-        target="vision.mock_detect",
-        input={"query": "{{ object_query }}"},
-        save_as="object",
-      ),
-      ActionStep(
-        name="plan_pick",
-        kind=ActionStepKind.TOOL,
-        target="robot.plan_top_down_pick",
-        input={"grasp": "{{ object.pose_3d }}"},
-        save_as="pick_plan",
-      ),
-      ActionStep(
-        name="pick",
-        kind=ActionStepKind.SKILL,
-        target="robot.pick",
-        input={
-          "plan": "{{ pick_plan.plan }}",
-          "object_id": "{{ object.object_id }}",
-        },
-        save_as="pick_result",
-      ),
-      ActionStep(
-        name="verify_grasp",
-        kind=ActionStepKind.SKILL,
-        target="robot.verify_grasp",
-        input={},
-        save_as="grasp_check",
-      ),
-      ActionStep(
-        name="plan_place",
-        kind=ActionStepKind.TOOL,
-        target="robot.plan_place",
-        input={"target": "{{ target }}"},
-        save_as="place_plan",
-      ),
-      ActionStep(
-        name="place",
-        kind=ActionStepKind.SKILL,
-        target="robot.place",
-        input={
-          "plan": "{{ place_plan.plan }}",
-          "object_id": "{{ object.object_id }}",
-          "target": "{{ target }}",
-        },
-        save_as="place_result",
-      ),
-      ActionStep(
-        name="verify_place",
-        kind=ActionStepKind.SKILL,
-        target="robot.verify_place",
-        input={},
-        save_as="place_check",
-      ),
-    ],
-  )
-```
-
-> ActionList 模板只支持 `{{ path.to.field }}` 单值替换（见 `runtime.py:22`），
-> 所以 `plan_top_down_pick` / `plan_place` 若返回 `{"plan": {...}}` 结构，用 `{{ pick_plan.plan }}` 取值；
-> 如果它们直接返回 pose，请落地时按 contract 校准字段名。
-
-**导出**：
-- `src/sensoragent/workflows/actionlists/__init__.py`：`from .industrial import build_industrial_pick_place_actionlist`
-- `src/sensoragent/workflows/__init__.py` 的 `__all__` 追加同名符号
-
-**注册**：`src/sensoragent/agent/bootstrap.py:243`
-
-```python
-actionlists = {
-  "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
-  "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
-  "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(),
-}
-```
-
----
-
-## 4. 端到端示例
-
-```python
-from sensoragent.agent import build_agent_from_env
-
-bundle = build_agent_from_env("configs/robot_sim.yaml", planner_mode="llm")
-task = bundle.agent.run_task("把滚柱放到 bin_cell_3")
-
-print(task.plan.to_dict())
-# {
-#   "target_kind": "actionlist",
-#   "target": "industrial.pick_place_actionlist",
-#   "input": {"object_query": "滚柱", "target": "bin_cell_3"},
-#   "reason": "intent={\"object\":\"滚柱\",\"action\":\"pick_place\",\"target\":\"bin_cell_3\"}; ..."
-# }
-
-for step in task.result.get("place_check", {}), task.result.get("grasp_check", {}):
-  print(step)
-```
-
-DeepSeek 实际收到的 user_prompt：
-
-```json
-{
-  "user_input": "把滚柱放到 bin_cell_3",
-  "initial_input": {},
-  "allowed_targets": ["industrial.pick_place_actionlist", "mock.pick_place_actionlist"]
-}
-```
-
-事件流会依次出现 `task_created` → `task_started` → `task_planned` →
-`actionlist_started` → 每个 `action_step_started/finished` → `actionlist_finished` →
-`task_succeeded|task_failed`。intent 字符串在 `task_planned` 的 `plan.reason` 里可查。
-
----
-
-## 5. 失败处理约定
-
-- `stop_on_failure=True`（`ActionStep` 默认）：任意 step 失败立刻返回 `ActionListResult.success=False`，
-  `error` 是失败 step 的 `error`。
-- `verify_grasp` 失败 → 直接终止，`error="grasp not detected (opening=...)"`；
-  上层业务可以据此触发人工干预或后续重试。
-- `verify_place` 失败 → 通常意味着夹爪没打开或物件被卡住，同样立刻返回。
-- **自动重试不在一期范围**。已有 `DecisionTreeRuntime` + `build_mock_retry_pick_tree`
-  （`workflows/decision_trees/mock.py:12`）可作模板，等主链路稳定再挂
-  `industrial.retry_pick_place_tree`。
-
----
-
-## 6. 测试计划
-
-`tests/unit/`：
-
-1. `test_llm_planner_industrial.py`
-   - 用 stub `JsonPlanningClient` 返回工业目标 JSON，断言 `AgentPlan.target == "industrial.pick_place_actionlist"`。
-   - LLM 返回不在 `allowed_targets` 的目标 → `ValueError`。
-2. `test_verify_skills.py`
-   - Stub `ToolRuntime`，`gripper.get_state` 返回不同 `opening`，覆盖成功/失败两支。
-3. `test_industrial_actionlist.py`
-   - 构造 `ActionListRuntime` + 打桩的 tool/skill runtime，跑一遍完整 7 步。
-   - `verify_grasp` 打桩失败 → ActionList 在第 4 步短路，后续 step 不进入。
-
-`tests/e2e/`：
-
-4. `test_industrial_pipeline_llm.py`（可选）
-   - `planner_mode="llm"`，使用真实 DeepSeek key（放到 `pytest.mark.integration` 里，CI 默认跳过）。
-   - 断言 `task.plan.target == "industrial.pick_place_actionlist"`。
-
----
-
-## 7. 后续可选
-
-- 把 intent 提升为 `AgentPlan` 的一等字段（`intent: dict | None`），代价是改 schema + 序列化。
-- `verify_grasp` 判据插件化：`RobotVerifyGraspSkill(__init__(self, verifier: Verifier))`，
-  背后支持 `gripper_opening` / `force_torque` / `vision_recheck` 多种实现。
-- 新增 `industrial.retry_pick_place_tree`：`verify_grasp.failure → retry_pick (max_retries=1)`，
-  `verify_place.failure → recover`。
-
----
-
-## 8. 需要确认的两点
-
-1. **verify 判据**：一期先用 `gripper.opening` 阈值。真机是否已有力矩/接近觉数据可以复核？
-2. **`plan_top_down_pick` / `plan_place` 的返回结构**：文档里用 `{{ pick_plan.plan }}` 假设它们
-   返回 `{"plan": {...}}`。落地前请对齐 `contracts/tools/robot.plan_*.schema.json`。
-
-
-## 9. 总结
-
-这是一份工程落地方案文档，描述了如何把自然语言指令（「把滚柱放到 bin_cell_3」）接通到工业机器人的完整执行链路。
-
-  ---
-  文档做了什么
-
-  背景：SensorAgent 已有 LLM Planner、LLM 接入（DeepSeek）、ActionList Runtime 等基础组件，但它们还没有串成一条完整的工业场景流水线。
-
-  ---
-  一共做了 4 件具体的事：
-
-  1. 升级 Planner Prompt（src/sensoragent/agent/prompts/intent_to_workflow.md）
-  - 改写 system prompt，让 DeepSeek 把中文/英文自然语言解析成结构化 intent（object + action + target），再映射到对应 workflow，最终返回
-  AgentPlan JSON。
-
-  2. 在 bootstrap 里显式传 allowed_targets（bootstrap.py:257）
-  - 把 industrial.pick_place_actionlist 和 mock.pick_place_actionlist 加入白名单，防止 LLM 乱选目标；当前缺失这一传参导致只能走 mock。
-
-  3. 新增两个验证 skill（src/sensoragent/skills/robot/verify.py）
-  - robot.verify_grasp：抓取后读夹爪开口判断是否夹住物体
-  - robot.verify_place：放置后读夹爪开口判断是否已释放
-  - 两者都复用现有 gripper.get_state tool，不引入新依赖
-
-  4. 新增工业 ActionList（src/sensoragent/workflows/actionlists/industrial.py）
-  - industrial.pick_place_actionlist，完整 7 步流程：detect_object → plan_pick → pick → verify_grasp → plan_place → place → verify_place
-  - 任意步失败立刻短路（stop_on_failure=True），上下文通过 {{ path.field }} 模板传递
-
-  ---
-  配套内容：
-  - 第 5 节定义了失败处理约定（短路策略，一期不做自动重试）
-  - 第 6 节给出了 3 个单测 + 1 个可选 e2e 测试的计划
-  - 第 7、8 节列出了后续扩展点和两个待确认问题（verify 判据、plan 返回结构）
-
-
-
-## 10.logs
-
-2026/7/22 George-Lin-encx做了以下调整：
-  、 Let me plan out the changes:
-
-  1. src/sensoragent/agent/prompts/intent_to_workflow.md - replace with new prompt
-  2. src/sensoragent/skills/robot/verify.py - new file with verify_grasp, verify_place skills
-  3. src/sensoragent/skills/robot/__init__.py - export new skills
-  4. src/sensoragent/tools/robot/place_targets.py - new file with resolve_place_target tool
-  5. src/sensoragent/tools/robot/__init__.py - export new tool
-  6. contracts/tools/robot.resolve_place_target.schema.json - contract
-  7. src/sensoragent/workflows/actionlists/industrial.py - new file
-  8. src/sensoragent/workflows/actionlists/__init__.py - export
-  9. src/sensoragent/workflows/__init__.py - export
-  10. src/sensoragent/agent/bootstrap.py - register new tool, skill, actionlist, and pass allowed_targets
-
-  Let me also check what tools init looks like.
-
-  Read 2 files (ctrl+o to expand)
-
-● Now I have a complete picture. Key issue I need to address: robot.plan_place expects a place_pose (RobotPose dict), not a target string. I
-  need to add a robot.resolve_place_target tool that resolves a target string (like bin_cell_3) to a place_pose.
-
-  Let me start implementing. Plan of attack:
-
-  1. Update prompt file
-  2. Create verify.py skill file with two skills
-  3. Update skills/robot/init.py to export
-  4. Create resolve_place_target.py tool with a static registry
-  5. Update tools/robot/init.py to export
-  6. Create contract for the new tool
-  7. Create industrial.py actionlist
-  8. Update actionlists/init.py
-  9. Update workflows/init.py
-  10. Update bootstrap.py: register tool, register skill, register actionlist, pass allowed_targets to LLMPlanner
+1. **跑一次 LLM planner sim 实测**（sim + `--planner llm`），验 DeepSeek 中英文解析行为
+2. **验 prompt 中英文一致性**（离线，`check_llm_planner_prompt.py` 已就绪）
+3. 把 `numpy` 加进 `requirements.txt`
+4. `AgentPlan` 加 `intent: dict | None` 一等字段（目前塞在 `reason` 里）
+5. `industrial.pick_only_actionlist` / `industrial.place_only_actionlist`
+6. `industrial.retry_pick_place_tree`（DecisionTree），失败重试
+7. Vision 层升级到 A 方案：从 Gazebo `/gazebo/get_entity_state` 读实体位姿

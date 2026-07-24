@@ -67,3 +67,134 @@ Pipeline 的机制没问题（Round 1 完全 clean）。这两个 round 暴露�
 
 - 不是所有物件位置都是 RM65 top-down 抓取的可达域
 - Staging joints 只能对一小片 bin 区域友好
+
+---
+
+# 已完成 vs 待完成盘点
+
+## 一、已完成（这几轮实测过或至少测试通过）
+
+### 1. 指令解析层（Prompt + LLMPlanner）
+
+- `src/sensoragent/agent/prompts/intent_to_workflow.md` 已升级为工业 intent 解析版
+- `LLMPlanner.allowed_targets` 已从 `bootstrap.py` 传入 `tuple(actionlists.keys())`
+- DeepSeek 集成走 `OpenAICompatibleClient`
+- 单测通过（未在 sim 中实测 LLM 路径）
+
+### 2. Vision 层（P0-B）
+
+- 新增 `vision.config_detect` 工具，从 yaml `scene.objects` 读物体表
+- 支持大小写 / 子串匹配、中英文物体名
+- Contract 落地
+- Sim 中已用（Round 1 detect_object 步骤过）
+
+### 3. Scene 配置层
+
+- `SensorAgentConfig` 加了 `scene: SceneConfig(objects, place_targets)`
+- `bootstrap._build_scene_tool` 注入 scene 数据到 `vision.config_detect` / `robot.resolve_place_target`
+- `configs/robot_sim.yaml` 已把 5 种 industrial world 物件 + 7 个 place target 全部配好
+
+### 4. Place target 寄存器
+
+- `robot.resolve_place_target` 工具 + contract
+- 默认注册表 + yaml 覆盖两条路都通
+
+### 5. Industrial ActionList（11 步）
+
+- `industrial.pick_place_actionlist` 已定型：
+
+```
+detect → plan_pick → pick(6 sub) → verify_grasp
+→ resolve_place_target → plan_place
+→ place_pre_approach_joints (joints) → place_move_place (OMPL)
+→ place_open_gripper (best-effort) → place_retreat (joints) → verify_place
+```
+
+- 参数与队友 sim 默认对齐
+
+### 6. Verify 层
+
+- `robot.verify_grasp` / `robot.verify_place` skill
+- 判据：gripper opening 阈值
+- Sim 中 `verify_grasp opening=0.0397 held=True`、`verify_place opening=0.0847 released=True` 都正确
+
+### 7. Runtime 语义
+
+- `ActionListRuntime.success` 修好：`stop_on_failure=False` 的 step 失败不再拉低整体
+- 允许 `gripper.open` 报 stall 但物理上完成
+
+### 8. Sim runner 脚本
+
+- `scripts/linux/run_industrial_actionlist_sim.py`
+- 支持 `--planner static|llm`、`--execute`、`--reset-home`（自动 reset）、`--json-out`
+- 用队友已有的 bridge 探活辅助函数
+
+### 9. Sim 实测 baseline
+
+- **Round 1: roller → bin_cell_3 全绿通** ← 端到端唯一被证实的完整链路
+- 11 个 step 全部成功
+- roller 从工作台被抓起、放进 bin_cell_3、arm 返回 staging pose
+
+### 10. 单测
+
+- 17 个测试全绿（含 industrial actionlist 11 步顺序断言、runtime 语义、planner 白名单等）
+
+### 11. Merge
+
+- rebase 到 `origin/main` 上（含队友 `4977b16` pre_approach_joints 改进），已 force-push 到 `george-sim-test`
+
+---
+
+## 二、推进 LLM planner 前还没做的事
+
+按重要性排序：
+
+### A. 用 LLM planner 至少在 sim 里跑通一次（核心遗留）
+
+- 目前所有 sim 验证都用 `--planner static`
+- 需要用 `--planner llm --utterance "把滚柱放到 bin_cell_3"` 跑一次 `--execute`，看 DeepSeek 输出的 intent 是不是能被 LLMPlanner 落成 `AgentPlan(target=industrial.pick_place_actionlist, input={"object_query":"滚柱","target":"bin_cell_3"})`，然后端到端跑完 sim
+- 你 `.env` 里需要有 `SENSORAGENT_LLM_API_KEY`
+- 这是"LLM planner 已推进"的最小验证
+
+### B. Prompt 层的 sanity check
+
+- Prompt 里说 preserve operator's language in `object_query`，但 yaml 里 catalog 是 `滚柱: ...`, `silver_roller: ...`, `roller: ...` — 三个 key 指向同一个 pose
+- LLM 会输出 `"object_query": "滚柱"` 还是 `"roller"`？如果 LLM 判断规范化成英文，那我的中文 key 用不上；如果保留中文，那英文 key 用不上
+- 需要跑一次实测确认，必要时改 prompt
+
+### C. Sim runner 的 LLM 分支代码路径没实测
+
+- `_dispatch_via_planner` 走 `bundle.agent.run_task(user_input, input_data)`，这条 path 我从来没在 sim 里跑过
+- 里面有个 `if task.plan.target != ACTIONLIST_NAME: raise` 硬约束，如果 LLM 返回别的 workflow name 会直接崩
+
+### D. .env / API key 就绪状态未确认
+
+- 你有没有 DeepSeek API key 已配置？我这边没法验证 `SENSORAGENT_LLM_API_KEY` 环境变量
+- 需要你手动确认 `.env` 有内容，或者你想切别的 provider（`SENSORAGENT_LLM_PROVIDER`）
+
+---
+
+## 三、已知但不阻塞 LLM 推进的问题（可留后续）
+
+### E. 多物件/多 bin 组合有物理不可达
+
+- gear at (0.43, 0.08, 0.13) — top-down pick 边缘
+- bin_cell_1 (Y=-0.30) / bin_cell_4 — RM65 reach 边缘
+- 这些是硬件限制，不影响 LLM 层验证（只要 LLM 输出的组合在可达域内即可）
+
+### F. 单一 staging joints 覆盖面有限
+
+- `[-0.17, -0.57, -0.61, 0, -1.96, 0]` 对 bin_cell_2/3 好，对 bin_cell_1 挂
+- 长期解：per-bin staging 或 IK-aware 规划
+- 短期：让 LLM 只选可达 bin
+
+### G. sim 需要手动重启释放 world state
+
+- 每轮跑完 roller 不会自动回原位
+- 已有 `--reset-home` 让 arm 回家，但 world 里物件不重置
+- 影响：不能在同一 sim session 连续跑多轮
+
+### H. Cartesian planner 严格阈值（0.98）导致偶发失败
+
+- 队友设的，稳定性优先
+- 如果需要放宽，改 `ros2_ws/.../robot_bridge.yaml` 的 `cartesian_min_fraction`
