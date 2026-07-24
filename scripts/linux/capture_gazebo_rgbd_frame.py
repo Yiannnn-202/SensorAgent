@@ -15,8 +15,11 @@ from pathlib import Path
 
 import numpy as np
 import rclpy
+from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
+from tf2_ros import Buffer, TransformException, TransformListener
 
 
 class FrameCapture(Node):
@@ -25,6 +28,8 @@ class FrameCapture(Node):
     self.image: Image | None = None
     self.depth: Image | None = None
     self.camera_info: CameraInfo | None = None
+    self.tf_buffer = Buffer()
+    self.tf_listener = TransformListener(self.tf_buffer, self)
     self.create_subscription(Image, image_topic, self._on_image, 10)
     self.create_subscription(Image, depth_topic, self._on_depth, 10)
     self.create_subscription(CameraInfo, camera_info_topic, self._on_camera_info, 10)
@@ -89,6 +94,55 @@ def _camera_info_json(message: CameraInfo) -> dict:
   }
 
 
+def _quaternion_matrix(x: float, y: float, z: float, w: float) -> np.ndarray:
+  norm = x * x + y * y + z * z + w * w
+  if norm <= 0.0:
+    return np.eye(3, dtype=np.float64)
+  scale = 2.0 / norm
+  xx = x * x * scale
+  yy = y * y * scale
+  zz = z * z * scale
+  xy = x * y * scale
+  xz = x * z * scale
+  yz = y * z * scale
+  wx = w * x * scale
+  wy = w * y * scale
+  wz = w * z * scale
+  return np.array(
+    [
+      [1.0 - yy - zz, xy - wz, xz + wy],
+      [xy + wz, 1.0 - xx - zz, yz - wx],
+      [xz - wy, yz + wx, 1.0 - xx - yy],
+    ],
+    dtype=np.float64,
+  )
+
+
+def _transform_matrix(transform) -> list[list[float]]:
+  translation = transform.transform.translation
+  rotation = transform.transform.rotation
+  matrix = np.eye(4, dtype=np.float64)
+  matrix[:3, :3] = _quaternion_matrix(rotation.x, rotation.y, rotation.z, rotation.w)
+  matrix[:3, 3] = [translation.x, translation.y, translation.z]
+  return [[float(value) for value in row] for row in matrix]
+
+
+def _lookup_matrix(node: FrameCapture, target_frame: str, source_frame: str) -> list[list[float]] | None:
+  try:
+    transform = node.tf_buffer.lookup_transform(
+      target_frame,
+      source_frame,
+      Time(),
+      timeout=Duration(seconds=0.5),
+    )
+  except TransformException as exc:
+    node.get_logger().warning(
+      f"Could not lookup transform {target_frame} <- {source_frame}: {exc}"
+    )
+    return None
+  return _transform_matrix(transform)
+
+
 def _write_ppm(path: Path, image: np.ndarray) -> None:
   path.parent.mkdir(parents=True, exist_ok=True)
   with path.open("wb") as stream:
@@ -102,6 +156,8 @@ def main() -> int:
   parser.add_argument("--image-topic", default="/industrial_camera/image")
   parser.add_argument("--depth-topic", default="/industrial_camera/depth_image")
   parser.add_argument("--camera-info-topic", default="/industrial_camera/camera_info")
+  parser.add_argument("--base-frame", default="base_link")
+  parser.add_argument("--world-frame", default="world")
   parser.add_argument("--timeout", type=float, default=10.0)
   args = parser.parse_args()
 
@@ -117,6 +173,9 @@ def main() -> int:
     image = _decode_image(node.image)
     depth = _decode_depth(node.depth)
     camera_info = _camera_info_json(node.camera_info)
+    camera_frame = camera_info["frame_id"]
+    t_base_camera = _lookup_matrix(node, args.base_frame, camera_frame)
+    t_world_camera = _lookup_matrix(node, args.world_frame, camera_frame)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     np.save(args.out_dir / "rgb.npy", image)
     _write_ppm(args.out_dir / "rgb.ppm", image)
@@ -130,6 +189,11 @@ def main() -> int:
       "preview_path": str(args.out_dir / "rgb.ppm"),
       "depth_path": str(args.out_dir / "depth.npy"),
       "camera_info_path": str(args.out_dir / "camera_info.json"),
+      "camera_frame": camera_frame,
+      "base_frame": args.base_frame,
+      "world_frame": args.world_frame,
+      "T_base_camera": t_base_camera,
+      "T_world_camera": t_world_camera,
       "image_shape": list(image.shape),
       "depth_shape": list(depth.shape),
     }

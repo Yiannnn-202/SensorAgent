@@ -29,6 +29,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
       "image_path": "string",
       "depth_path": "string",
       "camera_info_path": "string",
+      "T_base_camera": "array",
     },
     tags=("industrial", "pick-place", "vision", "verify"),
     steps=[
@@ -41,6 +42,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
           "image_path": "{{ image_path }}",
           "depth_path": "{{ depth_path }}",
           "camera_info_path": "{{ camera_info_path }}",
+          "T_base_camera": "{{ T_base_camera }}",
         },
         save_as="object",
       ),
