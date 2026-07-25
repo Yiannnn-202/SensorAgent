@@ -1,7 +1,7 @@
 {
   "name": "vision.open_vocab_detect",
-  "version": "0.1.0",
-  "description": "Detect an object from a text query using an open-vocabulary vision backend.",
+  "version": "0.2.0",
+  "description": "Detect a text-query object and optionally refine its mask and estimate its RGB-D position.",
   "input_schema": {
     "type": "object",
     "required": ["query"],
@@ -18,8 +18,19 @@
           "items": {"type": "number"}
         }
       },
-      "position_base_offset": {"type": "array", "items": {"type": "number"}},
-      "depth_window": {"type": "number"}
+      "position_base_offset": {
+        "type": "array",
+        "items": {"type": "number"}
+      },
+      "depth_window": {"type": "number"},
+      "depth_scale": {"type": "number"},
+      "box_threshold": {"type": "number"},
+      "text_threshold": {"type": "number"},
+      "device": {"type": "string"},
+      "refine_masks": {"type": "boolean"},
+      "require_masks": {"type": "boolean"},
+      "camera_frame": {"type": "string"},
+      "base_frame": {"type": "string"}
     }
   },
   "output_schema": {
@@ -33,11 +44,35 @@
       "object_id": {"type": "string"},
       "bbox_2d": {"type": "array", "items": {"type": "number"}},
       "mask_path": {"type": "string"},
+      "mask_polygons": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {"type": "number"}
+          }
+        }
+      },
+      "mask_area_px": {"type": "number"},
+      "center_px": {"type": "array", "items": {"type": "number"}},
+      "depth_m": {"type": "number"},
       "position_camera": {"type": "array", "items": {"type": "number"}},
       "position_base": {"type": "array", "items": {"type": "number"}},
       "pose_3d": {"type": "array", "items": {"type": "number"}},
-      "model_path": {"type": "string"}
+      "camera_frame": {"type": "string"},
+      "base_frame": {"type": "string"},
+      "model": {"type": "string"},
+      "model_path": {"type": "string"},
+      "timing_ms": {"type": "object"},
+      "warnings": {"type": "array", "items": {"type": "string"}}
     }
   },
-  "errors": ["VISION_MODEL_NOT_READY", "OBJECT_NOT_FOUND", "INVALID_QUERY"]
+  "errors": [
+    "VISION_MODEL_NOT_READY",
+    "VISION_BACKEND_UNAVAILABLE",
+    "VISION_BACKEND_ERROR",
+    "VISION_INPUT_ERROR",
+    "OBJECT_NOT_FOUND"
+  ]
 }

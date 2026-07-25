@@ -42,6 +42,22 @@ The suite also covers fake VAD segmentation, realtime-VAD result handling,
 audio Skills, and the voice acknowledgement ActionList. Tests that instantiate
 the actual Silero ONNX recorder skip when `onnxruntime` is unavailable.
 
+## Open-vocabulary vision tests
+
+The focused vision suite uses injected detector and mask-refiner fakes. It
+checks the stable Tool contract, SAM 2 box fallback, mask centroid and depth
+sampling, camera projection, and base-frame transformation without downloading
+weights:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+pytest -q tests\unit\test_vision_open_vocab.py
+```
+
+Real Grounding DINO and SAM 2 inference is a separate environment acceptance
+step. Follow `docs/guides/vision_open_vocab_cn.md`; do not treat the mock unit
+tests as evidence of model accuracy or robot-coordinate correctness.
+
 ## Local audio acceptance
 
 Local microphone, model, and sound-device behavior is environment-specific:
