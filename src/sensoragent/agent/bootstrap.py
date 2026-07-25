@@ -101,11 +101,23 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
     return VisionOpenVocabularyDetectTool(
       model_path=str(vision_config.get("model_path", "models/vision/yoloe.pt")),
       backend=str(vision_config.get("backend", "yoloe")),
+      grounding_dino_model=vision_config.get("grounding_dino_model"),
+      sam2_model_path=vision_config.get("sam2_model_path"),
       camera_info_path=vision_config.get("camera_info_path"),
       camera_info=vision_config.get("camera_info"),
       t_base_camera=vision_config.get("T_base_camera"),
       position_base_offset=vision_config.get("position_base_offset"),
       depth_window=int(vision_config.get("depth_window", 7)),
+      depth_scale=float(vision_config.get("depth_scale", 1.0)),
+      box_threshold=float(vision_config.get("box_threshold", 0.35)),
+      text_threshold=float(vision_config.get("text_threshold", 0.25)),
+      device=vision_config.get("device"),
+      refine_masks=vision_config.get("refine_masks"),
+      require_masks=bool(vision_config.get("require_masks", False)),
+      camera_frame=str(
+        vision_config.get("camera_frame", "camera_color_optical_frame")
+      ),
+      base_frame=str(vision_config.get("base_frame", "base_link")),
     )
   if tool_name == "robot.resolve_place_target":
     targets = config.scene.place_targets or default_place_target_registry()
