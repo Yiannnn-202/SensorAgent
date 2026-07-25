@@ -239,11 +239,11 @@ Goal: implement competition-specific task logic after the generic framework is s
   confidence, 3D pose, bin cells, robot state, gripper state, and task state.
 - [ ] Add the L1 fixed industrial pick-and-place ActionList workflow as the
   deterministic baseline.
-- [ ] Add the L2 industrial DecisionTree workflow with detect, plan-pick, pick,
+- [x] Add the L2 industrial DecisionTree workflow with detect, plan-pick, pick,
   verify-grasp, plan-place, place, verify-place, success, and failure nodes.
-- [ ] Add visual verification workflow branches for grasp verification and target
+- [x] Add visual verification workflow branches for grasp verification and target
   bin-cell placement verification.
-- [ ] Add classified recovery branches for object-not-found, path-planning failure,
+- [x] Add classified recovery branches for object-not-found, path-planning failure,
   pick failure, dropped object, wrong-bin placement, and pose abnormality.
 - [x] Add typed failure classification and deterministic recovery-plan tools.
 - [x] Add visual postcondition verification tools for lifted-object and target-bin checks.

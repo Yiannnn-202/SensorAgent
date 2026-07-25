@@ -64,7 +64,9 @@ failures can be normalized into `FailureEvidence`, classified by
 `recovery.classify_failure`, and converted into deterministic local replanning
 instructions by `recovery.plan`. DecisionTree execution writes a `last_failure`
 context object after any failed node so failure branches can classify and plan
-without parsing logs.
+without parsing logs. `industrial.recovery_pick_place_tree` wires these pieces
+into the industrial pick/place flow and rejoins after bounded local recovery
+branches.
 
 Registered durable ActionLists currently include:
 
@@ -76,6 +78,12 @@ Registered durable ActionLists currently include:
 | `industrial.pick_only_actionlist` | Config-detected object pick with grasp verification |
 | `industrial.place_only_actionlist` | Place a held object into a named target |
 | `industrial.vision_pick_place_actionlist` | RGB-D open-vocabulary detection followed by industrial pick/place |
+
+Registered durable DecisionTrees currently include:
+
+| DecisionTree | Purpose |
+| --- | --- |
+| `industrial.recovery_pick_place_tree` | Industrial pick/place with classified recovery for perception, pick, place, release, wrong-bin, and bridge failures |
 
 The initial robot control surface is backend-neutral:
 

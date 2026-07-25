@@ -11,6 +11,8 @@ tools:
     - robot.plan_top_down_pick
     - robot.plan_oriented_pick
     - robot.plan_place
+    - robot.resolve_place_target
+    - vision.config_detect
     - vision.verify_object_lifted
     - vision.verify_object_in_bin
     - recovery.classify_failure
@@ -32,6 +34,17 @@ integrations:
     backend: fake
     dof: 6
     maximum_opening: 0.0848
+
+scene:
+  objects:
+    roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
+    silver_roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
+    滚柱: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
+  place_targets:
+    bin_cell_3:
+      position: [0.36, -0.06, 0.30]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
 
 logging:
   level: info

@@ -61,6 +61,7 @@ from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyOb
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
+  build_industrial_recovery_pick_place_tree,
   build_industrial_pick_only_actionlist,
   build_industrial_pick_place_actionlist,
   build_industrial_place_only_actionlist,
@@ -321,7 +322,9 @@ def build_agent(
     actionlists,
     logger,
   )
-  decision_trees: dict[str, object] = {}
+  decision_trees: dict[str, object] = {
+    "industrial.recovery_pick_place_tree": build_industrial_recovery_pick_place_tree(),
+  }
   task_store = InMemoryTaskStore()
   event_stream = InMemoryEventStream()
   planner = None
@@ -331,7 +334,9 @@ def build_agent(
     )
     planner = LLMPlanner(
       OpenAICompatibleClient(load_llm_config_from_env()),
-      allowed_targets=tuple(actionlists.keys()),
+      # DecisionTree targets are dispatched separately by target_kind but share
+      # the same LLM whitelist to prevent arbitrary workflow selection.
+      allowed_targets=tuple(actionlists.keys()) + tuple(decision_trees.keys()),
       allowed_place_targets=place_targets,
     )
   elif planner_mode != "static":

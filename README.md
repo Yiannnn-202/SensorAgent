@@ -52,7 +52,7 @@ SensorAgent is not responsible for:
 | SensorAgent-to-Gazebo/MoveIt HTTP bridge | Implemented and used by Gazebo test scripts; automated ROS acceptance is not in the default suite |
 | Industrial config-detect pick/place ActionLists | Implemented for the current tabletop world |
 | Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
-| Failure classification and recovery planning | Implemented as reusable tools; full recovery tree pending |
+| Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow; Gazebo acceptance pending |
 | Physical robot connection | Not connected |
 | Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
 | Gymnasium RL environment | Not implemented |
@@ -62,8 +62,9 @@ linear motion, stop, gripper control, deterministic pick/place planning, named
 place-target resolution, and `robot.pick` / `robot.place` / verification Skills.
 `configs/robot_mock.yaml` selects the deterministic fake backend, while
 `configs/robot_sim.yaml` selects `HttpRobotControlClient`, scene objects,
-place targets, optional open-vocabulary vision, visual verification, and recovery
-classification tools. The physical robot is not connected.
+place targets, optional open-vocabulary vision, visual verification, recovery
+classification tools, and `industrial.recovery_pick_place_tree`. The physical
+robot is not connected.
 
 ## Repository Layout
 
@@ -275,6 +276,12 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_si
   --target bin_cell_3 \
   --execute
 ```
+
+The recovery DecisionTree can be invoked from Python or Agent APIs as
+`industrial.recovery_pick_place_tree`. It runs the same pick/place path, records
+`last_failure` after failed nodes, classifies the failure, plans a local recovery,
+and rejoins the flow through bounded re-detect, re-pick, re-place, gripper-open,
+or bridge-reset branches.
 
 ## Current Development Priorities
 

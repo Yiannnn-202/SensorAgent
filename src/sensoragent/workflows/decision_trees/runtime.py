@@ -111,6 +111,7 @@ class DecisionTreeRuntime:
   def run(self, tree: DecisionTree, input_data: dict, trace: TraceContext) -> DecisionTreeResult:
     """Run a DecisionTree from its start node."""
 
+    max_nodes = int(input_data.get("max_decision_nodes", 100))
     nodes = {node.name: node for node in tree.nodes}
     if tree.start not in nodes:
       return DecisionTreeResult(
@@ -127,6 +128,20 @@ class DecisionTreeRuntime:
     self._logger.log("decision_tree_started", trace, {"decision_tree": tree.name})
 
     while current_name is not None:
+      if len(results) >= max_nodes:
+        final = DecisionTreeResult(
+          tree.name,
+          False,
+          results,
+          context,
+          f"DecisionTree exceeded max_decision_nodes={max_nodes}",
+        )
+        self._logger.log(
+          "decision_tree_finished",
+          trace,
+          {"decision_tree": tree.name, "success": False, "error": final.error},
+        )
+        return final
       node = nodes.get(current_name)
       if node is None:
         final = DecisionTreeResult(

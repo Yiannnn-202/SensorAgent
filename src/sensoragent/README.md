@@ -78,7 +78,15 @@ industrial.vision_pick_place_actionlist
 ```
 
 DecisionTree support is implemented and tested with mock retry and not-found
-flows, but no production robot DecisionTree is registered.
+flows. The production-facing registered tree is:
+
+```text
+industrial.recovery_pick_place_tree
+```
+
+It classifies failed nodes through `recovery.classify_failure`, plans bounded
+local recovery through `recovery.plan`, and branches into re-detect, re-pick,
+re-place, gripper release, or bridge reset paths.
 
 ## Audio path
 

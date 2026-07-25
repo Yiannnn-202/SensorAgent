@@ -75,6 +75,14 @@ This suite checks typed failure classification, deterministic recovery-plan
 selection, `vision.verify_object_lifted`, `vision.verify_object_in_bin`, and the
 DecisionTree `last_failure` context used by recovery branches.
 
+The full industrial recovery tree has focused tests for nominal execution,
+grasp-failure recovery, place-plan recovery, and wrong-bin recovery:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m unittest tests.unit.test_industrial_recovery_tree
+```
+
 ## Local audio acceptance
 
 Local microphone, model, and sound-device behavior is environment-specific:
