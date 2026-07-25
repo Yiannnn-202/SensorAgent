@@ -59,6 +59,13 @@ tools.
 Tool execution includes contract validation, timeout handling, retry policy, typed
 errors, and structured logging.
 
+Failure detection is centralized under `src/sensoragent/recovery/`. Workflow
+failures can be normalized into `FailureEvidence`, classified by
+`recovery.classify_failure`, and converted into deterministic local replanning
+instructions by `recovery.plan`. DecisionTree execution writes a `last_failure`
+context object after any failed node so failure branches can classify and plan
+without parsing logs.
+
 Registered durable ActionLists currently include:
 
 | ActionList | Purpose |
@@ -276,6 +283,13 @@ baseline tests. `industrial.vision_pick_place_actionlist` uses
 tool returns structured `VISION_MODEL_NOT_READY`,
 `VISION_BACKEND_UNAVAILABLE`, `VISION_INPUT_ERROR`, `VISION_DEPTH_ERROR`, or
 `OBJECT_NOT_FOUND` failures instead of pretending detection succeeded.
+
+Postcondition verification is split into robot-state and vision-state checks.
+`robot.verify_grasp` and `robot.verify_place` read gripper state; the newer
+`vision.verify_object_lifted` and `vision.verify_object_in_bin` compare observed
+object poses against expected lift and target-cell conditions. These verification
+tools produce reportable failures such as `DROPPED_OBJECT` and `WRONG_BIN`,
+which feed the recovery planner.
 
 ## Runtime compatibility boundary
 

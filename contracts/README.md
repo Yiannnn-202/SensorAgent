@@ -27,6 +27,8 @@ contracts/
     ├── gripper.close.schema.json
     ├── gripper.get_state.schema.json
     ├── gripper.open.schema.json
+    ├── recovery.classify_failure.schema.json
+    ├── recovery.plan.schema.json
     ├── robot.get_state.schema.json
     ├── robot.move_joints.schema.json
     ├── robot.move_linear.schema.json
@@ -37,7 +39,9 @@ contracts/
     ├── robot.stop.schema.json
     ├── vision.config_detect.schema.json
     ├── vision.mock_detect.schema.json
-    └── vision.open_vocab_detect.schema.json
+    ├── vision.open_vocab_detect.schema.json
+    ├── vision.verify_object_in_bin.schema.json
+    └── vision.verify_object_lifted.schema.json
 ```
 
 ## Tool contract shape

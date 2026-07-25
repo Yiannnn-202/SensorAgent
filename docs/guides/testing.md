@@ -13,7 +13,8 @@ python -m unittest discover -s tests -p 'test_*.py'
 The suite includes unit and end-to-end tests for config loading, planner
 validation, tool/skill runtimes, ActionLists, DecisionTrees, audio fakes,
 contract validation, robot planning/control adapters, and open-vocabulary vision
-error handling. It does not start ROS 2 or Gazebo.
+error handling. It also covers failure classification and recovery planning
+tools. It does not start ROS 2 or Gazebo.
 
 ## Mock task pipeline
 
@@ -62,6 +63,17 @@ pytest -q tests\unit\test_vision_open_vocab.py
 Real Grounding DINO and SAM 2 inference is a separate environment acceptance
 step. Follow `docs/guides/vision_open_vocab_cn.md`; do not treat the mock unit
 tests as evidence of model accuracy or robot-coordinate correctness.
+
+## Failure detection and recovery tests
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m unittest tests.unit.test_failure_recovery
+```
+
+This suite checks typed failure classification, deterministic recovery-plan
+selection, `vision.verify_object_lifted`, `vision.verify_object_in_bin`, and the
+DecisionTree `last_failure` context used by recovery branches.
 
 ## Local audio acceptance
 

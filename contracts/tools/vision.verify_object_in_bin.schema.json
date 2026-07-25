@@ -1,0 +1,32 @@
+{
+  "name": "vision.verify_object_in_bin",
+  "version": "0.1.0",
+  "description": "Verify that an observed object position lies inside a named place target.",
+  "input_schema": {
+    "type": "object",
+    "required": ["target"],
+    "properties": {
+      "target": {"type": "string"},
+      "pose_3d": {"type": "array", "items": {"type": "number"}},
+      "object_pose": {"type": "object"},
+      "target_pose": {"type": "object"},
+      "tolerance_xy": {"type": "number"},
+      "max_z_error": {"type": "number"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["target", "in_target", "object_position", "target_position", "distance_xy"],
+    "properties": {
+      "target": {"type": "string"},
+      "in_target": {"type": "boolean"},
+      "object_position": {"type": "array", "items": {"type": "number"}},
+      "target_position": {"type": "array", "items": {"type": "number"}},
+      "distance_xy": {"type": "number"},
+      "z_error": {"type": "number"},
+      "tolerance_xy": {"type": "number"},
+      "max_z_error": {"type": "number"}
+    }
+  },
+  "errors": ["TARGET_NOT_FOUND", "POSE_INVALID", "WRONG_BIN"]
+}

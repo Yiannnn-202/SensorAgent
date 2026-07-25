@@ -1,0 +1,35 @@
+{
+  "name": "recovery.plan",
+  "version": "0.1.0",
+  "description": "Plan a bounded local recovery strategy for a classified failure.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "classification": {
+        "type": "object",
+        "description": "Output from recovery.classify_failure."
+      },
+      "evidence": {
+        "type": "object",
+        "description": "Raw evidence to classify before planning when classification is not provided."
+      },
+      "context": {
+        "type": "object",
+        "description": "Optional runtime context such as max_recovery_attempts."
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["strategy", "failure_type", "retryable", "max_attempts", "updated_input", "notes"],
+    "properties": {
+      "strategy": {"type": "string"},
+      "failure_type": {"type": "string"},
+      "retryable": {"type": "boolean"},
+      "max_attempts": {"type": "number"},
+      "updated_input": {"type": "object"},
+      "notes": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "errors": ["INVALID_CLASSIFICATION", "INVALID_CONTEXT"]
+}

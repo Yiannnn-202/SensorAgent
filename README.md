@@ -52,6 +52,7 @@ SensorAgent is not responsible for:
 | SensorAgent-to-Gazebo/MoveIt HTTP bridge | Implemented and used by Gazebo test scripts; automated ROS acceptance is not in the default suite |
 | Industrial config-detect pick/place ActionLists | Implemented for the current tabletop world |
 | Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
+| Failure classification and recovery planning | Implemented as reusable tools; full recovery tree pending |
 | Physical robot connection | Not connected |
 | Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
 | Gymnasium RL environment | Not implemented |
@@ -61,8 +62,8 @@ linear motion, stop, gripper control, deterministic pick/place planning, named
 place-target resolution, and `robot.pick` / `robot.place` / verification Skills.
 `configs/robot_mock.yaml` selects the deterministic fake backend, while
 `configs/robot_sim.yaml` selects `HttpRobotControlClient`, scene objects,
-place targets, and optional open-vocabulary vision. The physical robot is not
-connected.
+place targets, optional open-vocabulary vision, visual verification, and recovery
+classification tools. The physical robot is not connected.
 
 ## Repository Layout
 
@@ -113,6 +114,7 @@ Key SensorAgent documents:
 - [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
 - [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
 - [Industrial intent to ActionList guide](docs/guides/intent_to_actionlist_cn.md)
+- [Failure detection and recovery guide](docs/guides/failure_recovery_cn.md)
 - [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
 - [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
 

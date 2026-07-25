@@ -18,6 +18,10 @@ tools:
     - gripper.get_state
     - vision.config_detect
     - vision.open_vocab_detect
+    - vision.verify_object_lifted
+    - vision.verify_object_in_bin
+    - recovery.classify_failure
+    - recovery.plan
 
 skills:
   enabled:

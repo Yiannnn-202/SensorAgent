@@ -43,6 +43,10 @@ robot.stop
 gripper.open
 gripper.close
 gripper.get_state
+vision.verify_object_lifted
+vision.verify_object_in_bin
+recovery.classify_failure
+recovery.plan
 audio.mock_transcribe
 audio.listen_transcribe
 audio.listen_vad_transcribe

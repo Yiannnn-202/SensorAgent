@@ -11,6 +11,10 @@ tools:
     - robot.plan_top_down_pick
     - robot.plan_oriented_pick
     - robot.plan_place
+    - vision.verify_object_lifted
+    - vision.verify_object_in_bin
+    - recovery.classify_failure
+    - recovery.plan
     - robot.stop
     - gripper.open
     - gripper.close
@@ -20,6 +24,8 @@ skills:
   enabled:
     - robot.pick
     - robot.place
+    - robot.verify_grasp
+    - robot.verify_place
 
 integrations:
   robot:

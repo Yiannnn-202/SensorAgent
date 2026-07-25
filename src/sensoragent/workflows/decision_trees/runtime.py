@@ -149,6 +149,7 @@ class DecisionTreeRuntime:
         {"decision_tree": tree.name, "node": node.name, "kind": node.kind},
       )
 
+      rendered_input = {}
       if node.kind == DecisionNodeKind.TERMINAL:
         success = bool(node.terminal_success)
         result = DecisionNodeResult(node=node.name, success=success, output=context)
@@ -175,6 +176,17 @@ class DecisionTreeRuntime:
       results.append(result)
       if node.save_as and result.success:
         context[node.save_as] = result.output
+      if not result.success:
+        context["last_failure"] = {
+          "node": node.name,
+          "failed_step": node.name,
+          "target": node.target,
+          "kind": node.kind.value,
+          "input": rendered_input if node.kind != DecisionNodeKind.CONDITION else node.input,
+          "output": result.output,
+          "error": result.error,
+          "attempts": result.attempts,
+        }
 
       self._logger.log(
         "decision_node_finished",

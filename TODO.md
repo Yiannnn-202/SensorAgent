@@ -245,6 +245,8 @@ Goal: implement competition-specific task logic after the generic framework is s
   bin-cell placement verification.
 - [ ] Add classified recovery branches for object-not-found, path-planning failure,
   pick failure, dropped object, wrong-bin placement, and pose abnormality.
+- [x] Add typed failure classification and deterministic recovery-plan tools.
+- [x] Add visual postcondition verification tools for lifted-object and target-bin checks.
 - [ ] Add a constrained planner prompt/schema that can only select approved
   workflows, skills, and failure-recovery policies.
 - [ ] Add fixture-based planner tests for standard commands, synonymous commands,
