@@ -10,6 +10,11 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
+The suite includes unit and end-to-end tests for config loading, planner
+validation, tool/skill runtimes, ActionLists, DecisionTrees, audio fakes,
+contract validation, robot planning/control adapters, and open-vocabulary vision
+error handling. It does not start ROS 2 or Gazebo.
+
 ## Mock task pipeline
 
 ```powershell
@@ -58,6 +63,20 @@ Confirm that speech starts recording, silence ends the utterance before the
 maximum duration, SenseVoice returns the expected text, and a JSONL task log is
 written.
 
+## Industrial ActionList dry run
+
+On a machine with the Agent Python environment:
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
+  --planner static \
+  --object-query roller \
+  --target bin_cell_3
+```
+
+Without `--execute`, the script swaps the robot backend to fake and validates
+the workflow wiring without moving Gazebo.
+
 ## ROS 2 simulation acceptance
 
 On Ubuntu with ROS 2 Humble:
@@ -67,8 +86,23 @@ bash scripts/linux/run_rm65_b_sim.sh
 ```
 
 Check the arm trajectory controller, effort gripper controller, gripper Action,
-MoveIt planning, and object contact manually. The repository currently has no
-automated ROS 2, Gazebo, or grasp-stability test cases.
+MoveIt planning, HTTP bridge readiness, and object contact manually:
+
+```bash
+curl http://127.0.0.1:8765/health
+curl http://127.0.0.1:8765/ready
+```
+
+Then use the targeted scripts as needed:
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/test_gazebo_pick_pipeline.py --diagnose-only
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py --planner static --object-query roller --target bin_cell_3 --execute
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py --object-query "red roller" --target bin_cell_3 --execute
+```
+
+The repository currently has no automated ROS 2, Gazebo, or grasp-stability test
+cases in the default suite.
 
 ROS 2, Gazebo, hardware, and local-model acceptance checks are manual or
 environment-specific and are not part of the default Python test suite.

@@ -26,8 +26,9 @@ Install:
 python -m pip install -r requirements.txt
 ```
 
-The local path uses `numpy`, `sounddevice`, `sherpa-onnx`, and
-`onnxruntime`. At present `onnxruntime` is used directly by the VAD code but is
+The local path uses `numpy`, `sounddevice`, `sherpa-onnx`, and `onnxruntime`.
+`requirements.txt` installs the shared runtime plus `sounddevice` and
+`sherpa-onnx`. At present `onnxruntime` is used directly by the VAD code but is
 not explicitly declared in `requirements.txt`; install it manually if it is not
 already present:
 
@@ -36,8 +37,8 @@ python -m pip install onnxruntime
 ```
 
 The package metadata in `pyproject.toml` currently lists only the core runtime
-dependencies. Installing the project package alone does not install the local
-audio stack.
+dependencies. Installing the project package alone does not install the full
+local audio stack.
 
 ## Model layout
 
@@ -143,4 +144,5 @@ does not automatically speak success or failure messages.
 
 The current SensorAgent package requires Python 3.12, whereas ROS 2 Humble on
 Ubuntu 22.04 normally uses Python 3.10. Run the local audio and ROS 2 stacks as
-separate processes until this compatibility decision is resolved.
+separate processes; robot execution crosses the HTTP bridge rather than
+importing `rclpy` into the Agent process.

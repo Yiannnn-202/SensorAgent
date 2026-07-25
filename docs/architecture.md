@@ -1,9 +1,9 @@
 # SensorAgent Architecture
 
 SensorAgent is the repository for agent-side embodied-task orchestration and its
-local development integrations. It combines a Python agent runtime, language-neutral
-tool contracts, mock and audio adapters, and a reproducible RM65-B ROS 2 simulation
-workspace.
+local development integrations. It combines a Python agent runtime,
+language-neutral tool contracts, mock/audio/vision/robot adapters, industrial
+workflow definitions, and a reproducible RM65-B ROS 2 simulation workspace.
 
 ## System role
 
@@ -32,8 +32,8 @@ flowchart LR
   AGENT --> SKILL["Skill runtime"]
   WORKFLOW --> TOOL["Tool runtime"]
   SKILL --> TOOL
-  TOOL --> LOCAL["Local or mock integration"]
-  TOOL --> EXTERNAL["HTTP / WebSocket / MCP / ROS 2 adapter"]
+  TOOL --> LOCAL["Local, scene-config, or mock integration"]
+  TOOL --> EXTERNAL["HTTP bridge / future WebSocket or MCP adapter"]
   AGENT --> STATE["Task state and event stream"]
   TOOL --> LOG["Structured logs"]
   WORKFLOW --> LOG
@@ -42,20 +42,33 @@ flowchart LR
 ### Agent and planner
 
 `src/sensoragent/agent/` owns task orchestration, planner selection, task lifecycle,
-and runtime assembly. The static planner provides deterministic tests. The LLM
-planner uses an OpenAI-compatible endpoint and returns a validated `AgentPlan`; it
-does not directly execute low-level tools.
+and runtime assembly. The static planner provides deterministic tests and scripts.
+The LLM planner uses an OpenAI-compatible endpoint and returns a validated
+`AgentPlan` with an optional structured `intent`; it can select only targets from
+the runtime's allowed ActionList whitelist and does not directly execute low-level
+tools.
 
 ### Tools, skills, and workflows
 
 - **Tools** are atomic typed capabilities such as `audio.transcribe`,
-  `vision.mock_detect`, or `robot.mock_pick`.
+  `vision.open_vocab_detect`, `robot.move_pose`, or `gripper.open`.
 - **Skills** compose reusable tool behavior.
 - **ActionLists** execute ordered steps.
 - **DecisionTrees** add conditions, retries, and recovery branches.
 
 Tool execution includes contract validation, timeout handling, retry policy, typed
 errors, and structured logging.
+
+Registered durable ActionLists currently include:
+
+| ActionList | Purpose |
+| --- | --- |
+| `mock.pick_place_actionlist` | Fixture-backed pick/place smoke test |
+| `audio.voice_command_ack_actionlist` | Listen once and generate an acknowledgement WAV |
+| `industrial.pick_place_actionlist` | Config-detected object, pick, grasp verification, named target placement, release verification |
+| `industrial.pick_only_actionlist` | Config-detected object pick with grasp verification |
+| `industrial.place_only_actionlist` | Place a held object into a named target |
+| `industrial.vision_pick_place_actionlist` | RGB-D open-vocabulary detection followed by industrial pick/place |
 
 The initial robot control surface is backend-neutral:
 
@@ -154,9 +167,11 @@ Local model weights are runtime assets under ignored `models/` paths. Automated
 tests use fake clients and fixtures, so the default test suite does not require a
 microphone, speaker, or model weights.
 
-The audio path does not yet imply robot control. Both the static and LLM planners
-currently select only `mock.pick_place_actionlist`; recognized commands therefore
-exercise the Agent lifecycle and mock robot tools.
+The CLI `listen-task` path does not yet imply robot control by itself. With
+`configs/audio_local.yaml` or `configs/audio_mock.yaml`, it runs through the
+audio tools and then uses the selected planner against the workflows enabled in
+the built runtime. The default static planner remains mock-oriented unless a
+script or caller chooses another target.
 
 ## Robotics simulation
 
@@ -232,13 +247,35 @@ been manually exercised on Ubuntu. Object contact and repeatable grasp stability
 still require acceptance testing.
 
 SensorAgent now contains stable atomic robot Tool contracts, deterministic
-top-down pick/place planning helpers, and `robot.pick` / `robot.place` Skills.
+top-down/oriented pick and place planning helpers, named place-target resolution,
+and `robot.pick` / `robot.place` / `robot.verify_*` Skills.
 `configs/robot_mock.yaml` registers them against a stateful fake backend for
 integration development. `configs/robot_sim.yaml` selects
 `HttpRobotControlClient`, which calls the implemented `sensoragent_robot_bridge`
-HTTP service. The bridge translates backend-neutral requests into MoveIt 2 arm
-planning/execution and `GripperCommand` actions for Gazebo. Its Windows validation
-is limited to unit and static tests; Ubuntu ROS 2 runtime acceptance is pending.
+HTTP service and also provides scene object/place-target catalogs. The bridge
+translates backend-neutral requests into MoveIt 2 arm planning/execution and
+`GripperCommand` actions for Gazebo. Manual Gazebo scripts exercise this path;
+automated ROS 2 acceptance is still outside the default Python suite.
+
+## Industrial workflow and vision path
+
+The current tabletop competition path has two perception options:
+
+```text
+vision.config_detect
+  reads named object poses from configs/robot_sim.yaml scene.objects
+
+vision.open_vocab_detect
+  reads RGB-D frame files, uses a YOLOE/Ultralytics backend when weights are
+  installed, and projects bbox-center depth into base_link coordinates
+```
+
+`industrial.pick_place_actionlist` uses `vision.config_detect` for deterministic
+baseline tests. `industrial.vision_pick_place_actionlist` uses
+`vision.open_vocab_detect` and the Gazebo RGB-D capture script. The open-vocab
+tool returns structured `VISION_MODEL_NOT_READY`,
+`VISION_BACKEND_UNAVAILABLE`, `VISION_INPUT_ERROR`, `VISION_DEPTH_ERROR`, or
+`OBJECT_NOT_FOUND` failures instead of pretending detection succeeded.
 
 ## Runtime compatibility boundary
 
@@ -258,17 +295,17 @@ Python 3.12 SensorAgent
 
 This avoids importing Python 3.10 `rclpy` into the Agent process. The bridge
 defaults to localhost; remote binding requires network-level protection because
-the HTTP server does not provide authentication or TLS. Implementation is
-complete, but Ubuntu ROS 2 runtime acceptance remains pending.
+the HTTP server does not provide authentication or TLS.
 
 ## Reinforcement learning and simulation assets
 
-`reinforcement_learning/` and `simulation/gazebo/` currently provide tracked
-empty structure for future environments, policies, evaluation, worlds, models,
-and scenarios. No Gymnasium environment, reset interface, reward function,
-industrial world, training entry point, or evaluation harness exists yet.
-Low-level trajectory planning and safety remain with MoveIt 2, `ros2_control`,
-and the robot runtime.
+`reinforcement_learning/` and top-level `simulation/gazebo/` currently provide
+tracked empty structure for future environments, policies, evaluation, worlds,
+models, and scenarios. The active industrial Gazebo world and models are in
+`ros2_ws/src/sensoragent_rm65_b_bringup/` so they can be installed with the ROS
+2 package. No Gymnasium environment, reset interface, reward function, training
+entry point, or evaluation harness exists yet. Low-level trajectory planning and
+safety remain with MoveIt 2, `ros2_control`, and the robot runtime.
 
 ## Repository layout
 

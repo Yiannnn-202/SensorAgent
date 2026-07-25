@@ -24,7 +24,8 @@ SensorAgent is responsible for:
 - MCP-style skills/tools contracts.
 - ActionList and DecisionTree workflow execution.
 - Vision/audio/robot tool adapters.
-- External module integration through API or MCP.
+- External module integration through HTTP, API-shaped adapters, or MCP-style
+  contracts.
 - Agent-owned structured logging.
 - Local Silero VAD and SenseVoice ASR command intake.
 - Local file-based TTS generation through supported sherpa-onnx models.
@@ -43,23 +44,25 @@ SensorAgent is not responsible for:
 | Area | Status |
 | --- | --- |
 | Agent, Tool, Skill, ActionList, and DecisionTree runtimes | Implemented |
-| Static and OpenAI-compatible LLM planning | Implemented for approved mock targets |
+| Static and OpenAI-compatible LLM planning | Implemented with an allowed-target workflow whitelist |
 | Local microphone VAD and SenseVoice ASR | Implemented |
 | Local TTS file generation | Implemented; direct playback is intentionally disabled |
 | RM65-B + Robotiq Gazebo and MoveIt stack | Implemented and manually exercised on Ubuntu |
 | Backend-neutral robot Tools and pick/place Skills | Implemented |
-| SensorAgent-to-Gazebo/MoveIt HTTP bridge | Implemented; Ubuntu ROS 2 runtime acceptance pending |
+| SensorAgent-to-Gazebo/MoveIt HTTP bridge | Implemented and used by Gazebo test scripts; automated ROS acceptance is not in the default suite |
+| Industrial config-detect pick/place ActionLists | Implemented for the current tabletop world |
+| Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
 | Physical robot connection | Not connected |
-| Industrial Gazebo tabletop scenario | Initial environment implemented |
+| Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
 | Gymnasium RL environment | Not implemented |
 
 The reusable robot control surface now includes state, joint motion, pose motion,
-linear motion, stop, gripper control, and deterministic `robot.pick` /
-`robot.place` Skills. `configs/robot_mock.yaml` selects the deterministic fake
-backend, while `configs/robot_sim.yaml` selects the implemented
-`HttpRobotControlClient` and local Gazebo/MoveIt bridge. Windows validation covers
-unit/static testing only; Ubuntu ROS 2 runtime acceptance is still pending. The
-physical robot is not connected.
+linear motion, stop, gripper control, deterministic pick/place planning, named
+place-target resolution, and `robot.pick` / `robot.place` / verification Skills.
+`configs/robot_mock.yaml` selects the deterministic fake backend, while
+`configs/robot_sim.yaml` selects `HttpRobotControlClient`, scene objects,
+place targets, and optional open-vocabulary vision. The physical robot is not
+connected.
 
 ## Repository Layout
 
@@ -109,6 +112,9 @@ Key SensorAgent documents:
 - [Audio guide](docs/guides/audio.md)
 - [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
 - [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
+- [Industrial intent to ActionList guide](docs/guides/intent_to_actionlist_cn.md)
+- [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
+- [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
 
 ## RM65-B and Robotiq Simulation
 
@@ -191,7 +197,7 @@ playback and automatic task-result announcements are not enabled.
 
 ## Run the Mock Pipeline
 
-The current Phase 1 demo runs a local mock Agent chain:
+The local mock Agent chain is the fastest Windows-friendly smoke test:
 
 ```text
 CLI
@@ -239,13 +245,42 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m sensoragent.services.cli.main listen-task --config configs\audio_mock.yaml --planner static --duration 1 --object-query "silver roller" --target "third bin cell"
 ```
 
+## Run the Industrial Gazebo Workflows
+
+On Ubuntu 22.04 with ROS 2 Humble, start Gazebo, MoveIt, and the HTTP bridge:
+
+```bash
+bash scripts/linux/run_rm65_b_sim.sh
+curl http://127.0.0.1:8765/ready
+```
+
+Run the config-based industrial ActionList without moving the robot:
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
+  --planner static \
+  --object-query roller \
+  --target bin_cell_3
+```
+
+Add `--execute` after checking the scene and bridge readiness. The optional
+RGB-D path captures one Gazebo frame, runs `vision.open_vocab_detect`, then
+executes the parallel vision ActionList:
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
+  --object-query "red roller" \
+  --target bin_cell_3 \
+  --execute
+```
+
 ## Current Development Priorities
 
-1. Complete Ubuntu ROS 2 runtime acceptance for the simulation HTTP bridge.
+1. Add automated ROS 2/Gazebo acceptance tests and repeatable scene reset.
 2. Connect recognized voice commands to approved robot workflows.
-3. Add industrial Gazebo objects, reset services, and repeatable scenarios.
+3. Broaden industrial object/bin coverage with recovery branches.
 4. Define the Gymnasium observation, action, reward, and termination contract.
-5. Add service entry points, external vision integration, and a physical robot adapter.
+5. Add service entry points and a physical robot adapter.
 
 The Python Agent package currently declares Python 3.12, while Ubuntu 22.04 and
 ROS 2 Humble normally use Python 3.10. The implemented design keeps them in

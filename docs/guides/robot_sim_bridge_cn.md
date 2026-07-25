@@ -1,8 +1,8 @@
 # SensorAgent 仿真机器人 HTTP Bridge 指引
 
 本文说明已实现的 SensorAgent 到 RM65-B + Robotiq 2F-85 仿真控制链路。
-Bridge 的代码和静态/单元测试已经完成，但 **Ubuntu 22.04 + ROS 2 Humble
-运行时验收仍待完成**，本文不代表已经完成 ROS 运行时测试。
+Bridge 已接入 Gazebo/MoveIt 测试脚本和工业 ActionList；默认 Python 测试套件
+仍不自动启动 ROS 2、Gazebo 或 MoveIt。
 
 ## 架构与运行边界
 
@@ -75,14 +75,15 @@ curl http://127.0.0.1:8765/gripper/state
 }
 ```
 
-`/health` 只表示 HTTP Bridge 进程正在响应，不等同于 MoveIt、Action Server
-和 Gazebo 全链路已经通过验收。
+`/health` 只表示 HTTP Bridge 进程正在响应；执行前还应检查 `/ready` 中的
+`move_action`、`execute_trajectory`、`cartesian_path` 和 `gripper_cmd`。
 
 ## HTTP 接口
 
 | 方法 | 路径 | 主要请求字段 |
 | --- | --- | --- |
 | `GET` | `/health` | 无 |
+| `GET` | `/ready` | 无；返回 MoveIt、笛卡尔路径、夹爪 Action 等就绪状态 |
 | `GET` | `/state` | 无；返回机械臂和夹爪状态 |
 | `POST` | `/move-joints` | `joints`（6 个弧度值）、`speed`、`wait` |
 | `POST` | `/move-pose` | `pose`、`speed`、`wait` |
@@ -182,7 +183,9 @@ closure = 0.0848 - opening
 
 ## 验收状态
 
-- Windows 环境目前只完成 Agent/Bridge 的单元测试和静态检查。
-- Ubuntu 22.04 + ROS 2 Humble 上的 SensorAgent → HTTP → MoveIt /
-  GripperCommand → Gazebo 运行时验收仍待完成。
+- Windows 环境目前只覆盖 Agent/Bridge 的单元测试和静态检查。
+- Ubuntu 22.04 + ROS 2 Humble 上提供 pick、place、工业 ActionList 和 RGB-D
+  视觉 ActionList 脚本，用于手动验收 SensorAgent → HTTP → MoveIt /
+  GripperCommand → Gazebo 链路。
+- 自动化 ROS 2/Gazebo 验收测试尚未进入默认 Python 测试套件。
 - 物理机器人尚未连接。

@@ -1,11 +1,13 @@
 # 指令解析 → intent → ActionList 落地方案
 
-_最近更新_：2026-07-24（对应 `george-sim-test` 分支）
+_最近更新_：2026-07-26（同步当前 `main` 文档）
 
 ## 0. 现状 TL;DR
 
 - 端到端管道**已跑通** Gazebo sim baseline：`roller → bin_cell_3` 11 步全绿。
-- 中英文指令的 LLM 解析尚未在 sim 中实测（下一步）。
+- `AgentPlan.intent` 已是一等字段，LLM 输出优先读取顶层 `intent`。
+- `industrial.pick_only_actionlist`、`industrial.place_only_actionlist` 和
+  `industrial.vision_pick_place_actionlist` 已注册。
 - 已知硬件边界：部分物件位置和 bin 位置对 RM65-B top-down 抓取超出可达域，需要 workspace 内的组合。
 
 ## 1. 全链路时序
@@ -102,7 +104,8 @@ Contract：`contracts/tools/vision.config_detect.schema.json`。
 - `bootstrap.py:_build_scene_tool`：把 scene 数据注入到 `vision.config_detect` /
   `robot.resolve_place_target`
 
-`configs/robot_sim.yaml` 的 `scene:` 段已配好 5 种 industrial world 物件 + 7 个 place target。
+`configs/robot_sim.yaml` 的 `scene:` 段已配好 5 类 industrial world 物件
+（滚柱、阶梯轴、法兰、短螺栓、齿轮）的中英文别名，以及 7 个 place target。
 
 ### 3.5 Place target 寄存器：`robot.resolve_place_target`
 
@@ -205,10 +208,10 @@ verify_place 通过的场景返回 `success=True`。
 ```
 SENSORAGENT_LLM_API_KEY=<your DeepSeek key>
 SENSORAGENT_LLM_BASE_URL=https://api.deepseek.com
-SENSORAGENT_LLM_MODEL=deepseek-chat
+SENSORAGENT_LLM_MODEL=deepseek-v4-flash
 ```
 
-依赖：`.venv/bin/pip install -r requirements.txt` + 补装 `numpy`（planning.py 依赖，建议加进 requirements）。
+依赖：在 Agent Python 3.12 环境中执行 `python -m pip install -r requirements.txt`。
 
 ### 7.2 启 Gazebo sim
 
@@ -224,15 +227,15 @@ bash scripts/linux/run_rm65_b_sim.sh
 ### 7.3 跑 baseline（static planner）
 
 ```bash
-PYTHONPATH=src .venv/bin/python scripts/linux/run_industrial_actionlist_sim.py \
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
   --planner static --object-query roller --target bin_cell_3 --execute \
   --json-out logs/tasks/baseline.json
 ```
 
-### 7.4 跑 LLM planner（尚未实测）
+### 7.4 跑 LLM planner
 
 ```bash
-PYTHONPATH=src .venv/bin/python scripts/linux/run_industrial_actionlist_sim.py \
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
   --planner llm --utterance "把滚柱放到 bin_cell_3" --execute \
   --json-out logs/tasks/llm_run.json
 ```
@@ -240,17 +243,15 @@ PYTHONPATH=src .venv/bin/python scripts/linux/run_industrial_actionlist_sim.py \
 ### 7.5 离线 prompt 校验（不用 sim）
 
 ```bash
-PYTHONPATH=src .venv/bin/python scripts/linux/check_llm_planner_prompt.py
+PYTHONPATH=src .venv312/bin/python scripts/linux/check_llm_planner_prompt.py
 ```
 
 ## 8. 后续可选项
 
 优先级从高到低：
 
-1. **跑一次 LLM planner sim 实测**（sim + `--planner llm`），验 DeepSeek 中英文解析行为
-2. **验 prompt 中英文一致性**（离线，`check_llm_planner_prompt.py` 已就绪）
-3. 把 `numpy` 加进 `requirements.txt`
-4. `AgentPlan` 加 `intent: dict | None` 一等字段（目前塞在 `reason` 里）
-5. `industrial.pick_only_actionlist` / `industrial.place_only_actionlist`
-6. `industrial.retry_pick_place_tree`（DecisionTree），失败重试
-7. Vision 层升级到 A 方案：从 Gazebo `/gazebo/get_entity_state` 读实体位姿
+1. 增加自动化 ROS 2/Gazebo 验收，覆盖 bridge ready、pick、place 和工业 ActionList。
+2. 增加场景 reset/物件重生能力，避免每轮手动重启 sim。
+3. 扩展 `industrial.retry_pick_place_tree`（DecisionTree），接入失败重试和恢复。
+4. 扩展 LLM 中英文 fixture 测试，覆盖歧义、缺目标、非法物件和同义词。
+5. 扩展 Vision 层：更稳定的开放词汇模型、mask/点云融合和 bin 占用验证。

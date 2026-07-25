@@ -5,7 +5,8 @@ RM65-B、Robotiq 2F-85、Gazebo 与 MoveIt 2 仿真控制栈。
 
 > 当前启动栈包含 Gazebo、机械臂/夹爪 `ros2_control`、MoveIt 2、RViz 和
 > 已实现的 `sensoragent_robot_bridge`。HTTP Bridge 默认监听
-> `http://127.0.0.1:8765`；其 Ubuntu ROS 2 运行时验收仍待完成。接口和配置见
+> `http://127.0.0.1:8765`；可通过 `/health` 和 `/ready` 检查服务与控制接口。
+> 接口和配置见
 > [SensorAgent 仿真机器人 HTTP Bridge 指引](robot_sim_bridge_cn.md)。
 
 ## 最简使用方式

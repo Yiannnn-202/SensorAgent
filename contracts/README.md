@@ -19,18 +19,25 @@ contracts/
 │   ├── error.schema.json
 │   └── trace-context.schema.json
 └── tools/
-    ├── vision.mock_detect.schema.json
+    ├── audio.listen_transcribe.schema.json
+    ├── audio.listen_vad_transcribe.schema.json
     ├── audio.mock_transcribe.schema.json
-    ├── robot.mock_pick.schema.json
-    ├── robot.mock_place.schema.json
+    ├── audio.speak.schema.json
+    ├── audio.transcribe.schema.json
+    ├── gripper.close.schema.json
+    ├── gripper.get_state.schema.json
+    ├── gripper.open.schema.json
     ├── robot.get_state.schema.json
     ├── robot.move_joints.schema.json
-    ├── robot.move_pose.schema.json
     ├── robot.move_linear.schema.json
+    ├── robot.move_pose.schema.json
+    ├── robot.mock_pick.schema.json
+    ├── robot.mock_place.schema.json
+    ├── robot.resolve_place_target.schema.json
     ├── robot.stop.schema.json
-    ├── gripper.open.schema.json
-    ├── gripper.close.schema.json
-    └── gripper.get_state.schema.json
+    ├── vision.config_detect.schema.json
+    ├── vision.mock_detect.schema.json
+    └── vision.open_vocab_detect.schema.json
 ```
 
 ## Tool contract shape

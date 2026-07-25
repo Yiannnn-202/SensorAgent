@@ -14,7 +14,7 @@ operator text / object query
 ```
 
 The existing `industrial.pick_place_actionlist` remains unchanged and continues
-to use `vision.config_detect`. This guide uses a parallel workflow:
+to use `vision.config_detect`. This guide uses the parallel RGB-D workflow:
 
 ```text
 industrial.vision_pick_place_actionlist
@@ -97,5 +97,7 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_si
   it imports `rclpy`.
 - `.venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py` uses
   the Agent Python environment.
-- `vision.open_vocab_detect` currently uses a simple bbox-center depth median
-  and a fixed Gazebo `T_base_camera` from `configs/robot_sim.yaml`.
+- `vision.open_vocab_detect` uses YOLOE/Ultralytics when the model is present.
+  For current red-object Gazebo debugging, it also has a red-component fallback.
+- 3D projection uses bbox-center depth median and either captured TF or the
+  fixed Gazebo `T_base_camera` from `configs/robot_sim.yaml`.

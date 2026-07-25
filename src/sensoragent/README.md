@@ -10,14 +10,14 @@ src/sensoragent/
 ├── agent/          runtime assembly, task lifecycle, static/LLM planning
 ├── config/         YAML and environment configuration
 ├── contracts/      JSON contract validation helpers
-├── integrations/   local audio, microphone, VAD, and LLM clients
+├── integrations/   local audio, microphone, VAD, LLM, and robot HTTP clients
 ├── logger/         structured JSONL task logging
 ├── mcp/            current mock MCP-shaped endpoint
 ├── schemas/        Agent, Tool, Skill, workflow, and plan data models
-├── services/       CLI entry point and API placeholder
-├── skills/         Skill registry/runtime, mock and audio skills
+├── services/       CLI entry point and future API package
+├── skills/         Skill registry/runtime, mock/audio/robot skills
 ├── state/          in-memory task store and event stream
-├── tools/          Tool registry/runtime and mock/audio/vision tools
+├── tools/          Tool registry/runtime and mock/audio/vision/robot tools
 └── workflows/      ActionList and DecisionTree runtimes and definitions
 ```
 
@@ -27,8 +27,22 @@ Tools:
 
 ```text
 vision.mock_detect
+vision.config_detect
+vision.open_vocab_detect
 robot.mock_pick
 robot.mock_place
+robot.get_state
+robot.move_joints
+robot.move_pose
+robot.move_linear
+robot.plan_top_down_pick
+robot.plan_oriented_pick
+robot.plan_place
+robot.resolve_place_target
+robot.stop
+gripper.open
+gripper.close
+gripper.get_state
 audio.mock_transcribe
 audio.listen_transcribe
 audio.listen_vad_transcribe
@@ -42,6 +56,10 @@ Skills:
 mock.pick_and_place
 audio.listen_command
 audio.announce
+robot.pick
+robot.place
+robot.verify_grasp
+robot.verify_place
 ```
 
 ActionLists:
@@ -49,6 +67,10 @@ ActionLists:
 ```text
 mock.pick_place_actionlist
 audio.voice_command_ack_actionlist
+industrial.pick_place_actionlist
+industrial.pick_only_actionlist
+industrial.place_only_actionlist
+industrial.vision_pick_place_actionlist
 ```
 
 DecisionTree support is implemented and tested with mock retry and not-found
@@ -70,9 +92,10 @@ intentionally disabled.
 
 ## Robot boundary
 
-`tools/robot/`, `skills/robot/`, `workflows/robot/`, and
-`integrations/ros2/` do not yet contain real robot implementations. Current
-Python robot behavior is mock-only.
+`tools/robot/` and `skills/robot/` contain backend-neutral robot control,
+planning, pick/place, and verification behavior. `configs/robot_mock.yaml` uses
+`FakeRobotControlClient`; `configs/robot_sim.yaml` uses
+`HttpRobotControlClient` to talk to the ROS 2 bridge on `127.0.0.1:8765`.
 
 The working RM65-B and Robotiq control stack is a separate ROS 2 package:
 
@@ -80,8 +103,8 @@ The working RM65-B and Robotiq control stack is a separate ROS 2 package:
 ros2_ws/src/sensoragent_rm65_b_bringup
 ```
 
-Connecting it to Agent workflows requires real robot contracts and a ROS 2,
-API, or MCP integration.
+The Agent process does not import ROS 2 directly. Robot execution crosses the
+HTTP bridge into `ros2_ws/src/sensoragent_robot_bridge`.
 
 ## Runtime compatibility
 

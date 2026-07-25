@@ -1,13 +1,14 @@
 # 开放语义视觉 Tool 接入说明
 
-本文说明当前预留的开放语义检测接口：
+本文说明当前开放语义检测接口：
 
 ```text
 vision.open_vocab_detect
 ```
 
-它暂时不接入工业 ActionList，目的是先稳定通信格式和模型目录。后续可把
-YOLOE、YOLOv11-seg 或其他开放词汇检测器接到这个 Tool 后面。
+它已接入 `industrial.vision_pick_place_actionlist`，用于 Gazebo RGB-D
+抓取放置实验。Tool 会在模型权重存在时加载 YOLOE/Ultralytics；模型或可选
+依赖缺失时返回结构化失败，便于上层流程判断。
 
 ## 1. 模型权重位置
 
@@ -48,8 +49,9 @@ configs/robot_sim.yaml
 }
 ```
 
-第一版至少需要 `query`。`image_path` 和 `depth_path` 是为后续真实视觉检测与
-深度融合预留的通信字段。
+`query` 必填。`image_path` 指向 RGB `.npy` 或常见图像文件；`depth_path`
+当前支持 `.npy` 深度图。`camera_info_path` 或 `camera_info` 与
+`T_base_camera` 可用于把 bbox 中心深度投影到 `base_link`。
 
 ## 3. Tool 输出
 
@@ -76,7 +78,7 @@ robot.plan_top_down_pick
 → robot.pick
 ```
 
-## 4. 当前占位行为
+## 4. 当前行为
 
 如果模型权重还没有放入 `models/vision/yoloe.pt`，Tool 会返回结构化失败：
 
@@ -84,15 +86,46 @@ robot.plan_top_down_pick
 VISION_MODEL_NOT_READY
 ```
 
-这样可以先测试工具注册、配置加载、输入输出契约和上层通信，不会误以为模型已经可用。
+如果缺少 `ultralytics` 等可选依赖，会返回：
 
-## 5. 后续实现位置
+```text
+VISION_BACKEND_UNAVAILABLE
+```
 
-后续真正接 YOLOE/YOLOv11-seg 时，优先修改：
+如果检测不到目标，会返回：
+
+```text
+OBJECT_NOT_FOUND
+```
+
+当查询词包含 `red` 且 RGB 输入是 `.npy` 时，Tool 还包含一个红色连通域兜底
+路径，方便在当前 Gazebo 红色滚柱场景中验证 RGB-D 投影链路。
+
+## 5. Gazebo ActionList 使用
+
+完整 RGB-D 测试见：
+
+```text
+docs/guides/gazebo_vision_actionlist_test.md
+docs/guides/gazebo_vision_vm_setup.md
+```
+
+常用命令：
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
+  --object-query "red roller" \
+  --target bin_cell_3 \
+  --execute
+```
+
+## 6. 后续实现位置
+
+继续扩展 YOLOE/YOLOv11-seg 或其他开放词汇检测器时，优先修改：
 
 ```text
 src/sensoragent/tools/vision/open_vocab.py
 ```
 
-建议只替换 `PlaceholderOpenVocabularyBackend`，保持 `VisionOpenVocabularyDetectTool`
-的输入输出不变。
+建议保持 `VisionOpenVocabularyDetectTool` 的输入输出不变，只替换或扩展后端
+适配层。
