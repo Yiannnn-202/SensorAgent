@@ -13,9 +13,9 @@ from sensoragent.mcp import MockMcpEndpoint
 from sensoragent.schemas import TraceContext
 
 
-def _default_task_log_path() -> Path:
+def _default_task_log_path(prefix: str = "mock_pick_place") -> Path:
   timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-  return Path("logs") / "tasks" / f"mock_pick_place_{timestamp}.jsonl"
+  return Path("logs") / "tasks" / f"{prefix}_{timestamp}.jsonl"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -154,6 +154,36 @@ def _build_parser() -> argparse.ArgumentParser:
     help="Path to the JSONL task log. Defaults to logs/tasks/*.jsonl.",
   )
 
+  vision_detect = subparsers.add_parser(
+    "vision-detect",
+    help="Run open-vocabulary detection on one RGB image.",
+  )
+  vision_detect.add_argument(
+    "--config",
+    type=Path,
+    default=Path("configs/vision_grounding_dino.yaml"),
+    help="Config containing vision.open_vocab_detect and its backend settings.",
+  )
+  vision_detect.add_argument("--image", type=Path, required=True)
+  vision_detect.add_argument("--query", required=True)
+  vision_detect.add_argument("--depth", type=Path, default=None)
+  vision_detect.add_argument("--camera-info", type=Path, default=None)
+  vision_detect.add_argument("--device", default=None)
+  vision_detect.add_argument("--box-threshold", type=float, default=None)
+  vision_detect.add_argument("--text-threshold", type=float, default=None)
+  vision_detect.add_argument("--depth-scale", type=float, default=None)
+  vision_detect.add_argument(
+    "--no-refine",
+    action="store_true",
+    help="Skip SAM 2 and keep the detector bounding box.",
+  )
+  vision_detect.add_argument(
+    "--require-masks",
+    action="store_true",
+    help="Fail instead of using a box when SAM 2 refinement fails.",
+  )
+  vision_detect.add_argument("--log-path", type=Path, default=None)
+
   return parser
 
 
@@ -249,6 +279,46 @@ def _run_listen_task(args: argparse.Namespace) -> int:
   return 0 if task.error is None else 1
 
 
+def _run_vision_detect(args: argparse.Namespace) -> int:
+  log_path = args.log_path or _default_task_log_path("vision_detect")
+  bundle = build_agent_from_env(args.config, log_path=log_path)
+  input_data = {
+    "query": args.query,
+    "image_path": str(args.image),
+    "refine_masks": not args.no_refine,
+    "require_masks": args.require_masks,
+  }
+  optional = {
+    "depth_path": str(args.depth) if args.depth is not None else None,
+    "camera_info_path": (
+      str(args.camera_info) if args.camera_info is not None else None
+    ),
+    "device": args.device,
+    "box_threshold": args.box_threshold,
+    "text_threshold": args.text_threshold,
+    "depth_scale": args.depth_scale,
+  }
+  input_data.update({key: value for key, value in optional.items() if value is not None})
+  result = bundle.tool_runtime.invoke(
+    "vision.open_vocab_detect",
+    input_data,
+    trace=TraceContext(),
+  )
+  print(
+    json.dumps(
+      {
+        "tool": result.tool,
+        "success": result.success,
+        "output": result.output,
+        "error": result.error,
+      },
+      ensure_ascii=False,
+      indent=2,
+    )
+  )
+  return 0 if result.success else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
   parser = _build_parser()
   args = parser.parse_args(argv)
@@ -259,6 +329,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return _run_task(args)
   if args.command == "listen-task":
     return _run_listen_task(args)
+  if args.command == "vision-detect":
+    return _run_vision_detect(args)
 
   parser.error(f"Unknown command: {args.command}")
   return 2
