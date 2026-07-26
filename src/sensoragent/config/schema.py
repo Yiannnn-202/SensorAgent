@@ -57,6 +57,7 @@ class SceneConfig:
 
   objects: dict = field(default_factory=dict)
   place_targets: dict = field(default_factory=dict)
+  workspace: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

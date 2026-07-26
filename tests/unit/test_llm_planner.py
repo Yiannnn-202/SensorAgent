@@ -83,6 +83,32 @@ class LLMPlannerTest(TestCase):
       "target": "bin_cell_3",
     })
 
+  def test_llm_planner_extracts_spatial_constraint(self) -> None:
+    client = FakeJsonClient(
+      {
+        "target_kind": "actionlist",
+        "target": "mock.pick_place_actionlist",
+        "input": {
+          "object_query": "扳手",
+          "target": "bin_cell_3",
+          "spatial_constraint": {"relation": "left", "ordinal": 1},
+        },
+        "intent": {
+          "object": "扳手",
+          "action": "pick_place",
+          "target": "bin_cell_3",
+          "spatial": {"relation": "left", "ordinal": 1},
+        },
+        "reason": "Left wrench pick-and-place.",
+      }
+    )
+    plan = LLMPlanner(client).plan("把左侧的扳手放到料箱第三格", {})
+    self.assertEqual(plan.input["object_query"], "扳手")
+    self.assertEqual(
+      plan.input["spatial_constraint"], {"relation": "left", "ordinal": 1}
+    )
+    self.assertEqual(plan.intent["spatial"], {"relation": "left", "ordinal": 1})
+
   def test_llm_planner_falls_back_to_intent_in_reason(self) -> None:
     """Legacy prompt v2 kept intent inside reason. Fallback path must still parse it."""
 

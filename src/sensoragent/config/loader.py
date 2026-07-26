@@ -79,5 +79,6 @@ def load_config(path: str | Path) -> SensorAgentConfig:
     scene=SceneConfig(
       objects=_as_mapping(scene.get("objects"), "scene.objects"),
       place_targets=_as_mapping(scene.get("place_targets"), "scene.place_targets"),
+      workspace=_as_mapping(scene.get("workspace"), "scene.workspace"),
     ),
   )

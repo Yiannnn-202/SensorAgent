@@ -21,6 +21,7 @@ operation guides, and a small number of project planning records.
 
 - [Testing](guides/testing.md)
 - [Audio](guides/audio.md)
+- [Robot backend selection plan](guides/robot_backend_selection.md)
 - [RM65-B + Robotiq 2F-85 Gazebo quickstart](guides/rm65_b_gazebo_quickstart_cn.md)
 - [SensorAgent simulation robot HTTP bridge](guides/robot_sim_bridge_cn.md)
 - [Industrial tabletop Gazebo environment](guides/industrial_gazebo_environment_cn.md)

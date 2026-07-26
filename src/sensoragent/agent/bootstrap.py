@@ -114,10 +114,12 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       device=vision_config.get("device"),
       refine_masks=vision_config.get("refine_masks"),
       require_masks=bool(vision_config.get("require_masks", False)),
+      red_color_shortcut=bool(vision_config.get("red_color_shortcut", False)),
       camera_frame=str(
         vision_config.get("camera_frame", "camera_color_optical_frame")
       ),
       base_frame=str(vision_config.get("base_frame", "base_link")),
+      workspace=dict(config.scene.workspace or {}),
     )
   if tool_name == "robot.resolve_place_target":
     targets = config.scene.place_targets or default_place_target_registry()

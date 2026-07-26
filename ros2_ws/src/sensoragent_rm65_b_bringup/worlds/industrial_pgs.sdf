@@ -107,6 +107,11 @@
       <pose>0.24 0.23 0.322 1.570796 0 0</pose>
     </include>
     <include>
+      <uri>model://sensoragent_part_roller</uri>
+      <name>roller_02</name>
+      <pose>0.24 -0.12 0.322 1.570796 0 0</pose>
+    </include>
+    <include>
       <uri>model://sensoragent_part_stepped_shaft</uri>
       <name>stepped_shaft_01</name>
       <pose>0.38 0.23 0.326 1.570796 0 0.12</pose>

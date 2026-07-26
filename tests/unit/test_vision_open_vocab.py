@@ -87,6 +87,73 @@ class _FakeWrongBoxBackend:
     )
 
 
+class _FakeMultiBoxBackend:
+  """Backend that returns several boxes for spatial-selection tests."""
+
+  def __init__(self, boxes: list[tuple[str, float, list[float]]]) -> None:
+    self._boxes = boxes
+
+  def _detections(self, query: str) -> list[VisionDetection]:
+    detections: list[VisionDetection] = []
+    for index, (label, confidence, bbox) in enumerate(self._boxes):
+      x1, y1, x2, y2 = bbox
+      detections.append(
+        VisionDetection(
+          found=True,
+          label=label,
+          confidence=confidence,
+          object_id=f"{label}_{index + 1:03d}",
+          bbox_2d=list(bbox),
+          center_px=[(x1 + x2) / 2.0, (y1 + y2) / 2.0],
+          mask_area_px=abs((x2 - x1) * (y2 - y1)),
+          source="fake_multi",
+        )
+      )
+    return detections
+
+  def detect(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> VisionDetection:
+    del image_path, depth_path, options
+    detections = self._detections(query)
+    if not detections:
+      return VisionDetection(
+        found=False, label=query, confidence=0.0, source="fake_multi"
+      )
+    return max(detections, key=lambda item: item.confidence)
+
+  def detect_all(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> list[VisionDetection]:
+    del image_path, depth_path, options
+    return self._detections(query)
+
+
+class _FakeRaisingBackend:
+  """Backend that raises a configured exception (for error-mapping tests)."""
+
+  def __init__(self, error: Exception) -> None:
+    self._error = error
+
+  def detect(self, *, query, image_path, depth_path, options):
+    del query, image_path, depth_path, options
+    raise self._error
+
+  def detect_all(self, *, query, image_path, depth_path, options):
+    del query, image_path, depth_path, options
+    raise self._error
+
+
 class _FakeMaskRefiner:
   def segment(
     self,
@@ -198,6 +265,10 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertEqual(result.output["position_camera"], [0.0, 0.0, 1.0])
     self.assertEqual(result.output["position_base"], [0.1, 0.2, 1.3])
     self.assertEqual(result.output["pose_3d"], [0.1, 0.2, 1.3, 0.0, 0.0, 0.0])
+    self.assertEqual(
+      result.output["position_3d"],
+      {"x": 0.1, "y": 0.2, "z": 1.3, "frame_id": "base_link", "unit": "m"},
+    )
 
   def test_missing_depth_file_is_reported_as_input_error(self) -> None:
     result = VisionOpenVocabularyDetectTool(
@@ -287,6 +358,7 @@ class VisionOpenVocabularyToolTest(TestCase):
 
       result = VisionOpenVocabularyDetectTool(
         detector=_FakeWrongBoxBackend(),
+        red_color_shortcut=True,
         t_base_camera=[
           [1.0, 0.0, 0.0, 0.0],
           [0.0, 1.0, 0.0, 0.0],
@@ -309,6 +381,254 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertTrue(result.success)
     self.assertEqual(result.output["source"], "red_color_filter")
     self.assertEqual(result.output["bbox_2d"], [7.0, 8.0, 12.0, 13.0])
+
+  def test_red_shortcut_disabled_by_default(self) -> None:
+    import tempfile
+    import numpy as np
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      image_path = Path(temp_dir) / "rgb.npy"
+      image = np.zeros((16, 16, 3), dtype=np.uint8)
+      image[8:14, 7:13] = [230, 30, 30]
+      np.save(image_path, image)
+
+      result = VisionOpenVocabularyDetectTool(
+        detector=_FakeWrongBoxBackend(),
+      ).run(
+        ToolCall(
+          tool="vision.open_vocab_detect",
+          input={
+            "query": "red roller",
+            "image_path": str(image_path),
+          },
+          trace=TraceContext(),
+        )
+      )
+
+    self.assertTrue(result.success)
+    self.assertNotEqual(result.output["source"], "red_color_filter")
+    self.assertEqual(result.output["source"], "fake_yoloe")
+    self.assertEqual(result.output["object_id"], "red roller_wrong")
+
+  def test_spatial_left_picks_min_image_x(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.8, [10.0, 10.0, 30.0, 30.0]),
+        ("wrench", 0.7, [100.0, 10.0, 130.0, 40.0]),
+        ("wrench", 0.6, [200.0, 10.0, 230.0, 35.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "left"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [10.0, 10.0, 30.0, 30.0])
+    self.assertEqual(len(result.output["candidates"]), 2)
+    ContractValidator(ROOT / "contracts").validate_tool_output(
+      "vision.open_vocab_detect", result.output
+    )
+
+  def test_spatial_right_and_largest_pick_extremes(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.8, [10.0, 10.0, 30.0, 30.0]),
+        ("wrench", 0.7, [100.0, 10.0, 130.0, 40.0]),
+        ("wrench", 0.6, [200.0, 10.0, 230.0, 35.0]),
+      ]
+    )
+    tool = VisionOpenVocabularyDetectTool(detector=backend)
+    right = tool.run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "right"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertEqual(right.output["bbox_2d"], [200.0, 10.0, 230.0, 35.0])
+    largest = tool.run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "largest"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertEqual(largest.output["bbox_2d"], [100.0, 10.0, 130.0, 40.0])
+
+  def test_spatial_tie_returns_ambiguous(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.8, [10.0, 10.0, 30.0, 30.0]),
+        ("wrench", 0.7, [12.0, 10.0, 32.0, 30.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "left"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertFalse(result.success)
+    self.assertIn("OBJECT_AMBIGUOUS", result.error or "")
+    self.assertEqual(len(result.output["candidates"]), 2)
+
+  def test_spatial_empty_candidates_returns_not_found(self) -> None:
+    backend = _FakeMultiBoxBackend([])
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "left"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertFalse(result.success)
+    self.assertIn("OBJECT_NOT_FOUND", result.error or "")
+    self.assertEqual(result.output["candidates"], [])
+
+  def test_spatial_ordinal_two_picks_second_from_left(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.8, [10.0, 10.0, 30.0, 30.0]),
+        ("wrench", 0.7, [100.0, 10.0, 130.0, 40.0]),
+        ("wrench", 0.6, [200.0, 10.0, 230.0, 35.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "wrench",
+          "spatial_constraint": {"relation": "left", "ordinal": 2},
+        },
+        trace=TraceContext(),
+      )
+    )
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [100.0, 10.0, 130.0, 40.0])
+
+  def test_spatial_absent_falls_back_to_single_detect(self) -> None:
+    result = VisionOpenVocabularyDetectTool(detector=_FakeBoxOnlyBackend()).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "image_path": "frame.png"},
+        trace=TraceContext(),
+      )
+    )
+    self.assertTrue(result.success)
+    self.assertNotIn("candidates", result.output)
+
+  def test_workspace_filters_out_of_reach_candidates(self) -> None:
+    # Identity T_base_camera + fx=fy=100, cx=cy=0, table_z=0.12 back-projects
+    # pixel (u,v) to base XY (0.12*u/100, 0.12*v/100).
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.7, [190.0, -10.0, 210.0, 10.0]),  # center (200,0) -> base (0.24,0): in reach
+        ("wrench", 0.8, [-10.0, -10.0, 10.0, 10.0]),  # center (0,0)   -> base (0,0):   out of reach
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(
+      detector=backend,
+      camera_info={"fx": 100.0, "fy": 100.0, "cx": 0.0, "cy": 0.0},
+      t_base_camera=[
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+      ],
+      workspace={"x": [0.15, 0.60], "y": [-0.35, 0.35], "table_z": 0.12},
+    ).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "left"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertTrue(result.success)
+    # Without filtering, left would pick the (0,0) box. Workspace filtering
+    # drops it (base x=0 < 0.15), leaving the in-reach box at center (200,0).
+    self.assertEqual(result.output["bbox_2d"], [190.0, -10.0, 210.0, 10.0])
+
+  def test_spatial_nearest_and_farthest_use_base_xy(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.7, [190.0, -10.0, 210.0, 10.0]),  # base (0.24,0): dist 0.24
+        ("wrench", 0.8, [90.0, -10.0, 110.0, 10.0]),  # base (0.12,0): dist 0.12
+      ]
+    )
+    tool = VisionOpenVocabularyDetectTool(
+      detector=backend,
+      camera_info={"fx": 100.0, "fy": 100.0, "cx": 0.0, "cy": 0.0},
+      t_base_camera=[
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+      ],
+      workspace={"x": [0.10, 0.60], "y": [-0.35, 0.35], "table_z": 0.12},
+    )
+    nearest = tool.run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "nearest"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertEqual(nearest.output["bbox_2d"], [90.0, -10.0, 110.0, 10.0])
+    farthest = tool.run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "farthest"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertEqual(farthest.output["bbox_2d"], [190.0, -10.0, 210.0, 10.0])
+
+  def test_robot_sim_config_exposes_workspace(self) -> None:
+    from sensoragent.config import load_config
+
+    workspace = load_config(ROOT / "configs" / "robot_sim.yaml").scene.workspace
+    self.assertEqual(workspace.get("frame"), "base_link")
+    self.assertEqual(workspace.get("x"), [0.15, 0.60])
+    self.assertEqual(workspace.get("table_z"), 0.12)
+
+  def test_grounding_prompt_strips_spatial_modifiers(self) -> None:
+    from sensoragent.tools.vision.open_vocab import _grounding_prompt
+
+    self.assertEqual(_grounding_prompt("左侧的扳手"), "wrench")
+    self.assertEqual(_grounding_prompt("left wrench"), "wrench")
+    self.assertEqual(_grounding_prompt("第二个滚柱"), "roller")
+    self.assertEqual(_grounding_prompt("扳手"), "wrench")
+
+  def test_oserror_from_detector_maps_to_backend_error(self) -> None:
+    result = VisionOpenVocabularyDetectTool(
+      detector=_FakeRaisingBackend(OSError("connection timed out"))
+    ).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "image_path": "frame.png"},
+        trace=TraceContext(),
+      )
+    )
+    self.assertFalse(result.success)
+    self.assertIn("VISION_BACKEND_ERROR", result.error or "")
+
+  def test_permission_error_maps_to_input_error(self) -> None:
+    result = VisionOpenVocabularyDetectTool(
+      detector=_FakeRaisingBackend(PermissionError("permission denied"))
+    ).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "image_path": "frame.png"},
+        trace=TraceContext(),
+      )
+    )
+    self.assertFalse(result.success)
+    self.assertIn("VISION_INPUT_ERROR", result.error or "")
+    self.assertNotIn("VISION_BACKEND_ERROR", result.error or "")
 
   def test_mask_refinement_drives_centroid_and_depth_sampling(self) -> None:
     import json
