@@ -42,6 +42,17 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--utterance", default="pick roller and place into bin_cell_3")
   parser.add_argument("--object-query", default="roller")
   parser.add_argument("--target", default="bin_cell_3")
+  parser.add_argument(
+    "--spatial-relation",
+    default=None,
+    help="Optional spatial relation (left/right/front/back/nearest/farthest/largest/smallest).",
+  )
+  parser.add_argument(
+    "--spatial-ordinal",
+    type=int,
+    default=1,
+    help="Ordinal for the spatial relation (1=first, 2=second, ...).",
+  )
   parser.add_argument("--config", type=Path, default=ROOT / "configs" / "robot_sim.yaml")
   parser.add_argument("--endpoint", default=None)
   parser.add_argument("--frame-dir", type=Path, default=ROOT / "logs" / "vision" / "latest")
@@ -165,6 +176,11 @@ def main() -> int:
     "camera_info_path": manifest["camera_info_path"],
     "T_base_camera": manifest.get("T_base_camera")
     or config.integrations.vision.get("T_base_camera"),
+    "spatial_constraint": (
+      {"relation": args.spatial_relation, "ordinal": args.spatial_ordinal}
+      if args.spatial_relation
+      else None
+    ),
   }
   _print_section(
     "vision actionlist input",

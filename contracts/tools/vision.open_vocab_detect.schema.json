@@ -1,6 +1,6 @@
 {
   "name": "vision.open_vocab_detect",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Detect a text-query object and optionally refine its mask and estimate its RGB-D position.",
   "input_schema": {
     "type": "object",
@@ -30,7 +30,16 @@
       "refine_masks": {"type": "boolean"},
       "require_masks": {"type": "boolean"},
       "camera_frame": {"type": "string"},
-      "base_frame": {"type": "string"}
+      "base_frame": {"type": "string"},
+      "spatial_constraint": {
+        "type": "object",
+        "properties": {
+          "relation": {"type": "string"},
+          "ordinal": {"type": "number"},
+          "reference": {"type": "string"},
+          "tolerance_px": {"type": "number"}
+        }
+      }
     }
   },
   "output_schema": {
@@ -60,12 +69,33 @@
       "position_camera": {"type": "array", "items": {"type": "number"}},
       "position_base": {"type": "array", "items": {"type": "number"}},
       "pose_3d": {"type": "array", "items": {"type": "number"}},
+      "position_3d": {
+        "type": "object",
+        "properties": {
+          "x": {"type": "number"},
+          "y": {"type": "number"},
+          "z": {"type": "number"},
+          "frame_id": {"type": "string"},
+          "unit": {"type": "string"}
+        }
+      },
       "camera_frame": {"type": "string"},
       "base_frame": {"type": "string"},
       "model": {"type": "string"},
       "model_path": {"type": "string"},
       "timing_ms": {"type": "object"},
-      "warnings": {"type": "array", "items": {"type": "string"}}
+      "warnings": {"type": "array", "items": {"type": "string"}},
+      "candidates": {
+        "type": "array",
+        "items": {"type": "object"}
+      },
+      "spatial_constraint": {
+        "type": "object",
+        "properties": {
+          "relation": {"type": "string"},
+          "ordinal": {"type": "number"}
+        }
+      }
     }
   },
   "errors": [
@@ -73,6 +103,7 @@
     "VISION_BACKEND_UNAVAILABLE",
     "VISION_BACKEND_ERROR",
     "VISION_INPUT_ERROR",
-    "OBJECT_NOT_FOUND"
+    "OBJECT_NOT_FOUND",
+    "OBJECT_AMBIGUOUS"
   ]
 }
