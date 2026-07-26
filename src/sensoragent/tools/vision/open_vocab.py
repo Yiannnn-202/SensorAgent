@@ -94,6 +94,11 @@ _SPATIAL_VALID_RELATIONS = (
     | _SPATIAL_BASE_RELATIONS
 )
 
+#: Public view of the accepted `spatial_constraint.relation` values, so callers
+#: (CLI, sim runners) validate against one source of truth instead of their own
+#: hardcoded copy.
+SPATIAL_RELATIONS = _SPATIAL_VALID_RELATIONS
+
 
 @dataclass(frozen=True)
 class SpatialConstraint:
@@ -675,6 +680,11 @@ class UltralyticsSam2Backend:
   def _load_model(self):
     if self._model is not None:
       return self._model
+    if not Path(self.weights_path).is_file():
+      raise VisionModelNotReadyError(
+        f"SAM 2 weights not found: {self.weights_path}. Put the file in the "
+        "repository root or set sam2_model_path / SENSORAGENT_SAM2_WEIGHTS."
+      )
     try:
       from ultralytics import SAM
     except ImportError as exc:
@@ -1178,7 +1188,7 @@ class VisionOpenVocabularyDetectTool:
         timing_ms=timing,
         warnings=warnings,
       )
-    except Exception as exc:
+    except (RuntimeError, ValueError, OSError) as exc:
       if require_masks:
         raise RuntimeError(f"SAM 2 mask refinement failed: {exc}") from exc
       warnings.append(f"SAM 2 mask refinement failed; using detector box: {exc}")
@@ -1512,6 +1522,30 @@ class VisionOpenVocabularyDetectTool:
           "source": self._backend,
         },
         error=f"VISION_INPUT_ERROR: {exc}",
+      )
+    except PermissionError as exc:
+      return ToolResult(
+        tool=self.spec.name,
+        success=False,
+        output={
+          "found": False,
+          "label": query,
+          "confidence": 0.0,
+          "source": self._backend,
+        },
+        error=f"VISION_INPUT_ERROR: {exc}",
+      )
+    except OSError as exc:
+      return ToolResult(
+        tool=self.spec.name,
+        success=False,
+        output={
+          "found": False,
+          "label": query,
+          "confidence": 0.0,
+          "source": self._backend,
+        },
+        error=f"VISION_BACKEND_ERROR: {exc}",
       )
     except ImportError as exc:
       return ToolResult(

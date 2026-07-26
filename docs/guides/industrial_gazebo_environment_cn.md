@@ -24,12 +24,17 @@ ros2_ws/src/sensoragent_rm65_b_bringup/worlds/industrial_pgs.sdf
 
 | 模型目录 | 场景名称 | 主要形状 |
 | --- | --- | --- |
-| `sensoragent_part_roller` | `roller_01` | 圆柱滚柱 |
+| `sensoragent_part_roller` | `roller_01`、`roller_02` | 圆柱滚柱 |
 | `sensoragent_part_stepped_shaft` | `stepped_shaft_01` | 阶梯轴 |
 | `sensoragent_part_flange` | `flange_01` | 法兰圆柱 |
 | `sensoragent_part_hex_nut` | `hex_nut_01` | 简化六角螺母 |
 | `sensoragent_part_short_bolt` | `short_bolt_01` | 无螺纹短螺栓 |
 | `sensoragent_part_gear` | `gear_01` | 简化齿轮 |
+
+滚柱刻意放了两个实例（`roller_01` 在 base_link `(0.24, 0.23)`、`roller_02` 在
+`(0.24, -0.12)`），用来给 `vision.open_vocab_detect` 的空间选择器提供"多个同类
+物件"的真实场景，验证"左边那个滚柱"这类指令。详见
+[gazebo_vision_actionlist_test.md](gazebo_vision_actionlist_test.md)。
 
 模型使用基础几何体和简化碰撞体，尺寸均控制在 Robotiq 2F-85 的
 `84.8 mm` 最大开口范围内。

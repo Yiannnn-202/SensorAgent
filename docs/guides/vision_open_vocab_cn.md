@@ -89,6 +89,7 @@ python -m sensoragent.services.cli.main vision-detect `
 - `--text-threshold` 控制文本匹配阈值，默认 `0.25`。
 - `--require-masks` 禁止 SAM 2 失败后退回检测框。
 - `--no-refine` 完全跳过 SAM 2，适合定位依赖或显存问题。
+- `--spatial-relation` / `--spatial-ordinal` 在多个同类物件里挑一个，见第 7 节。
 
 ## 4. Tool 输入输出
 
@@ -164,12 +165,92 @@ python -m sensoragent.services.cli.main vision-detect `
 
 ## 6. 错误边界
 
-- `VISION_MODEL_NOT_READY`：本地 YOLOE 权重路径不存在。
+- `VISION_MODEL_NOT_READY`：本地 YOLOE 权重路径不存在，或 SAM 2 权重文件缺失。
 - `VISION_BACKEND_UNAVAILABLE`：缺少 Transformers、Ultralytics、Pillow 等依赖。
-- `VISION_INPUT_ERROR`：图片、深度、相机参数或数值参数不合法。
-- `VISION_BACKEND_ERROR`：模型推理失败，或严格掩码模式下 SAM 2 失败。
+- `VISION_INPUT_ERROR`：图片、深度、相机参数或数值参数不合法，也包括文件不存在
+  和无读取权限。
+- `VISION_BACKEND_ERROR`：模型推理失败、权重下载等 IO 失败，或严格掩码模式下
+  SAM 2 失败。
 - `OBJECT_NOT_FOUND`：推理成功，但没有超过阈值的目标。
+- `OBJECT_AMBIGUOUS`：只在使用空间约束时出现，见第 7 节。
 
 单元测试只使用假后端，不下载模型，也不代表工业场景精度已经达标。提交前仍需用
 比赛现场图像完成真实模型冒烟测试，再分别记录检测召回率、掩码质量、深度有效率、
 坐标误差和端到端耗时。
+
+## 7. 多候选空间选择
+
+场景里有多个同类物件时（例如两个滚柱），仅靠 `query` 只能拿到置信度最高的那
+一个。用 `spatial_constraint` 指定"哪一个"：
+
+```json
+{
+  "query": "roller",
+  "image_path": "logs/vision/latest/rgb.png",
+  "spatial_constraint": {"relation": "left", "ordinal": 1}
+}
+```
+
+CLI 对应 `--spatial-relation left --spatial-ordinal 1`。
+
+支持的 `relation`：
+
+| relation | 排序依据 | 是否需要深度/内参 |
+| --- | --- | --- |
+| `left` / `right` | 检测框中心像素 X | 否 |
+| `front` / `back` | 检测框中心像素 Y | 否 |
+| `largest` / `smallest` | 检测框像素面积 | 否 |
+| `nearest` / `farthest` | base_link XY 到原点的距离 | 需要相机内参和 `T_base_camera` |
+
+`ordinal` 从 `1` 开始，`{"relation": "left", "ordinal": 2}` 表示"左边第二个"。
+
+前六种关系只在图像平面上排序，**不读深度**，因此在深度缺失或不可靠时依然可用。
+`nearest` / `farthest` 需要把像素反投影到 base 坐标，用的是 `scene.workspace.table_z`
+指定的桌面平面高度（假设物件位于桌面上），同样不读深度图。
+
+选择流程：先用后端的多框输出收集候选 → 按 `scene.workspace` 的 x/y 包络过滤掉
+机械臂够不到的候选 → 按关系排序取第 `ordinal` 个 → **只对胜出者**跑 SAM 2 和深度
+估计。因此加空间约束不会带来 N 倍的分割开销。
+
+`scene.workspace` 在 `configs/robot_sim.yaml` 里配置：
+
+```yaml
+scene:
+  workspace:
+    frame: base_link
+    x: [0.15, 0.60]
+    y: [-0.35, 0.35]
+    z: [0.10, 0.30]
+    table_z: 0.12
+```
+
+缺少相机内参或 `T_base_camera` 时无法反投影，可达域过滤会被跳过（不阻塞纯图像
+平面的选择）。
+
+成功时输出在原有字段外附带落选候选，便于上层复核或让操作员改口：
+
+```json
+{
+  "found": true,
+  "label": "roller",
+  "object_id": "roller_001",
+  "position_3d": {"x": 0.24, "y": 0.23, "z": 0.142, "frame_id": "base_link", "unit": "m"},
+  "candidates": [
+    {"found": true, "label": "roller", "confidence": 0.83, "bbox_2d": [402.0, 210.0, 452.0, 262.0]}
+  ]
+}
+```
+
+失败时返回 `OBJECT_AMBIGUOUS`，`output.candidates` 给出所有候选、
+`output.spatial_constraint` 回显本次约束。触发条件有三种：
+
+- 排序键相差在 `tolerance_px`（默认 `8.0` 像素）以内，分不出左右/前后；
+- `ordinal` 超过候选数量（比如只有 2 个却要"第三个"）；
+- `nearest` / `farthest` 缺少内参或 `T_base_camera`，拿不到 base 坐标。
+
+这三种都不应该被当成"没找到"，正确处理是向操作员追问，而不是抓一个猜的目标。
+
+语言侧由 `src/sensoragent/agent/prompts/intent_to_workflow.md` 负责把空间修饰词从
+物件名里剥出来：`"把左侧的扳手放到料箱第三格"` 会解析成
+`object_query="扳手"` 加 `spatial_constraint={"relation":"left","ordinal":1}`，
+避免把"左侧的扳手"整串丢给检测器。

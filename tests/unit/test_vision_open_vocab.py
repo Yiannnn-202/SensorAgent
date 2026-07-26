@@ -135,6 +135,21 @@ class _FakeMultiBoxBackend:
     return self._detections(query)
 
 
+class _FakeRaisingBackend:
+  """Backend that raises a configured exception (for error-mapping tests)."""
+
+  def __init__(self, error: Exception) -> None:
+    self._error = error
+
+  def detect(self, *, query, image_path, depth_path, options):
+    del query, image_path, depth_path, options
+    raise self._error
+
+  def detect_all(self, *, query, image_path, depth_path, options):
+    del query, image_path, depth_path, options
+    raise self._error
+
+
 class _FakeMaskRefiner:
   def segment(
     self,
@@ -583,6 +598,33 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertEqual(_grounding_prompt("left wrench"), "wrench")
     self.assertEqual(_grounding_prompt("第二个滚柱"), "roller")
     self.assertEqual(_grounding_prompt("扳手"), "wrench")
+
+  def test_oserror_from_detector_maps_to_backend_error(self) -> None:
+    result = VisionOpenVocabularyDetectTool(
+      detector=_FakeRaisingBackend(OSError("connection timed out"))
+    ).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "image_path": "frame.png"},
+        trace=TraceContext(),
+      )
+    )
+    self.assertFalse(result.success)
+    self.assertIn("VISION_BACKEND_ERROR", result.error or "")
+
+  def test_permission_error_maps_to_input_error(self) -> None:
+    result = VisionOpenVocabularyDetectTool(
+      detector=_FakeRaisingBackend(PermissionError("permission denied"))
+    ).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "image_path": "frame.png"},
+        trace=TraceContext(),
+      )
+    )
+    self.assertFalse(result.success)
+    self.assertIn("VISION_INPUT_ERROR", result.error or "")
+    self.assertNotIn("VISION_BACKEND_ERROR", result.error or "")
 
   def test_mask_refinement_drives_centroid_and_depth_sampling(self) -> None:
     import json

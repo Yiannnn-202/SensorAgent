@@ -91,6 +91,41 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_si
   --execute
 ```
 
+## 5. Disambiguate two identical rollers
+
+`worlds/industrial_pgs.sdf` spawns two rollers so the spatial resolver has a
+real multi-candidate scene:
+
+| Model | World pose (x, y) | base_link (x, y) | In the camera image |
+| --- | --- | --- | --- |
+| `roller_01` | (0.24, 0.23) | (0.24, 0.23) | left |
+| `roller_02` | (0.24, -0.12) | (0.24, -0.12) | right |
+
+The rig's optical +X maps to base -Y, so the larger-Y roller (`roller_01`)
+appears on the image left. Pick one explicitly:
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
+  --object-query roller \
+  --spatial-relation left \
+  --target bin_cell_3 \
+  --execute
+```
+
+`--spatial-relation right` selects `roller_02` instead. Without the flag the
+detector falls back to top-1 confidence, which is not deterministic across two
+identical parts — so always pass a relation in this scene.
+
+`roller_02` sits 0.030 m in front of the bin's near wall (bin footprint starts
+at x=0.290, the roller ends at x=0.260). That clears the world geometry, but it
+is tight for the 2F-85 fingertips — if a right-roller pick trips a collision
+check, move `roller_02` to a smaller x rather than widening the gripper stroke.
+
+Relations `left/right/front/back/largest/smallest` need no depth;
+`nearest/farthest` back-project through `scene.workspace.table_z`. See
+[vision_open_vocab_cn.md](vision_open_vocab_cn.md) section 7 for the full
+resolver semantics and the `OBJECT_AMBIGUOUS` cases.
+
 ## Notes
 
 - `python3 scripts/linux/capture_gazebo_rgbd_frame.py` uses ROS 2 Python because

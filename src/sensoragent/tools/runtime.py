@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from typing import TYPE_CHECKING
 
-from sensoragent.contracts import ContractValidator
 from sensoragent.logger import TaskLogger
 from sensoragent.schemas import ToolCall, ToolResult, TraceContext
 from sensoragent.tools.base import ToolRegistry
 from sensoragent.tools.errors import ToolError, ToolExecutionError, ToolTimeoutError
+
+if TYPE_CHECKING:
+  from sensoragent.contracts import ContractValidator
 
 
 class ToolRuntime:

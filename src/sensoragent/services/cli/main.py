@@ -11,6 +11,7 @@ from typing import Sequence
 from sensoragent.agent import build_agent_from_env
 from sensoragent.mcp import MockMcpEndpoint
 from sensoragent.schemas import TraceContext
+from sensoragent.tools.vision import SPATIAL_RELATIONS
 
 
 def _default_task_log_path(prefix: str = "mock_pick_place") -> Path:
@@ -173,6 +174,22 @@ def _build_parser() -> argparse.ArgumentParser:
   vision_detect.add_argument("--text-threshold", type=float, default=None)
   vision_detect.add_argument("--depth-scale", type=float, default=None)
   vision_detect.add_argument(
+    "--spatial-relation",
+    default=None,
+    choices=sorted(SPATIAL_RELATIONS),
+    help=(
+      "Disambiguate several identical objects by spatial relation. "
+      "left/right/front/back/largest/smallest work on the image alone; "
+      "nearest/farthest rank by base XY and need --camera-info."
+    ),
+  )
+  vision_detect.add_argument(
+    "--spatial-ordinal",
+    type=int,
+    default=1,
+    help="Which candidate to take along --spatial-relation (1=first). Default 1.",
+  )
+  vision_detect.add_argument(
     "--no-refine",
     action="store_true",
     help="Skip SAM 2 and keep the detector bounding box.",
@@ -280,6 +297,8 @@ def _run_listen_task(args: argparse.Namespace) -> int:
 
 
 def _run_vision_detect(args: argparse.Namespace) -> int:
+  if args.spatial_ordinal < 1:
+    raise SystemExit("--spatial-ordinal must be >= 1")
   log_path = args.log_path or _default_task_log_path("vision_detect")
   bundle = build_agent_from_env(args.config, log_path=log_path)
   input_data = {
@@ -299,6 +318,11 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
     "depth_scale": args.depth_scale,
   }
   input_data.update({key: value for key, value in optional.items() if value is not None})
+  if args.spatial_relation is not None:
+    input_data["spatial_constraint"] = {
+      "relation": args.spatial_relation,
+      "ordinal": args.spatial_ordinal,
+    }
   result = bundle.tool_runtime.invoke(
     "vision.open_vocab_detect",
     input_data,
