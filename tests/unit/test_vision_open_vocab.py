@@ -270,6 +270,54 @@ class VisionOpenVocabularyToolTest(TestCase):
       {"x": 0.1, "y": 0.2, "z": 1.3, "frame_id": "base_link", "unit": "m"},
     )
 
+  def test_depth_projection_outputs_world_position(self) -> None:
+    import json
+    import tempfile
+    import numpy as np
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      root = Path(temp_dir)
+      depth_path = root / "depth.npy"
+      camera_info_path = root / "camera_info.json"
+      np.save(depth_path, np.ones((5, 5), dtype=np.float32))
+      camera_info_path.write_text(
+        json.dumps({"k": [100.0, 0.0, 2.0, 0.0, 100.0, 2.0, 0.0, 0.0, 1.0]}),
+        encoding="utf-8",
+      )
+
+      result = VisionOpenVocabularyDetectTool(
+        detector=_FakeBoxOnlyBackend(),
+        t_base_camera=[
+          [1.0, 0.0, 0.0, 0.1],
+          [0.0, 1.0, 0.0, 0.2],
+          [0.0, 0.0, 1.0, 0.3],
+          [0.0, 0.0, 0.0, 1.0],
+        ],
+        t_world_camera=[
+          [1.0, 0.0, 0.0, 1.0],
+          [0.0, 1.0, 0.0, 2.0],
+          [0.0, 0.0, 1.0, 3.0],
+          [0.0, 0.0, 0.0, 1.0],
+        ],
+      ).run(
+        ToolCall(
+          tool="vision.open_vocab_detect",
+          input={
+            "query": "roller",
+            "image_path": "rgb.npy",
+            "depth_path": str(depth_path),
+            "camera_info_path": str(camera_info_path),
+          },
+          trace=TraceContext(),
+        )
+      )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["position_camera"], [0.0, 0.0, 1.0])
+    self.assertEqual(result.output["position_base"], [0.1, 0.2, 1.3])
+    self.assertEqual(result.output["position_world"], [1.0, 2.0, 4.0])
+    self.assertEqual(result.output["world_frame"], "world")
+
   def test_missing_depth_file_is_reported_as_input_error(self) -> None:
     result = VisionOpenVocabularyDetectTool(
       detector=_FakeBoxOnlyBackend(),
@@ -592,7 +640,8 @@ class VisionOpenVocabularyToolTest(TestCase):
 
     workspace = load_config(ROOT / "configs" / "robot_sim.yaml").scene.workspace
     self.assertEqual(workspace.get("frame"), "base_link")
-    self.assertEqual(workspace.get("x"), [0.15, 0.60])
+    self.assertEqual(workspace.get("x"), [0.09, 0.59])
+    self.assertEqual(workspace.get("y"), [-0.375, 0.375])
     self.assertEqual(workspace.get("table_z"), 0.12)
 
   def test_grounding_prompt_strips_spatial_modifiers(self) -> None:

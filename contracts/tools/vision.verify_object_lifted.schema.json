@@ -1,0 +1,30 @@
+{
+  "name": "vision.verify_object_lifted",
+  "version": "0.1.0",
+  "description": "Compare before/after object poses to detect empty grasp or dropped object cases.",
+  "input_schema": {
+    "type": "object",
+    "required": ["before_pose"],
+    "properties": {
+      "before_pose": {"type": "array", "items": {"type": "number"}},
+      "after_pose": {"type": "array", "items": {"type": "number"}},
+      "current_pose": {"type": "array", "items": {"type": "number"}},
+      "min_lift_delta": {"type": "number"},
+      "max_xy_drift": {"type": "number"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["lifted", "before_position", "after_position", "lift_delta", "xy_drift"],
+    "properties": {
+      "lifted": {"type": "boolean"},
+      "before_position": {"type": "array", "items": {"type": "number"}},
+      "after_position": {"type": "array", "items": {"type": "number"}},
+      "lift_delta": {"type": "number"},
+      "xy_drift": {"type": "number"},
+      "min_lift_delta": {"type": "number"},
+      "max_xy_drift": {"type": "number"}
+    }
+  },
+  "errors": ["POSE_INVALID", "DROPPED_OBJECT"]
+}

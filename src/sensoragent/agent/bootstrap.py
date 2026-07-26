@@ -55,10 +55,13 @@ from sensoragent.tools.robot import (
   RobotStopTool,
   default_place_target_registry,
 )
+from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
 from sensoragent.tools.vision import VisionConfigDetectTool, VisionOpenVocabularyDetectTool
+from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
+  build_industrial_recovery_pick_place_tree,
   build_industrial_pick_only_actionlist,
   build_industrial_pick_place_actionlist,
   build_industrial_place_only_actionlist,
@@ -82,12 +85,16 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
   "robot.plan_oriented_pick": RobotPlanOrientedPickTool,
   "robot.plan_place": RobotPlanPlaceTool,
   "robot.plan_top_down_pick": RobotPlanTopDownPickTool,
+  "recovery.classify_failure": RecoveryClassifyFailureTool,
+  "recovery.plan": RecoveryPlanTool,
+  "vision.verify_object_lifted": VisionVerifyObjectLiftedTool,
 }
 
 
 SCENE_TOOL_NAMES = {
   "vision.config_detect",
   "vision.open_vocab_detect",
+  "vision.verify_object_in_bin",
   "robot.resolve_place_target",
 }
 
@@ -124,6 +131,9 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
   if tool_name == "robot.resolve_place_target":
     targets = config.scene.place_targets or default_place_target_registry()
     return RobotResolvePlaceTargetTool(targets)
+  if tool_name == "vision.verify_object_in_bin":
+    targets = config.scene.place_targets or default_place_target_registry()
+    return VisionVerifyObjectInBinTool(targets)
   raise KeyError(f"Not a scene tool: {tool_name}")
 
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {
@@ -312,7 +322,9 @@ def build_agent(
     actionlists,
     logger,
   )
-  decision_trees: dict[str, object] = {}
+  decision_trees: dict[str, object] = {
+    "industrial.recovery_pick_place_tree": build_industrial_recovery_pick_place_tree(),
+  }
   task_store = InMemoryTaskStore()
   event_stream = InMemoryEventStream()
   planner = None
@@ -322,7 +334,9 @@ def build_agent(
     )
     planner = LLMPlanner(
       OpenAICompatibleClient(load_llm_config_from_env()),
-      allowed_targets=tuple(actionlists.keys()),
+      # DecisionTree targets are dispatched separately by target_kind but share
+      # the same LLM whitelist to prevent arbitrary workflow selection.
+      allowed_targets=tuple(actionlists.keys()) + tuple(decision_trees.keys()),
       allowed_place_targets=place_targets,
     )
   elif planner_mode != "static":

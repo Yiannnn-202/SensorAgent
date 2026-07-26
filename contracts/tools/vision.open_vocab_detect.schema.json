@@ -19,6 +19,13 @@
           "items": {"type": "number"}
         }
       },
+      "T_world_camera": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {"type": "number"}
+        }
+      },
       "position_base_offset": {
         "type": "array",
         "items": {"type": "number"}
@@ -32,6 +39,7 @@
       "require_masks": {"type": "boolean"},
       "camera_frame": {"type": "string"},
       "base_frame": {"type": "string"},
+      "world_frame": {"type": "string"},
       "spatial_constraint": {
         "type": "object",
         "properties": {
@@ -70,6 +78,7 @@
       "depth_m": {"type": "number"},
       "position_camera": {"type": "array", "items": {"type": "number"}},
       "position_base": {"type": "array", "items": {"type": "number"}},
+      "position_world": {"type": "array", "items": {"type": "number"}},
       "pose_3d": {"type": "array", "items": {"type": "number"}},
       "position_3d": {
         "type": "object",

@@ -7,15 +7,26 @@
         <pose>0 0 0.28 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.8 0.75 0.04</size>
+            <size>0.5 0.75 0.04</size>
           </box>
         </geometry>
         <surface>
           <friction>
             <ode>
-              <mu>0.8</mu>
-              <mu2>0.8</mu2>
+              <mu>20.0</mu>
+              <mu2>20.0</mu2>
+              <slip1>0.0</slip1>
+              <slip2>0.0</slip2>
             </ode>
+            <torsional>
+              <coefficient>1.0</coefficient>
+              <patch_radius>0.02</patch_radius>
+              <surface_radius>0.02</surface_radius>
+              <use_patch_radius>true</use_patch_radius>
+              <ode>
+                <slip>0.0</slip>
+              </ode>
+            </torsional>
           </friction>
         </surface>
       </collision>
@@ -23,7 +34,7 @@
         <pose>0 0 0.28 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.8 0.75 0.04</size>
+            <size>0.5 0.75 0.04</size>
           </box>
         </geometry>
         <material>
@@ -34,11 +45,11 @@
       </visual>
 
       <collision name="front_left_leg_collision">
-        <pose>-0.33 0.30 0.13 0 0 0</pose>
+        <pose>-0.20 0.30 0.13 0 0 0</pose>
         <geometry><box><size>0.06 0.06 0.26</size></box></geometry>
       </collision>
       <visual name="front_left_leg_visual">
-        <pose>-0.33 0.30 0.13 0 0 0</pose>
+        <pose>-0.20 0.30 0.13 0 0 0</pose>
         <geometry><box><size>0.06 0.06 0.26</size></box></geometry>
         <material>
           <ambient>0.10 0.12 0.14 1</ambient>
@@ -47,11 +58,11 @@
       </visual>
 
       <collision name="front_right_leg_collision">
-        <pose>0.33 0.30 0.13 0 0 0</pose>
+        <pose>0.20 0.30 0.13 0 0 0</pose>
         <geometry><box><size>0.06 0.06 0.26</size></box></geometry>
       </collision>
       <visual name="front_right_leg_visual">
-        <pose>0.33 0.30 0.13 0 0 0</pose>
+        <pose>0.20 0.30 0.13 0 0 0</pose>
         <geometry><box><size>0.06 0.06 0.26</size></box></geometry>
         <material>
           <ambient>0.10 0.12 0.14 1</ambient>
@@ -60,11 +71,11 @@
       </visual>
 
       <collision name="back_left_leg_collision">
-        <pose>-0.33 -0.30 0.13 0 0 0</pose>
+        <pose>-0.20 -0.30 0.13 0 0 0</pose>
         <geometry><box><size>0.06 0.06 0.26</size></box></geometry>
       </collision>
       <visual name="back_left_leg_visual">
-        <pose>-0.33 -0.30 0.13 0 0 0</pose>
+        <pose>-0.20 -0.30 0.13 0 0 0</pose>
         <geometry><box><size>0.06 0.06 0.26</size></box></geometry>
         <material>
           <ambient>0.10 0.12 0.14 1</ambient>
@@ -73,11 +84,11 @@
       </visual>
 
       <collision name="back_right_leg_collision">
-        <pose>0.33 -0.30 0.13 0 0 0</pose>
+        <pose>0.20 -0.30 0.13 0 0 0</pose>
         <geometry><box><size>0.06 0.06 0.26</size></box></geometry>
       </collision>
       <visual name="back_right_leg_visual">
-        <pose>0.33 -0.30 0.13 0 0 0</pose>
+        <pose>0.20 -0.30 0.13 0 0 0</pose>
         <geometry><box><size>0.06 0.06 0.26</size></box></geometry>
         <material>
           <ambient>0.10 0.12 0.14 1</ambient>

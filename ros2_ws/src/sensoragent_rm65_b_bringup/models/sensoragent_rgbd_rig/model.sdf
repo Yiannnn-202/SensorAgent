@@ -4,40 +4,40 @@
     <static>true</static>
     <link name="rig">
       <visual name="left_post">
-        <pose>0.47 0.42 0.57 0 0 0</pose>
+        <pose>0.34 0.42 0.57 0 0 0</pose>
         <geometry><box><size>0.04 0.04 1.14</size></box></geometry>
         <material><diffuse>0.12 0.12 0.12 1</diffuse></material>
       </visual>
       <collision name="left_post_collision">
-        <pose>0.47 0.42 0.57 0 0 0</pose>
+        <pose>0.34 0.42 0.57 0 0 0</pose>
         <geometry><box><size>0.04 0.04 1.14</size></box></geometry>
       </collision>
       <visual name="right_post">
-        <pose>0.47 -0.42 0.57 0 0 0</pose>
+        <pose>0.34 -0.42 0.57 0 0 0</pose>
         <geometry><box><size>0.04 0.04 1.14</size></box></geometry>
         <material><diffuse>0.12 0.12 0.12 1</diffuse></material>
       </visual>
       <collision name="right_post_collision">
-        <pose>0.47 -0.42 0.57 0 0 0</pose>
+        <pose>0.34 -0.42 0.57 0 0 0</pose>
         <geometry><box><size>0.04 0.04 1.14</size></box></geometry>
       </collision>
       <visual name="crossbar">
-        <pose>0.47 0 1.12 0 0 0</pose>
+        <pose>0.34 0 1.12 0 0 0</pose>
         <geometry><box><size>0.05 0.88 0.05</size></box></geometry>
         <material><diffuse>0.12 0.12 0.12 1</diffuse></material>
       </visual>
       <collision name="crossbar_collision">
-        <pose>0.47 0 1.12 0 0 0</pose>
+        <pose>0.34 0 1.12 0 0 0</pose>
         <geometry><box><size>0.05 0.88 0.05</size></box></geometry>
       </collision>
       <visual name="camera_body">
-        <pose>0.47 0 1.08 0 0 0</pose>
+        <pose>0.34 0 1.08 0 0 0</pose>
         <geometry><box><size>0.10 0.06 0.04</size></box></geometry>
         <material><diffuse>0.04 0.04 0.04 1</diffuse></material>
       </visual>
 
       <sensor name="rgb_camera" type="camera">
-        <pose>0.47 0 1.06 0 1.570796 0</pose>
+        <pose>0.34 0 1.06 0 1.570796 0</pose>
         <always_on>true</always_on>
         <update_rate>10</update_rate>
         <topic>/industrial_camera/image</topic>
@@ -57,7 +57,7 @@
       </sensor>
 
       <sensor name="depth_camera" type="depth_camera">
-        <pose>0.47 0 1.06 0 1.570796 0</pose>
+        <pose>0.34 0 1.06 0 1.570796 0</pose>
         <always_on>true</always_on>
         <update_rate>10</update_rate>
         <topic>/industrial_camera/depth_image</topic>

@@ -12,6 +12,10 @@ from sensoragent.tools.vision.open_vocab import (
   VisionInferenceOptions,
   VisionOpenVocabularyDetectTool,
 )
+from sensoragent.tools.vision.verify import (
+  VisionVerifyObjectInBinTool,
+  VisionVerifyObjectLiftedTool,
+)
 
 __all__ = [
   "SPATIAL_RELATIONS",
@@ -24,4 +28,6 @@ __all__ = [
   "VisionDetection",
   "VisionInferenceOptions",
   "VisionOpenVocabularyDetectTool",
+  "VisionVerifyObjectInBinTool",
+  "VisionVerifyObjectLiftedTool",
 ]

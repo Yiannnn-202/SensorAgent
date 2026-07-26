@@ -11,7 +11,7 @@ PICK_SPEED = 2.0
 PICK_DESCENT_SPEED = 1.5
 GRIPPER_CLOSE_OPENING = 0.02
 
-PLACE_CLEARANCE = 0.15
+PLACE_CLEARANCE = 0.08
 PLACE_SPEED = 2.0
 GRIPPER_OPEN_OPENING = 0.0848
 GRIPPER_SPEED = 0.5
@@ -129,6 +129,16 @@ def build_industrial_pick_place_actionlist() -> ActionList:
           "speed": GRIPPER_SPEED,
         },
         stop_on_failure=False,
+      ),
+      ActionStep(
+        name="place_lift_clearance",
+        kind=ActionStepKind.TOOL,
+        target="robot.move_linear",
+        input={
+          "pose": "{{ place_plan.plan.retreat }}",
+          "speed": PLACE_SPEED,
+          "wait": True,
+        },
       ),
       ActionStep(
         name="place_retreat",
@@ -262,6 +272,16 @@ def build_industrial_place_only_actionlist() -> ActionList:
           "speed": GRIPPER_SPEED,
         },
         stop_on_failure=False,
+      ),
+      ActionStep(
+        name="place_lift_clearance",
+        kind=ActionStepKind.TOOL,
+        target="robot.move_linear",
+        input={
+          "pose": "{{ place_plan.plan.retreat }}",
+          "speed": PLACE_SPEED,
+          "wait": True,
+        },
       ),
       ActionStep(
         name="place_retreat",

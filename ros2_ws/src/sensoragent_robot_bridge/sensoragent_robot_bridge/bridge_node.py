@@ -16,9 +16,11 @@ from geometry_msgs.msg import Pose
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from moveit_msgs.msg import (
     Constraints,
+    CollisionObject,
     JointConstraint,
     MoveItErrorCodes,
     OrientationConstraint,
+    PlanningScene,
     PositionConstraint,
 )
 from moveit_msgs.srv import GetCartesianPath
@@ -148,6 +150,11 @@ class RobotBridgeNode(Node):
         self._cartesian_client = self.create_client(
             GetCartesianPath,
             "/compute_cartesian_path",
+        )
+        self._planning_scene_pub = self.create_publisher(
+            PlanningScene,
+            "/planning_scene",
+            10,
         )
 
         self._tf_buffer = Buffer()
@@ -368,6 +375,67 @@ class RobotBridgeNode(Node):
             raise ValueError(f"speed must be greater than 0 and at most {MAX_SPEED:g}")
         return speed
 
+    def _box_collision_object(
+        self,
+        object_id: str,
+        *,
+        center: tuple[float, float, float],
+        size: tuple[float, float, float],
+    ) -> CollisionObject:
+        collision = CollisionObject()
+        collision.header.frame_id = self._base_frame
+        collision.id = object_id
+        primitive = SolidPrimitive()
+        primitive.type = SolidPrimitive.BOX
+        primitive.dimensions = [float(value) for value in size]
+        pose = Pose()
+        pose.position.x = float(center[0])
+        pose.position.y = float(center[1])
+        pose.position.z = float(center[2])
+        pose.orientation.w = 1.0
+        collision.primitives.append(primitive)
+        collision.primitive_poses.append(pose)
+        collision.operation = CollisionObject.ADD
+        return collision
+
+    def _camera_rig_collision_objects(self) -> list[CollisionObject]:
+        """Collision objects matching sensoragent_rgbd_rig/model.sdf.
+
+        The SDF poses are in world coordinates; base_link is mounted at world
+        z=0.18 with aligned x/y axes, so these base-frame z centers subtract
+        0.18 m. Keeping these objects in MoveIt's planning scene prevents the
+        arm from planning through the Gazebo camera posts or crossbar.
+        """
+
+        return [
+            self._box_collision_object(
+                "sensoragent_camera_left_post",
+                center=(0.34, 0.42, 0.39),
+                size=(0.04, 0.04, 1.14),
+            ),
+            self._box_collision_object(
+                "sensoragent_camera_right_post",
+                center=(0.34, -0.42, 0.39),
+                size=(0.04, 0.04, 1.14),
+            ),
+            self._box_collision_object(
+                "sensoragent_camera_crossbar",
+                center=(0.34, 0.0, 0.94),
+                size=(0.05, 0.88, 0.05),
+            ),
+            self._box_collision_object(
+                "sensoragent_camera_body",
+                center=(0.34, 0.0, 0.90),
+                size=(0.10, 0.06, 0.04),
+            ),
+        ]
+
+    def _publish_static_obstacles(self) -> None:
+        scene = PlanningScene()
+        scene.is_diff = True
+        scene.world.collision_objects = self._camera_rig_collision_objects()
+        self._planning_scene_pub.publish(scene)
+
     def _move_group_goal(
         self,
         constraints: Constraints,
@@ -388,6 +456,9 @@ class RobotBridgeNode(Node):
         goal.planning_options.replan_delay = 0.2
         goal.planning_options.planning_scene_diff.is_diff = True
         goal.planning_options.planning_scene_diff.robot_state.is_diff = True
+        goal.planning_options.planning_scene_diff.world.collision_objects = (
+            self._camera_rig_collision_objects()
+        )
         return goal
 
     def _run_move_group(
@@ -397,6 +468,7 @@ class RobotBridgeNode(Node):
         speed: float,
     ) -> dict:
         self._set_arm_status("moving")
+        self._publish_static_obstacles()
         result, error = self._send_action(
             self._move_group_client,
             self._move_group_goal(constraints, speed),
@@ -557,6 +629,7 @@ class RobotBridgeNode(Node):
             request.revolute_jump_threshold = 0.0
             request.avoid_collisions = True
 
+            self._publish_static_obstacles()
             self._set_arm_status("planning")
             service_result = self._wait_future(
                 self._cartesian_client.call_async(request),

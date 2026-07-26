@@ -52,6 +52,15 @@ The industrial camera topics should be available:
 /industrial_camera/depth_camera_info
 ```
 
+Current scene layout:
+
+- one `roller` only, spawned near base_link `[0.24, 0.18, 0.142]`;
+- a flat 2x2 target grid instead of a walled bin; colored areas are visual-only,
+  while white boundaries are low-profile physical strips;
+- target names are `target_area_1` to `target_area_4`;
+- the workbench is `0.5 x 0.75 m`, has a high-friction collision surface, and
+  the camera is centered over it.
+
 ## 3. Capture one RGB-D frame
 
 Run this with the ROS 2 Python environment:
@@ -78,7 +87,7 @@ Plan-only / fake robot backend:
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
   --object-query roller \
-  --target bin_cell_3 \
+  --target target_area_3 \
   --no-capture
 ```
 
@@ -87,39 +96,32 @@ Capture and execute against Gazebo:
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
   --object-query roller \
-  --target bin_cell_3 \
+  --target target_area_3 \
   --execute
 ```
 
-## 5. Disambiguate two identical rollers
+If a descriptive prompt like `red roller` is too narrow for YOLOE, the runner
+now retries practical aliases such as `roller`, `red cylinder`, and
+`red cylindrical object`. The selected detection output includes
+`query_attempts` so you can see which prompt/threshold succeeded.
 
-`worlds/industrial_pgs.sdf` spawns two rollers so the spatial resolver has a
-real multi-candidate scene:
+The runner passes an empty object (`{}`) when no spatial selector is requested.
+Do not pass JSON `null` as `spatial_constraint`; the tool schema expects an
+object.
 
-| Model | World pose (x, y) | base_link (x, y) | In the camera image |
-| --- | --- | --- | --- |
-| `roller_01` | (0.24, 0.23) | (0.24, 0.23) | left |
-| `roller_02` | (0.24, -0.12) | (0.24, -0.12) | right |
+## 5. Optional spatial selection
 
-The rig's optical +X maps to base -Y, so the larger-Y roller (`roller_01`)
-appears on the image left. Pick one explicitly:
+The current default world has only one roller, so spatial selection is normally
+unnecessary. You can still test the spatial resolver if you add multiple
+objects or use a custom world:
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
   --object-query roller \
   --spatial-relation left \
-  --target bin_cell_3 \
+  --target target_area_3 \
   --execute
 ```
-
-`--spatial-relation right` selects `roller_02` instead. Without the flag the
-detector falls back to top-1 confidence, which is not deterministic across two
-identical parts — so always pass a relation in this scene.
-
-`roller_02` sits 0.030 m in front of the bin's near wall (bin footprint starts
-at x=0.290, the roller ends at x=0.260). That clears the world geometry, but it
-is tight for the 2F-85 fingertips — if a right-roller pick trips a collision
-check, move `roller_02` to a smaller x rather than widening the gripper stroke.
 
 Relations `left/right/front/back/largest/smallest` need no depth;
 `nearest/farthest` back-project through `scene.workspace.table_z`. See
@@ -134,5 +136,7 @@ resolver semantics and the `OBJECT_AMBIGUOUS` cases.
   the Agent Python environment.
 - `vision.open_vocab_detect` uses YOLOE/Ultralytics when the model is present.
   For current red-object Gazebo debugging, it also has a red-component fallback.
-- 3D projection uses bbox-center depth median and either captured TF or the
-  fixed Gazebo `T_base_camera` from `configs/robot_sim.yaml`.
+- 3D projection uses bbox/mask-center depth median plus camera intrinsics, then
+  transforms through captured TF (`T_base_camera` and `T_world_camera`). If TF is
+  unavailable, the runner falls back to fixed Gazebo `T_base_camera` from
+  `configs/robot_sim.yaml` for base-frame localization.

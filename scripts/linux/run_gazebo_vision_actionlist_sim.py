@@ -25,7 +25,8 @@ if str(SCRIPT_DIR) not in sys.path:
 from test_gazebo_pick_pipeline import _check_bridge, _load_agent_config, _print_section, _wait_for_bridge, _wait_for_ready  # noqa: E402
 
 from sensoragent.agent import build_agent  # noqa: E402
-from sensoragent.schemas import TraceContext  # noqa: E402
+from sensoragent.schemas import ToolCall, ToolResult, TraceContext  # noqa: E402
+from sensoragent.tools.base import Tool  # noqa: E402
 
 
 ACTIONLIST_NAME = "industrial.vision_pick_place_actionlist"
@@ -33,6 +34,94 @@ ACTIONLIST_NAME = "industrial.vision_pick_place_actionlist"
 
 def _json_dump(value) -> str:
   return json.dumps(value, ensure_ascii=False, indent=2, default=str, sort_keys=True)
+
+
+def _vision_query_aliases(query: str) -> list[str]:
+  aliases = [query]
+  normalized = query.casefold()
+  if "roller" in normalized or "cylinder" in normalized or "滚柱" in query:
+    aliases.extend([
+      "roller",
+      "red cylinder",
+      "red cylindrical object",
+      "cylinder",
+      "blue roller",
+      "blue cylinder",
+    ])
+  result: list[str] = []
+  seen: set[str] = set()
+  for alias in aliases:
+    candidate = alias.strip()
+    key = candidate.casefold()
+    if candidate and key not in seen:
+      result.append(candidate)
+      seen.add(key)
+  return result
+
+
+class _VisionQueryRetryTool:
+  """Retry YOLOE detection with practical aliases when a prompt is too narrow."""
+
+  def __init__(self, wrapped: Tool) -> None:
+    self.spec = wrapped.spec
+    self._wrapped = wrapped
+
+  def run(self, call: ToolCall) -> ToolResult:
+    query = call.input.get("query")
+    if not isinstance(query, str):
+      return self._wrapped.run(call)
+    attempts: list[dict] = []
+    last_result: ToolResult | None = None
+    thresholds = (
+      (
+        call.input.get("box_threshold"),
+        call.input.get("text_threshold"),
+      ),
+      (0.25, 0.15),
+      (0.15, 0.10),
+      (0.08, 0.05),
+    )
+    seen_thresholds: set[tuple[object, object]] = set()
+    for alias in _vision_query_aliases(query):
+      for box_threshold, text_threshold in thresholds:
+        threshold_key = (box_threshold, text_threshold)
+        if threshold_key in seen_thresholds and alias == query:
+          continue
+        input_data = {**call.input, "query": alias}
+        if box_threshold is not None:
+          input_data["box_threshold"] = box_threshold
+        if text_threshold is not None:
+          input_data["text_threshold"] = text_threshold
+        result = self._wrapped.run(ToolCall(tool=call.tool, input=input_data, trace=call.trace))
+        last_result = result
+        attempt = {
+          "query": alias,
+          "box_threshold": input_data.get("box_threshold"),
+          "text_threshold": input_data.get("text_threshold"),
+          "success": result.success,
+          "error": result.error,
+        }
+        if result.output:
+          attempt["confidence"] = result.output.get("confidence")
+          attempt["pose_3d"] = result.output.get("pose_3d")
+        attempts.append(attempt)
+        if result.success and result.output:
+          output = dict(result.output)
+          output["query_attempts"] = attempts
+          return ToolResult(tool=result.tool, success=True, output=output, error=None)
+        if result.error != "OBJECT_NOT_FOUND":
+          output = dict(result.output) if result.output else {}
+          output["query_attempts"] = attempts
+          return ToolResult(tool=result.tool, success=False, output=output, error=result.error)
+      seen_thresholds.clear()
+    output = dict(last_result.output) if last_result and last_result.output else {}
+    output["query_attempts"] = attempts
+    return ToolResult(
+      tool=self.spec.name,
+      success=False,
+      output=output or None,
+      error=last_result.error if last_result else "OBJECT_NOT_FOUND",
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -142,6 +231,14 @@ def _frame_manifest(frame_dir: Path) -> dict:
   return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
+def _gazebo_world_camera_fallback(t_base_camera: list | None) -> list | None:
+  if not isinstance(t_base_camera, list) or len(t_base_camera) != 4:
+    return None
+  matrix = [[float(value) for value in row] for row in t_base_camera]
+  matrix[2][3] += 0.18
+  return matrix
+
+
 def main() -> int:
   args = _build_parser().parse_args()
   config = _load_agent_config(args.config, args.endpoint)
@@ -168,6 +265,9 @@ def main() -> int:
     config = replace(config, integrations=replace(config.integrations, robot=robot))
 
   bundle = build_agent(config)
+  bundle.tool_registry._tools["vision.open_vocab_detect"] = _VisionQueryRetryTool(  # noqa: SLF001
+    bundle.tool_registry.get("vision.open_vocab_detect")
+  )
   action_input = {
     "object_query": args.object_query,
     "target": args.target,
@@ -176,10 +276,14 @@ def main() -> int:
     "camera_info_path": manifest["camera_info_path"],
     "T_base_camera": manifest.get("T_base_camera")
     or config.integrations.vision.get("T_base_camera"),
+    "T_world_camera": manifest.get("T_world_camera")
+    or _gazebo_world_camera_fallback(
+      manifest.get("T_base_camera") or config.integrations.vision.get("T_base_camera")
+    ),
     "spatial_constraint": (
       {"relation": args.spatial_relation, "ordinal": args.spatial_ordinal}
       if args.spatial_relation
-      else None
+      else {}
     ),
   }
   _print_section(

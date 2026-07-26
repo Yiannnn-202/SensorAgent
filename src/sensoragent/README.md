@@ -43,6 +43,10 @@ robot.stop
 gripper.open
 gripper.close
 gripper.get_state
+vision.verify_object_lifted
+vision.verify_object_in_bin
+recovery.classify_failure
+recovery.plan
 audio.mock_transcribe
 audio.listen_transcribe
 audio.listen_vad_transcribe
@@ -74,7 +78,15 @@ industrial.vision_pick_place_actionlist
 ```
 
 DecisionTree support is implemented and tested with mock retry and not-found
-flows, but no production robot DecisionTree is registered.
+flows. The production-facing registered tree is:
+
+```text
+industrial.recovery_pick_place_tree
+```
+
+It classifies failed nodes through `recovery.classify_failure`, plans bounded
+local recovery through `recovery.plan`, and branches into re-detect, re-pick,
+re-place, gripper release, or bridge reset paths.
 
 ## Audio path
 

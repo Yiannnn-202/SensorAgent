@@ -1,0 +1,31 @@
+{
+  "name": "recovery.classify_failure",
+  "version": "0.1.0",
+  "description": "Classify failed workflow evidence into a typed failure category.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "evidence": {
+        "type": "object",
+        "description": "Failure evidence from a workflow node, action step, tool, skill, or verifier."
+      },
+      "min_confidence": {"type": "number"},
+      "min_grasp_opening": {"type": "number"},
+      "max_grasp_opening": {"type": "number"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["failure_type", "phase", "retryable", "confidence", "reason", "recommended_strategy"],
+    "properties": {
+      "failure_type": {"type": "string"},
+      "phase": {"type": "string"},
+      "retryable": {"type": "boolean"},
+      "confidence": {"type": "number"},
+      "reason": {"type": "string"},
+      "recommended_strategy": {"type": "string"},
+      "evidence": {"type": "object"}
+    }
+  },
+  "errors": ["INVALID_EVIDENCE"]
+}

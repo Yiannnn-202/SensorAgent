@@ -26,6 +26,8 @@ operation guides, and a small number of project planning records.
 - [SensorAgent simulation robot HTTP bridge](guides/robot_sim_bridge_cn.md)
 - [Industrial tabletop Gazebo environment](guides/industrial_gazebo_environment_cn.md)
 - [Industrial intent to ActionList workflow](guides/intent_to_actionlist_cn.md)
+- [Failure detection and recovery planning](guides/failure_recovery_cn.md)
+- [Gazebo failure recovery demo](guides/gazebo_recovery_demo_cn.md)
 - [Open-vocabulary vision Tool](guides/vision_open_vocab_cn.md)
 - [Gazebo vision VM setup](guides/gazebo_vision_vm_setup.md)
 - [Gazebo RGB-D vision ActionList test](guides/gazebo_vision_actionlist_test.md)
