@@ -12,7 +12,8 @@ models/vision/yoloe.pt
 
 The Grounding DINO configuration accepts either a Hugging Face model ID or a
 local `from_pretrained` directory. SAM 2 accepts a local Ultralytics weight
-path; the default `sam2_t.pt` name may be downloaded by Ultralytics at runtime.
+path; the default `models/vision/sam2_t.pt` file may be downloaded by
+Ultralytics at runtime.
 
 Configure the references under `integrations.vision`:
 

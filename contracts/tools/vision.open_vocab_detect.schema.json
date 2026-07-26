@@ -10,6 +10,7 @@
       "image_path": {"type": "string"},
       "depth_path": {"type": "string"},
       "camera_info_path": {"type": "string"},
+      "overlay_path": {"type": "string"},
       "camera_info": {"type": "object"},
       "T_base_camera": {
         "type": "array",
@@ -53,6 +54,7 @@
       "object_id": {"type": "string"},
       "bbox_2d": {"type": "array", "items": {"type": "number"}},
       "mask_path": {"type": "string"},
+      "overlay_path": {"type": "string"},
       "mask_polygons": {
         "type": "array",
         "items": {

@@ -37,6 +37,7 @@ class VisionDetection:
   object_id: str | None = None
   bbox_2d: list[float] | None = None
   mask_path: str | None = None
+  overlay_path: str | None = None
   mask_polygons: list[Polygon] | None = None
   mask_area_px: float | None = None
   center_px: list[float] | None = None
@@ -65,6 +66,7 @@ class VisionDetection:
       "object_id": self.object_id,
       "bbox_2d": self.bbox_2d,
       "mask_path": self.mask_path,
+      "overlay_path": self.overlay_path,
       "mask_polygons": self.mask_polygons,
       "mask_area_px": self.mask_area_px,
       "center_px": self.center_px,
@@ -674,7 +676,9 @@ class UltralyticsSam2Backend:
 
   def __init__(self, weights_path: str | Path | None = None) -> None:
     configured = os.getenv("SENSORAGENT_SAM2_WEIGHTS")
-    self.weights_path = str(weights_path or configured or "sam2_t.pt")
+    self.weights_path = str(
+      weights_path or configured or "models/vision/sam2_t.pt"
+    )
     self._model = None
 
   def _load_model(self):
@@ -863,6 +867,96 @@ def _transform_to_base(
   return [float(value / transformed[3]) for value in transformed[:3]]
 
 
+def _write_detection_overlay(
+  image_path: str,
+  detection: VisionDetection,
+  overlay_path: str,
+) -> VisionDetection:
+  """Draw the selected box, mask, center, and confidence on an RGB image."""
+
+  try:
+    from PIL import Image, ImageDraw
+  except ImportError as exc:
+    raise ImportError(
+      "Pillow is required to write a detection overlay. "
+      "Install requirements-vision.txt first."
+    ) from exc
+
+  source = Path(image_path)
+  if not source.is_file():
+    raise ValueError(f"image_path does not exist: {source}")
+  if source.suffix.casefold() == ".npy":
+    raise ValueError("overlay_path requires a standard RGB image, not .npy")
+  destination = Path(overlay_path)
+  if destination.suffix.casefold() not in {".jpg", ".jpeg", ".png", ".webp"}:
+    raise ValueError("overlay_path must end with .jpg, .jpeg, .png, or .webp")
+
+  started = time.perf_counter()
+  image = Image.open(source).convert("RGB")
+  mask_layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
+  mask_draw = ImageDraw.Draw(mask_layer)
+  for polygon in detection.mask_polygons or []:
+    if len(polygon) >= 3:
+      mask_draw.polygon(
+        [(float(point[0]), float(point[1])) for point in polygon],
+        fill=(28, 174, 124, 96),
+        outline=(14, 116, 80, 220),
+      )
+  rendered = Image.alpha_composite(
+    image.convert("RGBA"),
+    mask_layer,
+  ).convert("RGB")
+  draw = ImageDraw.Draw(rendered)
+  line_width = max(2, round(min(rendered.size) / 240))
+  if detection.bbox_2d is not None:
+    draw.rectangle(
+      [float(value) for value in detection.bbox_2d],
+      outline=(229, 57, 53),
+      width=line_width,
+    )
+  if detection.center_px is not None:
+    center_x, center_y = (float(value) for value in detection.center_px)
+    radius = max(3, line_width * 2)
+    draw.ellipse(
+      [
+        center_x - radius,
+        center_y - radius,
+        center_x + radius,
+        center_y + radius,
+      ],
+      fill=(255, 193, 7),
+      outline=(0, 0, 0),
+      width=1,
+    )
+  label = f"{detection.label} {detection.confidence:.3f}"
+  try:
+    label_box = draw.textbbox((0, 0), label)
+  except UnicodeEncodeError:
+    label = label.encode("ascii", "replace").decode("ascii")
+    label_box = draw.textbbox((0, 0), label)
+  label_width = label_box[2] - label_box[0]
+  label_height = label_box[3] - label_box[1]
+  label_x = max(0, int(detection.bbox_2d[0])) if detection.bbox_2d else 0
+  label_x = min(label_x, max(0, rendered.width - label_width - 8))
+  label_y = (
+    max(0, int(detection.bbox_2d[1]) - label_height - 6)
+    if detection.bbox_2d
+    else 0
+  )
+  draw.rectangle(
+    [label_x, label_y, label_x + label_width + 8, label_y + label_height + 6],
+    fill=(229, 57, 53),
+  )
+  draw.text((label_x + 4, label_y + 3), label, fill=(255, 255, 255))
+  destination.parent.mkdir(parents=True, exist_ok=True)
+  rendered.save(destination)
+  timing = dict(detection.timing_ms)
+  timing["overlay"] = round((time.perf_counter() - started) * 1000.0, 3)
+  return replace(
+    detection,
+    overlay_path=str(destination),
+    timing_ms=timing,
+  )
 def _image_relation_key(
   detection: VisionDetection,
   relation: str,
@@ -960,7 +1054,7 @@ class VisionOpenVocabularyDetectTool:
       "refine a mask with SAM 2, and estimate its 3D position."
     ),
     tags=("vision", "open-vocabulary", "detector", "segmentation", "rgbd"),
-    timeout_seconds=120.0,
+    timeout_seconds=300.0,
   )
 
   def __init__(
@@ -1421,6 +1515,7 @@ class VisionOpenVocabularyDetectTool:
     query = query.strip()
     image_path = call.input.get("image_path")
     depth_path = call.input.get("depth_path")
+    overlay_path = call.input.get("overlay_path")
     if image_path is not None and not isinstance(image_path, str):
       return ToolResult(
         tool=self.spec.name,
@@ -1432,6 +1527,12 @@ class VisionOpenVocabularyDetectTool:
         tool=self.spec.name,
         success=False,
         error="depth_path must be a string when provided",
+      )
+    if overlay_path is not None and not isinstance(overlay_path, str):
+      return ToolResult(
+        tool=self.spec.name,
+        success=False,
+        error="overlay_path must be a string when provided",
       )
     defaults = VisionInferenceOptions(
       box_threshold=self._box_threshold,
@@ -1498,6 +1599,14 @@ class VisionOpenVocabularyDetectTool:
         camera_frame=str(call.input.get("camera_frame", self._camera_frame)),
         base_frame=str(call.input.get("base_frame", self._base_frame)),
       )
+      if overlay_path is not None and detection.found:
+        if image_path is None:
+          raise ValueError("image_path is required when overlay_path is provided")
+        detection = _write_detection_overlay(
+          image_path,
+          detection,
+          overlay_path,
+        )
     except VisionModelNotReadyError as exc:
       return ToolResult(
         tool=self.spec.name,

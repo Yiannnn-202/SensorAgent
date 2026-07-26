@@ -43,8 +43,14 @@ python -m venv .venv-vision
 版本，再安装 `requirements-vision.txt`。不要把 `.venv-vision`、模型权重或下载缓存
 提交到 Git。
 
+`requirements-vision.txt` 已包含 `hf_xet`，用于稳定续传 Hugging Face 的 Xet 权重。
+首次下载两个模型可能需要数分钟，不要重复启动多个下载进程。如果权重已经下载完成但
+首次 CLI 调用因超时返回失败，直接重新运行同一条命令；只有第二次返回结构化成功结果
+后，才能作为真实推理验收记录。
+
 首次运行时，默认配置会从 Hugging Face 下载
-`IDEA-Research/grounding-dino-tiny`，并由 Ultralytics 获取 `sam2_t.pt`。也可以使用
+`IDEA-Research/grounding-dino-tiny`，并由 Ultralytics 将 `sam2_t.pt` 下载到
+`models/vision/sam2_t.pt`。也可以使用
 本地路径：
 
 ```yaml
@@ -80,7 +86,8 @@ python -m sensoragent.services.cli.main vision-detect `
   --config configs\vision_grounding_dino.yaml `
   --image examples\scene.jpg `
   --query "扳手" `
-  --device 0
+  --device 0 `
+  --overlay logs\vision\wrench_overlay.jpg
 ```
 
 常用参数：
@@ -89,6 +96,7 @@ python -m sensoragent.services.cli.main vision-detect `
 - `--text-threshold` 控制文本匹配阈值，默认 `0.25`。
 - `--require-masks` 禁止 SAM 2 失败后退回检测框。
 - `--no-refine` 完全跳过 SAM 2，适合定位依赖或显存问题。
+- `--overlay` 保存检测框、半透明掩码、中心点、标签和置信度，便于肉眼验收。
 - `--spatial-relation` / `--spatial-ordinal` 在多个同类物件里挑一个，见第 7 节。
 
 ## 4. Tool 输入输出
@@ -117,6 +125,7 @@ python -m sensoragent.services.cli.main vision-detect `
   "center_px": [214.7, 171.3],
   "mask_area_px": 18234.5,
   "mask_polygons": [[[130.0, 90.0], [300.0, 100.0], [290.0, 250.0]]],
+  "overlay_path": "logs/vision/wrench_overlay.jpg",
   "model": "IDEA-Research/grounding-dino-tiny",
   "timing_ms": {
     "grounding_dino": 132.4,

@@ -13,7 +13,7 @@ integrations:
   vision:
     backend: grounding_dino
     grounding_dino_model: IDEA-Research/grounding-dino-tiny
-    sam2_model_path: sam2_t.pt
+    sam2_model_path: models/vision/sam2_t.pt
     box_threshold: 0.35
     text_threshold: 0.25
     refine_masks: true

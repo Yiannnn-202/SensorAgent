@@ -199,6 +199,12 @@ def _build_parser() -> argparse.ArgumentParser:
     action="store_true",
     help="Fail instead of using a box when SAM 2 refinement fails.",
   )
+  vision_detect.add_argument(
+    "--overlay",
+    type=Path,
+    default=None,
+    help="Optional path for a box/mask visualization (.jpg, .png, or .webp).",
+  )
   vision_detect.add_argument("--log-path", type=Path, default=None)
 
   return parser
@@ -316,6 +322,7 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
     "box_threshold": args.box_threshold,
     "text_threshold": args.text_threshold,
     "depth_scale": args.depth_scale,
+    "overlay_path": str(args.overlay) if args.overlay is not None else None,
   }
   input_data.update({key: value for key, value in optional.items() if value is not None})
   if args.spatial_relation is not None:
