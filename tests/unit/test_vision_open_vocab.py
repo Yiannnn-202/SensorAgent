@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -19,6 +20,9 @@ from sensoragent.tools.vision import (
   VisionInferenceOptions,
   VisionOpenVocabularyDetectTool,
 )
+
+
+PIL_AVAILABLE = importlib.util.find_spec("PIL") is not None
 
 
 class _FakeVisionBackend:
@@ -397,6 +401,54 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertFalse(result.success)
     self.assertIn("VISION_BACKEND_ERROR", result.error or "")
     self.assertIn("test SAM failure", result.error or "")
+
+  @skipUnless(PIL_AVAILABLE, "Pillow is an optional vision dependency")
+  def test_overlay_writes_box_mask_center_and_output_path(self) -> None:
+    import tempfile
+    from PIL import Image
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      root = Path(temp_dir)
+      image_path = root / "frame.png"
+      overlay_path = root / "outputs" / "frame_overlay.png"
+      Image.new("RGB", (8, 8), (255, 255, 255)).save(image_path)
+
+      result = VisionOpenVocabularyDetectTool(
+        detector=_FakeBoxOnlyBackend(),
+        mask_refiner=_FakeMaskRefiner(),
+        refine_masks=True,
+      ).run(
+        ToolCall(
+          tool="vision.open_vocab_detect",
+          input={
+            "query": "roller",
+            "image_path": str(image_path),
+            "overlay_path": str(overlay_path),
+          },
+          trace=TraceContext(),
+        )
+      )
+
+      self.assertTrue(result.success)
+      self.assertEqual(result.output["overlay_path"], str(overlay_path))
+      self.assertGreater(result.output["timing_ms"]["overlay"], 0.0)
+      self.assertTrue(overlay_path.is_file())
+      self.assertNotEqual(
+        Image.open(overlay_path).getpixel((1, 1)),
+        (255, 255, 255),
+      )
+      ContractValidator(ROOT / "contracts").validate_tool_input(
+        "vision.open_vocab_detect",
+        {
+          "query": "roller",
+          "image_path": str(image_path),
+          "overlay_path": str(overlay_path),
+        },
+      )
+      ContractValidator(ROOT / "contracts").validate_tool_output(
+        "vision.open_vocab_detect",
+        result.output,
+      )
 
   def test_robot_sim_config_registers_open_vocab_tool(self) -> None:
     config = build_agent_from_config(ROOT / "configs" / "robot_sim.yaml")

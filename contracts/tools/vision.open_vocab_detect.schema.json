@@ -1,6 +1,6 @@
 {
   "name": "vision.open_vocab_detect",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Detect a text-query object and optionally refine its mask and estimate its RGB-D position.",
   "input_schema": {
     "type": "object",
@@ -10,6 +10,7 @@
       "image_path": {"type": "string"},
       "depth_path": {"type": "string"},
       "camera_info_path": {"type": "string"},
+      "overlay_path": {"type": "string"},
       "camera_info": {"type": "object"},
       "T_base_camera": {
         "type": "array",
@@ -44,6 +45,7 @@
       "object_id": {"type": "string"},
       "bbox_2d": {"type": "array", "items": {"type": "number"}},
       "mask_path": {"type": "string"},
+      "overlay_path": {"type": "string"},
       "mask_polygons": {
         "type": "array",
         "items": {
