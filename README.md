@@ -116,6 +116,7 @@ Key SensorAgent documents:
 - [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
 - [Industrial intent to ActionList guide](docs/guides/intent_to_actionlist_cn.md)
 - [Failure detection and recovery guide](docs/guides/failure_recovery_cn.md)
+- [Gazebo failure recovery demo](docs/guides/gazebo_recovery_demo_cn.md)
 - [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
 - [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
 
@@ -282,6 +283,18 @@ The recovery DecisionTree can be invoked from Python or Agent APIs as
 `last_failure` after failed nodes, classifies the failure, plans a local recovery,
 and rejoins the flow through bounded re-detect, re-pick, re-place, gripper-open,
 or bridge-reset branches.
+
+For a video-ready failure-recovery demo, inject a wrong-bin placement in Gazebo:
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
+  --failure wrong-bin \
+  --object-query roller \
+  --target bin_cell_3 \
+  --wrong-target bin_cell_2 \
+  --execute \
+  --json-out logs/tasks/recovery_wrong_bin_demo.json
+```
 
 ## Current Development Priorities
 

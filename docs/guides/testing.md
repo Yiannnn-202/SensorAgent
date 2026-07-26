@@ -83,6 +83,13 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m unittest tests.unit.test_industrial_recovery_tree
 ```
 
+The Gazebo recovery demo runner also has a no-Gazebo smoke test:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m unittest tests.unit.test_gazebo_recovery_demo_script
+```
+
 ## Local audio acceptance
 
 Local microphone, model, and sound-device behavior is environment-specific:
@@ -135,6 +142,7 @@ Then use the targeted scripts as needed:
 PYTHONPATH=src .venv312/bin/python scripts/linux/test_gazebo_pick_pipeline.py --diagnose-only
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py --planner static --object-query roller --target bin_cell_3 --execute
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py --object-query "red roller" --target bin_cell_3 --execute
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py --failure wrong-bin --object-query roller --target bin_cell_3 --wrong-target bin_cell_2 --execute
 ```
 
 The repository currently has no automated ROS 2, Gazebo, or grasp-stability test

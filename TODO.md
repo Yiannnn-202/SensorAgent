@@ -262,6 +262,8 @@ Goal: implement competition-specific task logic after the generic framework is s
   verification baselines on the same fixture set.
 - [ ] Add a demo CLI/API command for the competition task that can run in mock,
   Gazebo/MoveIt, and later physical-robot modes.
+- [x] Add a Gazebo failure-recovery demo runner for wrong-bin, place-plan, and
+  release-failure injection.
 - [ ] Save report-ready CSV/JSONL summaries and failure-case artifacts for the
   technical report and demonstration video.
 

@@ -230,15 +230,36 @@ print(response.success, response.error, response.result)
 
 ## 8. 后续工作
 
+Gazebo 演示脚本见：
+
+```text
+scripts/linux/run_gazebo_recovery_demo.py
+docs/guides/gazebo_recovery_demo_cn.md
+```
+
+推荐演示命令：
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
+  --failure wrong-bin \
+  --object-query roller \
+  --target bin_cell_3 \
+  --wrong-target bin_cell_2 \
+  --execute \
+  --json-out logs/tasks/recovery_wrong_bin_demo.json
+```
+
+后续工作：
+
 1. 接入 post-place 真实视觉重检测，替换当前 deterministic release-pose 验证；
-2. 在 Gazebo 中录制“故意放错格 → 视觉发现 → 重新抓取 → 正确入格”的视频；
-3. 增加动态场景 reset 和物体重生，支持批量恢复实验；
-4. 统计失败检测准确率、恢复后成功率、恢复收益和平均恢复代价；
-5. 将恢复树导出为报告/视频中的行为树图。
+2. 增加动态场景 reset 和物体重生，支持批量恢复实验；
+3. 统计失败检测准确率、恢复后成功率、恢复收益和平均恢复代价；
+4. 将恢复树导出为报告/视频中的行为树图。
 
 ## 9. 测试命令
 
 ```powershell
 $env:PYTHONPATH = "$(Get-Location)\src"
 python -m unittest tests.unit.test_failure_recovery tests.unit.test_industrial_recovery_tree
+python -m unittest tests.unit.test_gazebo_recovery_demo_script
 ```
