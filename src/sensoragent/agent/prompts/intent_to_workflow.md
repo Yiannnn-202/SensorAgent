@@ -17,11 +17,29 @@ Your job:
 
    ```json
    {
-     "object": "<object phrase, preserving operator wording>",
+     "object": "<object NOUN ONLY, with spatial modifiers stripped>",
      "action": "pick" | "place" | "pick_place",
-     "target": "<destination id from allowed_place_targets, or empty string>"
+     "target": "<destination id from allowed_place_targets, or empty string>",
+     "spatial": {"relation": "<one of the relations below>", "ordinal": <int>} | null
    }
    ```
+
+   `spatial` captures a disambiguating relation when the operator refers to one
+   of several identical objects. Set it to `null` when no spatial qualifier is
+   present. Extract `relation` from these keywords (Chinese or English):
+     - 左 / 左侧(的) / 左边(的) / left → `"left"`
+     - 右 / 右侧(的) / 右边(的) / right → `"right"`
+     - 前面(的) / front → `"front"`
+     - 后面(的) / back → `"back"`
+     - 最近(的) / nearest / closest → `"nearest"`
+     - 最远(的) / farthest → `"farthest"`
+     - 最大(的) / largest / biggest → `"largest"`
+     - 最小(的) / smallest → `"smallest"`
+   For ordinals like "第二个 / second", set `ordinal` to the number (default 1).
+   The modifier MUST be stripped from `object` and `object_query`; only the
+   bare object noun reaches the vision detector. Example:
+   "把左侧的扳手放到料箱第三格" → `object:"扳手"`, `spatial:{"relation":"left","ordinal":1}`,
+   `target:"bin_cell_3"`.
 
    Definitions:
    - `pick_place`: operator wants the arm to both grasp an object AND deposit it somewhere.
@@ -50,6 +68,10 @@ Your job:
    - `industrial.pick_place_actionlist`: `{object_query, target}`
    - `industrial.pick_only_actionlist`:  `{object_query}`
    - `industrial.place_only_actionlist`: `{target}`
+   - `industrial.vision_pick_place_actionlist`: `{object_query, target, spatial_constraint}`
+   Include `spatial_constraint` only when `intent.spatial` is non-null; mirror it as
+   `{"relation": ..., "ordinal": ...}`. Sensor inputs (`image_path`, `depth_path`,
+   `camera_info_path`, `T_base_camera`) are supplied by the caller, not by you.
 
 Return ONLY this JSON object, no prose:
 
@@ -58,13 +80,15 @@ Return ONLY this JSON object, no prose:
   "target_kind": "actionlist",
   "target": "<one of allowed_targets>",
   "input": {
-    "object_query": "<intent.object>",
-    "target": "<intent.target — normalized id from allowed_place_targets>"
+    "object_query": "<intent.object — modifier stripped>",
+    "target": "<intent.target — normalized id from allowed_place_targets>",
+    "spatial_constraint": {"relation": "<relation>", "ordinal": <int>} | null
   },
   "intent": {
     "object": "<intent.object>",
     "action": "pick" | "place" | "pick_place",
-    "target": "<intent.target>"
+    "target": "<intent.target>",
+    "spatial": {"relation": "<relation>", "ordinal": <int>} | null
   },
   "reason": "<one short natural-language justification, e.g. why this workflow was chosen>"
 }
@@ -75,11 +99,13 @@ Rules:
 - Never invent a target outside `allowed_targets`.
 - Never invent a place-target outside `allowed_place_targets` (if it is provided).
 - For combined pick-and-place utterances, always set `action="pick_place"`.
-- Preserve the operator's language in `object_query` and in `intent.object`; the vision layer
-  handles matching.
+- Preserve the operator's language for the object noun in `object_query` and `intent.object`,
+  but strip any spatial modifier into `spatial`/`spatial_constraint`; the vision layer matches
+  the bare noun.
 - Prefer `industrial.pick_place_actionlist` when present in `allowed_targets`; fall back to
   `mock.pick_place_actionlist` only when no industrial target is available.
-- `intent` and `input` must agree: `intent.object == input.object_query` and
-  `intent.target == input.target`.
+- `intent` and `input` must agree: `intent.object == input.object_query`,
+  `intent.target == input.target`, and `intent.spatial == input.spatial_constraint` (when
+  spatial is present).
 - `reason` is a short human-readable justification. Do NOT embed JSON in it; the structured
   intent belongs in the top-level `intent` field.

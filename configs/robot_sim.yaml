@@ -66,6 +66,17 @@ scene:
     gear: [0.43, 0.08, 0.130, 0.0, 0.0, 0.0]
     齿轮: [0.43, 0.08, 0.130, 0.0, 0.0, 0.0]
 
+  # Reachable workspace envelope in base_link metres. Vision candidates whose
+  # back-projected base XY falls outside this box are filtered out before
+  # spatial selection. table_z is the assumed workbench height used for the
+  # depth-free pixel -> base back-projection (camera looks down at the table).
+  workspace:
+    frame: base_link
+    x: [0.15, 0.60]
+    y: [-0.35, 0.35]
+    z: [0.10, 0.30]
+    table_z: 0.12
+
   # Named place targets. Poses are TCP release poses in base_link.
   # bin_3x3 is spawned at world (0.50, -0.18, 0.30); each cell is 0.14 x 0.12
   # with walls 0.08 m tall (bin floor at base_link z ≈ 0.12, wall top ≈ 0.20).

@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import re
 import time
-from typing import Protocol, Sequence
+from typing import Callable, Protocol, Sequence
 
 import numpy as np
 
@@ -83,6 +83,43 @@ class VisionDetection:
     return output
 
 
+_SPATIAL_IMAGE_X_RELATIONS = frozenset({"left", "right"})
+_SPATIAL_IMAGE_Y_RELATIONS = frozenset({"front", "back"})
+_SPATIAL_IMAGE_AREA_RELATIONS = frozenset({"largest", "smallest"})
+_SPATIAL_BASE_RELATIONS = frozenset({"nearest", "farthest"})
+_SPATIAL_VALID_RELATIONS = (
+    _SPATIAL_IMAGE_X_RELATIONS
+    | _SPATIAL_IMAGE_Y_RELATIONS
+    | _SPATIAL_IMAGE_AREA_RELATIONS
+    | _SPATIAL_BASE_RELATIONS
+)
+
+
+@dataclass(frozen=True)
+class SpatialConstraint:
+  """Spatial selection rule applied across multiple detection candidates."""
+
+  relation: str
+  ordinal: int = 1
+  reference: str = "arm_base"
+  tolerance_px: float = 8.0
+
+  @classmethod
+  def from_call(cls, value: object) -> "SpatialConstraint | None":
+    """Build a constraint from a tool-call value; None means no constraint."""
+
+    if not isinstance(value, dict):
+      return None
+    relation = str(value.get("relation", "")).strip().casefold()
+    if relation not in _SPATIAL_VALID_RELATIONS:
+      return None
+    try:
+      ordinal = int(value.get("ordinal", 1) or 1)
+    except (TypeError, ValueError):
+      ordinal = 1
+    return cls(relation=relation, ordinal=max(1, ordinal))
+
+
 class OpenVocabularyVisionBackend(Protocol):
   """Backend interface implemented by YOLOE and Grounding DINO adapters."""
 
@@ -95,6 +132,16 @@ class OpenVocabularyVisionBackend(Protocol):
     options: VisionInferenceOptions,
   ) -> VisionDetection:
     """Detect the highest-confidence object matching the text query."""
+
+  def detect_all(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> list[VisionDetection]:
+    """Detect every object matching the text query above threshold."""
 
 
 class MaskRefinementBackend(Protocol):
@@ -138,6 +185,24 @@ class PlaceholderOpenVocabularyBackend:
       "integrations.vision.model_path."
     )
 
+  def detect_all(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> list[VisionDetection]:
+    """Raise the model-not-ready error via the single-detect path."""
+
+    self.detect(
+      query=query,
+      image_path=image_path,
+      depth_path=depth_path,
+      options=options,
+    )
+    return []
+
 
 class UnavailableOpenVocabularyBackend:
   """Backend used when an optional detector dependency is missing."""
@@ -157,6 +222,24 @@ class UnavailableOpenVocabularyBackend:
 
     del query, image_path, depth_path, options
     raise self._error
+
+  def detect_all(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> list[VisionDetection]:
+    """Raise the dependency error via the single-detect path."""
+
+    self.detect(
+      query=query,
+      image_path=image_path,
+      depth_path=depth_path,
+      options=options,
+    )
+    return []
 
 
 def _mask_area_and_centroid(
@@ -204,6 +287,31 @@ def _resolve_torch_device(device: str | None) -> str | None:
   return value
 
 
+_SPATIAL_MODIFIERS_CN = [
+  "左侧的", "左边的", "左侧", "左边", "左面",
+  "右侧的", "右边的", "右侧", "右边", "右面",
+  "前面的", "前边的", "前面", "前边",
+  "后面的", "后边的", "后面", "后边",
+  "最近的", "最近", "最远的", "最远",
+  "最大的", "最大", "最小的", "最小",
+]
+_SPATIAL_MODIFIERS_EN = re.compile(
+  r"\b(?:left|right|front|back|leftmost|rightmost|nearest|closest|"
+  r"farthest|largest|biggest|smallest)\b",
+  re.IGNORECASE,
+)
+_SPATIAL_ORDINAL_CN = re.compile(r"第\s*[一二三四五六七八九十0-9]+\s*(?:个|号)?")
+
+
+def _strip_spatial_modifiers(prompt: str) -> str:
+  """Remove spatial modifiers so they never reach Grounding DINO as text."""
+
+  for modifier in _SPATIAL_MODIFIERS_CN:
+    prompt = prompt.replace(modifier, " ")
+  prompt = _SPATIAL_ORDINAL_CN.sub(" ", prompt)
+  return _SPATIAL_MODIFIERS_EN.sub(" ", prompt)
+
+
 def _grounding_prompt(query: str) -> str:
   aliases = {
     "螺丝刀": "screwdriver",
@@ -219,6 +327,7 @@ def _grounding_prompt(query: str) -> str:
   prompt = query.strip()
   for source in sorted(aliases, key=len, reverse=True):
     prompt = prompt.replace(source, aliases[source])
+  prompt = _strip_spatial_modifiers(prompt)
   return " ".join(prompt.split())
 
 
@@ -254,10 +363,10 @@ class UltralyticsOpenVocabularyBackend:
       return
 
   @staticmethod
-  def _best_detection(result, source: str, model: str) -> VisionDetection | None:
+  def _all_detections(result, source: str, model: str) -> list[VisionDetection]:
     boxes = getattr(result, "boxes", None)
     if boxes is None or len(boxes) == 0:
-      return None
+      return []
     xyxy = boxes.xyxy.cpu().numpy()
     confidence = boxes.conf.cpu().numpy()
     classes = (
@@ -265,42 +374,54 @@ class UltralyticsOpenVocabularyBackend:
       if boxes.cls is not None
       else np.zeros(len(confidence), dtype=int)
     )
-    index = int(np.argmax(confidence))
     names = getattr(result, "names", {}) or {}
-    label = str(names.get(int(classes[index]), int(classes[index])))
-    polygons = None
     masks = getattr(result, "masks", None)
     raw_polygons = getattr(masks, "xy", None) if masks is not None else None
-    if raw_polygons is not None and index < len(raw_polygons):
-      polygon = [[float(x), float(y)] for x, y in raw_polygons[index].tolist()]
-      if polygon:
-        polygons = [polygon]
-    bbox = [float(value) for value in xyxy[index]]
-    area, center = _mask_area_and_centroid(polygons or [], bbox)
+    detections: list[VisionDetection] = []
+    for index in range(len(confidence)):
+      label = str(names.get(int(classes[index]), int(classes[index])))
+      polygons = None
+      if raw_polygons is not None and index < len(raw_polygons):
+        polygon = [[float(x), float(y)] for x, y in raw_polygons[index].tolist()]
+        if polygon:
+          polygons = [polygon]
+      bbox = [float(value) for value in xyxy[index]]
+      area, center = _mask_area_and_centroid(polygons or [], bbox)
+      detections.append(
+        VisionDetection(
+          found=True,
+          label=label,
+          confidence=float(confidence[index]),
+          object_id=f"{label}_{index + 1:03d}",
+          bbox_2d=bbox,
+          mask_polygons=polygons,
+          mask_area_px=area,
+          center_px=center,
+          model=model,
+          source=source,
+        )
+      )
+    return detections
+
+  def _not_found(self, query: str, elapsed_ms: float) -> VisionDetection:
     return VisionDetection(
-      found=True,
-      label=label,
-      confidence=float(confidence[index]),
-      object_id=f"{label}_001",
-      bbox_2d=bbox,
-      mask_polygons=polygons,
-      mask_area_px=area,
-      center_px=center,
-      model=model,
-      source=source,
+      found=False,
+      label=query,
+      confidence=0.0,
+      model=self._model_path.as_posix(),
+      timing_ms={"detector": elapsed_ms},
+      source=self._backend,
     )
 
-  def detect(
+  def _detect_candidates(
     self,
     *,
     query: str,
     image_path: str | None,
-    depth_path: str | None,
     options: VisionInferenceOptions,
-  ) -> VisionDetection:
-    """Run YOLOE and return the highest-confidence matching detection."""
+  ) -> list[VisionDetection]:
+    """Run YOLOE once and return every above-threshold detection with timing."""
 
-    del depth_path
     self._set_classes_if_supported(query)
     image = self._load_image(image_path)
     arguments: dict[str, object] = {
@@ -314,29 +435,47 @@ class UltralyticsOpenVocabularyBackend:
     results = self._model.predict(**arguments)
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 3)
     if not results:
-      return VisionDetection(
-        found=False,
-        label=query,
-        confidence=0.0,
-        model=self._model_path.as_posix(),
-        timing_ms={"detector": elapsed_ms},
-        source=self._backend,
-      )
-    detection = self._best_detection(
+      return [self._not_found(query, elapsed_ms)]
+    detections = self._all_detections(
       results[0],
       self._backend,
       self._model_path.as_posix(),
     )
-    if detection is None:
-      return VisionDetection(
-        found=False,
-        label=query,
-        confidence=0.0,
-        model=self._model_path.as_posix(),
-        timing_ms={"detector": elapsed_ms},
-        source=self._backend,
-      )
-    return replace(detection, timing_ms={"detector": elapsed_ms})
+    if not detections:
+      return [self._not_found(query, elapsed_ms)]
+    return [replace(detection, timing_ms={"detector": elapsed_ms}) for detection in detections]
+
+  def detect_all(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> list[VisionDetection]:
+    """Run YOLOE and return every matching detection above threshold."""
+
+    del depth_path
+    return self._detect_candidates(query=query, image_path=image_path, options=options)
+
+  def detect(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> VisionDetection:
+    """Run YOLOE and return the highest-confidence matching detection."""
+
+    del depth_path
+    candidates = self._detect_candidates(
+      query=query, image_path=image_path, options=options
+    )
+    found = [candidate for candidate in candidates if candidate.found]
+    if not found:
+      return candidates[0]
+    return max(found, key=lambda detection: detection.confidence)
 
 
 class GroundingDinoBackend:
@@ -379,17 +518,15 @@ class GroundingDinoBackend:
       value = value.tolist()
     return list(value)
 
-  def detect(
+  def _run_grounding(
     self,
     *,
     query: str,
     image_path: str | None,
-    depth_path: str | None,
     options: VisionInferenceOptions,
-  ) -> VisionDetection:
-    """Run text-grounded detection and return the best matching box."""
+  ) -> tuple[dict, str, float]:
+    """Run Grounding DINO inference and return (result, prompt, elapsed_ms)."""
 
-    del depth_path
     if image_path is None:
       raise ValueError("image_path is required for Grounding DINO detection")
     path = Path(image_path)
@@ -438,36 +575,93 @@ class GroundingDinoBackend:
         target_sizes=[image.size[::-1]],
       )
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 3)
-    result = results[0]
+    return results[0], prompt, elapsed_ms
+
+  def _boxes_to_detections(
+    self,
+    result: dict,
+    prompt: str,
+    query: str,
+    elapsed_ms: float,
+  ) -> list[VisionDetection]:
+    """Turn Grounding DINO result boxes into a list of detections."""
+
+    del query
     boxes = self._as_list(result.get("boxes", []))
     scores = self._as_list(result.get("scores", []))
     raw_labels = result.get("text_labels")
     labels = self._as_list(raw_labels) if raw_labels is not None else [prompt] * len(boxes)
     count = min(len(boxes), len(scores), len(labels))
-    if count == 0:
-      return VisionDetection(
-        found=False,
-        label=query,
-        confidence=0.0,
-        model=self.model_id,
-        timing_ms={"grounding_dino": elapsed_ms},
-        source="grounding_dino",
+    detections: list[VisionDetection] = []
+    for index in range(count):
+      bbox = [float(value) for value in boxes[index]]
+      label = labels[index] if isinstance(labels[index], str) else prompt
+      _, center = _mask_area_and_centroid([], bbox)
+      detections.append(
+        VisionDetection(
+          found=True,
+          label=str(label),
+          confidence=float(scores[index]),
+          object_id=f"{prompt.replace(' ', '_')}_{index + 1:03d}",
+          bbox_2d=bbox,
+          center_px=center,
+          model=self.model_id,
+          timing_ms={"grounding_dino": elapsed_ms},
+          source="grounding_dino",
+        )
       )
-    index = int(np.argmax(np.asarray(scores[:count], dtype=np.float64)))
-    bbox = [float(value) for value in boxes[index]]
-    label = labels[index] if isinstance(labels[index], str) else prompt
-    _, center = _mask_area_and_centroid([], bbox)
+    return detections
+
+  def _not_found(self, query: str, elapsed_ms: float) -> VisionDetection:
     return VisionDetection(
-      found=True,
-      label=str(label),
-      confidence=float(scores[index]),
-      object_id=f"{prompt.replace(' ', '_')}_001",
-      bbox_2d=bbox,
-      center_px=center,
+      found=False,
+      label=query,
+      confidence=0.0,
       model=self.model_id,
       timing_ms={"grounding_dino": elapsed_ms},
       source="grounding_dino",
     )
+
+  def detect_all(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> list[VisionDetection]:
+    """Run text-grounded detection and return every matching box."""
+
+    del depth_path
+    result, prompt, elapsed_ms = self._run_grounding(
+      query=query, image_path=image_path, options=options
+    )
+    detections = self._boxes_to_detections(result, prompt, query, elapsed_ms)
+    if not detections:
+      return [self._not_found(query, elapsed_ms)]
+    return detections
+
+  def detect(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> VisionDetection:
+    """Run text-grounded detection and return the best matching box."""
+
+    del depth_path
+    candidates = self.detect_all(
+      query=query,
+      image_path=image_path,
+      depth_path=depth_path,
+      options=options,
+    )
+    found = [candidate for candidate in candidates if candidate.found]
+    if not found:
+      return candidates[0]
+    return max(found, key=lambda detection: detection.confidence)
 
 
 class UltralyticsSam2Backend:
@@ -659,6 +853,93 @@ def _transform_to_base(
   return [float(value / transformed[3]) for value in transformed[:3]]
 
 
+def _image_relation_key(
+  detection: VisionDetection,
+  relation: str,
+) -> float | None:
+  """Sort key for image-space relations; None if the relation is not image-space."""
+
+  bbox = detection.bbox_2d
+  if bbox is None or len(bbox) < 4:
+    return None
+  center = detection.center_px
+  if center is None or len(center) < 2:
+    center = [(bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0]
+  if relation in _SPATIAL_IMAGE_X_RELATIONS:
+    return float(center[0])
+  if relation in _SPATIAL_IMAGE_Y_RELATIONS:
+    return float(center[1])
+  if relation in _SPATIAL_IMAGE_AREA_RELATIONS:
+    return abs((bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
+  return None
+
+
+def _resolve_spatial(
+  candidates: list[VisionDetection],
+  constraint: SpatialConstraint,
+  base_xy_of: Callable[[VisionDetection], tuple[float, float] | None] | None = None,
+) -> tuple[VisionDetection | None, list[VisionDetection], str | None]:
+  """Pick one candidate by the spatial constraint.
+
+  Returns (winner, alternatives, error). error is None on success, "not_found"
+  when no candidate qualifies, or "ambiguous" on a tie or out-of-range ordinal.
+  """
+
+  if not candidates:
+    return None, [], "not_found"
+  relation = constraint.relation
+  take_max = relation in {"right", "front", "largest", "farthest"}
+  keyed: list[tuple[float, VisionDetection]] = []
+  for detection in candidates:
+    if relation in _SPATIAL_BASE_RELATIONS:
+      if base_xy_of is None:
+        continue
+      xy = base_xy_of(detection)
+      if xy is None:
+        continue
+      key = float((xy[0] ** 2 + xy[1] ** 2) ** 0.5)
+    else:
+      key = _image_relation_key(detection, relation)
+      if key is None:
+        continue
+    keyed.append((key, detection))
+  if not keyed:
+    return None, candidates, "ambiguous"
+  keyed.sort(key=lambda item: item[0], reverse=take_max)
+  if constraint.ordinal > len(keyed):
+    return None, candidates, "ambiguous"
+  if (
+    constraint.ordinal == 1
+    and len(keyed) >= 2
+    and relation in (_SPATIAL_IMAGE_X_RELATIONS | _SPATIAL_IMAGE_Y_RELATIONS)
+    and abs(keyed[0][0] - keyed[1][0]) <= constraint.tolerance_px
+  ):
+    return None, candidates, "ambiguous"
+  winner = keyed[constraint.ordinal - 1][1]
+  alternatives = [detection for _, detection in keyed if detection is not winner]
+  return winner, alternatives, None
+
+
+def _within_workspace(
+  point_xy: tuple[float, float] | None,
+  workspace: dict,
+) -> bool:
+  """True if a base XY point is inside the workspace x/y envelope."""
+
+  if point_xy is None or not workspace:
+    return True
+  for axis, value in (("x", point_xy[0]), ("y", point_xy[1])):
+    bounds = workspace.get(axis)
+    if isinstance(bounds, list) and len(bounds) == 2:
+      try:
+        low, high = float(bounds[0]), float(bounds[1])
+      except (TypeError, ValueError):
+        continue
+      if value < low or value > high:
+        return False
+  return True
+
+
 class VisionOpenVocabularyDetectTool:
   """Open-vocabulary detection with optional SAM 2 and RGB-D localization."""
 
@@ -693,6 +974,7 @@ class VisionOpenVocabularyDetectTool:
     red_color_shortcut: bool = False,
     camera_frame: str = "camera_color_optical_frame",
     base_frame: str = "base_link",
+    workspace: dict | None = None,
     detector: OpenVocabularyVisionBackend | None = None,
     mask_refiner: MaskRefinementBackend | None = None,
   ) -> None:
@@ -711,6 +993,11 @@ class VisionOpenVocabularyDetectTool:
     self._red_color_shortcut = red_color_shortcut
     self._camera_frame = camera_frame
     self._base_frame = base_frame
+    self._workspace = dict(workspace or {})
+    try:
+      self._table_z = float(self._workspace.get("table_z", 0.12))
+    except (TypeError, ValueError):
+      self._table_z = 0.12
     normalized_backend = backend.casefold().replace("-", "_")
     is_grounding_dino = normalized_backend in {
       "grounding_dino",
@@ -1005,6 +1292,112 @@ class VisionOpenVocabularyDetectTool:
       warnings=warnings,
     )
 
+  def _base_xy_estimator(
+    self,
+    camera_info: dict | None,
+    t_base_camera: list[list[float]] | None,
+  ) -> Callable[[VisionDetection], tuple[float, float] | None] | None:
+    """Build a depth-free pixel -> base XY estimator on the table plane.
+
+    Returns None when camera intrinsics or the camera->base transform are
+    unavailable, so nearest/farthest and workspace filtering degrade gracefully.
+    """
+
+    if camera_info is None or t_base_camera is None:
+      return None
+    try:
+      fx, fy, cx, cy = _camera_intrinsics(camera_info)
+    except (ValueError, KeyError, TypeError):
+      return None
+    matrix = np.asarray(t_base_camera, dtype=np.float64)
+    if matrix.shape != (4, 4):
+      return None
+    origin = matrix[:3, 3]
+    rotation = matrix[:3, :3]
+    table_z = self._table_z
+
+    def estimate(detection: VisionDetection) -> tuple[float, float] | None:
+      center = detection.center_px
+      if center is None or len(center) < 2:
+        bbox = detection.bbox_2d
+        if bbox is None or len(bbox) < 4:
+          return None
+        center = [(bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0]
+      direction = rotation @ np.array(
+        [(float(center[0]) - cx) / fx, (float(center[1]) - cy) / fy, 1.0]
+      )
+      if abs(direction[2]) < 1e-9:
+        return None
+      scale = (table_z - float(origin[2])) / float(direction[2])
+      point = origin + scale * direction
+      return float(point[0]), float(point[1])
+
+    return estimate
+
+  def _select_by_spatial(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+    spatial: SpatialConstraint,
+    camera_info: dict | None,
+    t_base_camera: list[list[float]] | None,
+  ) -> tuple[VisionDetection | None, list[VisionDetection], str | None]:
+    """Collect candidates, filter by workspace, and resolve the spatial constraint."""
+
+    candidates = self._detector.detect_all(
+      query=query,
+      image_path=image_path,
+      depth_path=depth_path,
+      options=options,
+    )
+    candidates = [
+      candidate
+      for candidate in candidates
+      if candidate.found and candidate.bbox_2d is not None
+    ]
+    base_xy_of = self._base_xy_estimator(camera_info, t_base_camera)
+    if self._workspace and base_xy_of is not None:
+      candidates = [
+        candidate
+        for candidate in candidates
+        if _within_workspace(base_xy_of(candidate), self._workspace)
+      ]
+    return _resolve_spatial(candidates, spatial, base_xy_of=base_xy_of)
+
+  def _spatial_failure(
+    self,
+    query: str,
+    spatial: SpatialConstraint,
+    alternatives: list[VisionDetection],
+    error_kind: str,
+  ) -> ToolResult:
+    """Build the not-found / ambiguous ToolResult for the spatial path."""
+
+    code = "OBJECT_AMBIGUOUS" if error_kind == "ambiguous" else "OBJECT_NOT_FOUND"
+    candidate_outputs = [alternative.to_output() for alternative in alternatives]
+    return ToolResult(
+      tool=self.spec.name,
+      success=False,
+      output={
+        "found": False,
+        "label": query,
+        "confidence": 0.0,
+        "source": self._backend,
+        "spatial_constraint": {
+          "relation": spatial.relation,
+          "ordinal": spatial.ordinal,
+        },
+        "candidates": candidate_outputs,
+      },
+      error=(
+        f"{code}: relation={spatial.relation} ordinal={spatial.ordinal} "
+        f"matched {len(candidate_outputs)} candidate(s)"
+      ),
+    )
+
   def run(self, call: ToolCall) -> ToolResult:
     """Run detection, optional mask refinement, and optional RGB-D geometry."""
 
@@ -1039,13 +1432,30 @@ class VisionOpenVocabularyDetectTool:
       options = self._validate_options(call, defaults)
       refine_masks = bool(call.input.get("refine_masks", self._refine_masks))
       require_masks = bool(call.input.get("require_masks", self._require_masks))
+      spatial = SpatialConstraint.from_call(call.input.get("spatial_constraint"))
       red_detection = (
         self._largest_red_component(query, image_path)
         if self._red_color_shortcut
         else None
       )
+      alternatives: list[VisionDetection] = []
       if red_detection is not None:
         detection = red_detection
+      elif spatial is not None:
+        detection, alternatives, spatial_error = self._select_by_spatial(
+          query=query,
+          image_path=image_path,
+          depth_path=depth_path,
+          options=options,
+          spatial=spatial,
+          camera_info=_load_camera_info(
+            call.input.get("camera_info_path", self._camera_info_path),
+            call.input.get("camera_info", self._camera_info),
+          ),
+          t_base_camera=call.input.get("T_base_camera", self._t_base_camera),
+        )
+        if spatial_error is not None:
+          return self._spatial_failure(query, spatial, alternatives, spatial_error)
       else:
         detection = self._detector.detect(
           query=query,
@@ -1140,9 +1550,12 @@ class VisionOpenVocabularyDetectTool:
         },
         error=f"VISION_BACKEND_ERROR: {exc}",
       )
+    output = detection.to_output()
+    if alternatives:
+      output["candidates"] = [alternative.to_output() for alternative in alternatives]
     return ToolResult(
       tool=self.spec.name,
       success=detection.found,
-      output=detection.to_output(),
+      output=output,
       error=None if detection.found else "OBJECT_NOT_FOUND",
     )

@@ -205,12 +205,16 @@ class AgentRuntime:
     task.plan = plan
     self._event_stream.publish("task_planned", task.trace, {"plan": plan.to_dict()})
 
+    # Merge caller-provided task inputs with the planner's extracted inputs.
+    # plan.input (LLM-extracted object_query/target/spatial_constraint) wins on
+    # conflict; task.input supplies scene defaults like image_path/depth_path.
+    merged_input = {**task.input, **plan.input}
     if plan.target_kind == PlanTargetKind.SKILL:
-      request = AgentRequest(skill=plan.target, input=plan.input, trace=task.trace)
+      request = AgentRequest(skill=plan.target, input=merged_input, trace=task.trace)
     elif plan.target_kind == PlanTargetKind.ACTIONLIST:
-      request = AgentRequest(actionlist=plan.target, input=plan.input, trace=task.trace)
+      request = AgentRequest(actionlist=plan.target, input=merged_input, trace=task.trace)
     else:
-      request = AgentRequest(decision_tree=plan.target, input=plan.input, trace=task.trace)
+      request = AgentRequest(decision_tree=plan.target, input=merged_input, trace=task.trace)
 
     response = self.handle(request)
     task.result = response.result
