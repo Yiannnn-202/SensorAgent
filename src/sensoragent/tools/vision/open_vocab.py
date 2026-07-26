@@ -94,6 +94,11 @@ _SPATIAL_VALID_RELATIONS = (
     | _SPATIAL_BASE_RELATIONS
 )
 
+#: Public view of the accepted `spatial_constraint.relation` values, so callers
+#: (CLI, sim runners) validate against one source of truth instead of their own
+#: hardcoded copy.
+SPATIAL_RELATIONS = _SPATIAL_VALID_RELATIONS
+
 
 @dataclass(frozen=True)
 class SpatialConstraint:

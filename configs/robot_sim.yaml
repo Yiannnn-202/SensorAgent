@@ -54,6 +54,10 @@ scene:
   # base_link z = world z - robot_mount_z (0.18).
   # Workbench top at base_link z ≈ 0.12; object centres sit slightly above it.
   objects:
+    # NOTE: the world spawns two rollers (roller_01 at y=+0.23, roller_02 at
+    # y=-0.12). config_detect is a single-pose lookup and always returns
+    # roller_01 here; use vision.open_vocab_detect with a spatial_constraint
+    # when the instruction distinguishes between them.
     roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
     silver_roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
     滚柱: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
