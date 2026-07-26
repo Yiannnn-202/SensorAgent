@@ -126,7 +126,8 @@ python -m sensoragent.services.cli.main vision-detect `
 
 `source` 含 `sam2_fallback_box` 时表示掩码细化失败，本次结果只有检测框。具体原因在
 `warnings` 中。现有 ActionList 依赖的 `position_camera`、`position_base` 和
-`pose_3d` 字段保持不变。
+`pose_3d` 字段保持不变。`pose_3d` 的后三位（旋转）恒为 `0`，仅用于兼容下游
+`robot.plan_top_down_pick` 的位姿槽位；视觉侧只提供位置，朝向由机械臂侧决定。
 
 ## 5. RGB-D 定位
 
@@ -155,8 +156,11 @@ python -m sensoragent.services.cli.main vision-detect `
 窗口采样。
 
 只有同时配置相机内参和 `T_base_camera`，才能输出机械臂基坐标
-`position_base` 与 `pose_3d`。缺少变换时只输出 `position_camera`，不能把像素坐标或
-相机坐标当作机械臂抓取坐标。
+`position_base`、`pose_3d` 与结构化的 `position_3d`。`position_3d` 形如
+`{"x": 0.31, "y": -0.08, "z": 0.42, "frame_id": "base_link", "unit": "m"}`，显式标注
+坐标系与单位，是推荐给下游消费的带元数据位置字段；`pose_3d` 数组仅为兼容既有抓取
+管线保留。缺少变换时只输出 `position_camera`，不能把像素坐标或相机坐标当作机械臂
+抓取坐标。
 
 ## 6. 错误边界
 

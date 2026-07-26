@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, replace
 import json
 import os
 from pathlib import Path
+import re
 import time
 from typing import Protocol, Sequence
 
@@ -43,6 +44,7 @@ class VisionDetection:
   position_camera: list[float] | None = None
   position_base: list[float] | None = None
   pose_3d: list[float] | None = None
+  position_3d: dict[str, object] | None = None
   camera_frame: str | None = None
   base_frame: str | None = None
   model: str | None = None
@@ -70,6 +72,7 @@ class VisionDetection:
       "position_camera": self.position_camera,
       "position_base": self.position_base,
       "pose_3d": self.pose_3d,
+      "position_3d": self.position_3d,
       "camera_frame": self.camera_frame,
       "base_frame": self.base_frame,
       "model": self.model,
@@ -687,6 +690,7 @@ class VisionOpenVocabularyDetectTool:
     device: str | None = None,
     refine_masks: bool | None = None,
     require_masks: bool = False,
+    red_color_shortcut: bool = False,
     camera_frame: str = "camera_color_optical_frame",
     base_frame: str = "base_link",
     detector: OpenVocabularyVisionBackend | None = None,
@@ -704,6 +708,7 @@ class VisionOpenVocabularyDetectTool:
     self._text_threshold = text_threshold
     self._device = device
     self._require_masks = require_masks
+    self._red_color_shortcut = red_color_shortcut
     self._camera_frame = camera_frame
     self._base_frame = base_frame
     normalized_backend = backend.casefold().replace("-", "_")
@@ -746,7 +751,7 @@ class VisionOpenVocabularyDetectTool:
     query: str,
     image_path: str | None,
   ) -> VisionDetection | None:
-    if "red" not in _grounding_prompt(query).casefold() or image_path is None:
+    if image_path is None or not re.search(r"\bred\b", _grounding_prompt(query).casefold()):
       return None
     path = Path(image_path)
     if path.suffix.casefold() != ".npy":
@@ -974,8 +979,16 @@ class VisionOpenVocabularyDetectTool:
         for index in range(3)
       ]
     pose_3d = None
+    position_3d = None
     if position_base is not None:
       pose_3d = [*position_base, 0.0, 0.0, 0.0]
+      position_3d = {
+        "x": position_base[0],
+        "y": position_base[1],
+        "z": position_base[2],
+        "frame_id": base_frame,
+        "unit": "m",
+      }
     timing = dict(detection.timing_ms)
     timing["geometry"] = round((time.perf_counter() - started) * 1000.0, 3)
     return replace(
@@ -985,6 +998,7 @@ class VisionOpenVocabularyDetectTool:
       position_camera=position_camera,
       position_base=position_base,
       pose_3d=pose_3d,
+      position_3d=position_3d,
       camera_frame=camera_frame,
       base_frame=base_frame if position_base is not None else None,
       timing_ms=timing,
@@ -1025,7 +1039,11 @@ class VisionOpenVocabularyDetectTool:
       options = self._validate_options(call, defaults)
       refine_masks = bool(call.input.get("refine_masks", self._refine_masks))
       require_masks = bool(call.input.get("require_masks", self._require_masks))
-      red_detection = self._largest_red_component(query, image_path)
+      red_detection = (
+        self._largest_red_component(query, image_path)
+        if self._red_color_shortcut
+        else None
+      )
       if red_detection is not None:
         detection = red_detection
       else:

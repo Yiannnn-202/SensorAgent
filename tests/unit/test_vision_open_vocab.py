@@ -194,6 +194,10 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertEqual(result.output["position_camera"], [0.0, 0.0, 1.0])
     self.assertEqual(result.output["position_base"], [0.1, 0.2, 1.3])
     self.assertEqual(result.output["pose_3d"], [0.1, 0.2, 1.3, 0.0, 0.0, 0.0])
+    self.assertEqual(
+      result.output["position_3d"],
+      {"x": 0.1, "y": 0.2, "z": 1.3, "frame_id": "base_link", "unit": "m"},
+    )
 
   def test_missing_depth_file_is_reported_as_input_error(self) -> None:
     result = VisionOpenVocabularyDetectTool(
@@ -283,6 +287,7 @@ class VisionOpenVocabularyToolTest(TestCase):
 
       result = VisionOpenVocabularyDetectTool(
         detector=_FakeWrongBoxBackend(),
+        red_color_shortcut=True,
         t_base_camera=[
           [1.0, 0.0, 0.0, 0.0],
           [0.0, 1.0, 0.0, 0.0],
@@ -305,6 +310,34 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertTrue(result.success)
     self.assertEqual(result.output["source"], "red_color_filter")
     self.assertEqual(result.output["bbox_2d"], [7.0, 8.0, 12.0, 13.0])
+
+  def test_red_shortcut_disabled_by_default(self) -> None:
+    import tempfile
+    import numpy as np
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      image_path = Path(temp_dir) / "rgb.npy"
+      image = np.zeros((16, 16, 3), dtype=np.uint8)
+      image[8:14, 7:13] = [230, 30, 30]
+      np.save(image_path, image)
+
+      result = VisionOpenVocabularyDetectTool(
+        detector=_FakeWrongBoxBackend(),
+      ).run(
+        ToolCall(
+          tool="vision.open_vocab_detect",
+          input={
+            "query": "red roller",
+            "image_path": str(image_path),
+          },
+          trace=TraceContext(),
+        )
+      )
+
+    self.assertTrue(result.success)
+    self.assertNotEqual(result.output["source"], "red_color_filter")
+    self.assertEqual(result.output["source"], "fake_yoloe")
+    self.assertEqual(result.output["object_id"], "red roller_wrong")
 
   def test_mask_refinement_drives_centroid_and_depth_sampling(self) -> None:
     import json

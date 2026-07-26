@@ -114,6 +114,7 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       device=vision_config.get("device"),
       refine_masks=vision_config.get("refine_masks"),
       require_masks=bool(vision_config.get("require_masks", False)),
+      red_color_shortcut=bool(vision_config.get("red_color_shortcut", False)),
       camera_frame=str(
         vision_config.get("camera_frame", "camera_color_optical_frame")
       ),
