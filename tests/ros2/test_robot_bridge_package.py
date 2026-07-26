@@ -74,6 +74,18 @@ class RobotBridgePackageTest(TestCase):
     self.assertIn("orientation_tolerance: 0.20", bridge_config)
     self.assertIn("position_tolerance: 0.005", bridge_config)
 
+  def test_bridge_adds_camera_rig_to_planning_scene(self) -> None:
+    bridge_source = (
+      BRIDGE_ROOT / "sensoragent_robot_bridge" / "bridge_node.py"
+    ).read_text(encoding="utf-8")
+
+    self.assertIn("PlanningScene", bridge_source)
+    self.assertIn("sensoragent_camera_left_post", bridge_source)
+    self.assertIn("sensoragent_camera_right_post", bridge_source)
+    self.assertIn("sensoragent_camera_crossbar", bridge_source)
+    self.assertIn("sensoragent_camera_body", bridge_source)
+    self.assertIn("planning_scene_diff.world.collision_objects", bridge_source)
+
   def test_robotiq_fingers_use_high_friction(self) -> None:
     robotiq_path = (
       ROOT

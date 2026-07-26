@@ -30,6 +30,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
       "depth_path": "string",
       "camera_info_path": "string",
       "T_base_camera": "array",
+      "T_world_camera": "array",
       "spatial_constraint": "object",
     },
     tags=("industrial", "pick-place", "vision", "verify"),
@@ -44,6 +45,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
           "depth_path": "{{ depth_path }}",
           "camera_info_path": "{{ camera_info_path }}",
           "T_base_camera": "{{ T_base_camera }}",
+          "T_world_camera": "{{ T_world_camera }}",
           "spatial_constraint": "{{ spatial_constraint }}",
         },
         save_as="object",
@@ -127,6 +129,16 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
           "speed": GRIPPER_SPEED,
         },
         stop_on_failure=False,
+      ),
+      ActionStep(
+        name="place_lift_clearance",
+        kind=ActionStepKind.TOOL,
+        target="robot.move_linear",
+        input={
+          "pose": "{{ place_plan.plan.retreat }}",
+          "speed": PLACE_SPEED,
+          "wait": True,
+        },
       ),
       ActionStep(
         name="place_retreat",

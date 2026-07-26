@@ -44,10 +44,12 @@ class VisionDetection:
   depth_m: float | None = None
   position_camera: list[float] | None = None
   position_base: list[float] | None = None
+  position_world: list[float] | None = None
   pose_3d: list[float] | None = None
   position_3d: dict[str, object] | None = None
   camera_frame: str | None = None
   base_frame: str | None = None
+  world_frame: str | None = None
   model: str | None = None
   timing_ms: dict[str, float] = field(default_factory=dict)
   warnings: list[str] = field(default_factory=list)
@@ -73,10 +75,12 @@ class VisionDetection:
       "depth_m": self.depth_m,
       "position_camera": self.position_camera,
       "position_base": self.position_base,
+      "position_world": self.position_world,
       "pose_3d": self.pose_3d,
       "position_3d": self.position_3d,
       "camera_frame": self.camera_frame,
       "base_frame": self.base_frame,
+      "world_frame": self.world_frame,
       "model": self.model,
       "timing_ms": self.timing_ms or None,
       "warnings": self.warnings or None,
@@ -851,20 +855,28 @@ def _project_to_camera(
   ]
 
 
-def _transform_to_base(
+def _transform_point(
   point_camera: Sequence[float],
   transform: Sequence[Sequence[float]] | None,
+  field_name: str,
 ) -> list[float] | None:
   if transform is None:
     return None
   matrix = np.asarray(transform, dtype=np.float64)
   if matrix.shape != (4, 4):
-    raise ValueError("T_base_camera must be a 4x4 matrix")
+    raise ValueError(f"{field_name} must be a 4x4 matrix")
   point = np.asarray([*point_camera, 1.0], dtype=np.float64)
   transformed = matrix @ point
   if abs(transformed[3]) < 1e-12:
-    raise ValueError("T_base_camera produced an invalid homogeneous coordinate")
+    raise ValueError(f"{field_name} produced an invalid homogeneous coordinate")
   return [float(value / transformed[3]) for value in transformed[:3]]
+
+
+def _transform_to_base(
+  point_camera: Sequence[float],
+  transform: Sequence[Sequence[float]] | None,
+) -> list[float] | None:
+  return _transform_point(point_camera, transform, "T_base_camera")
 
 
 def _write_detection_overlay(
@@ -1067,6 +1079,7 @@ class VisionOpenVocabularyDetectTool:
     camera_info_path: str | None = None,
     camera_info: dict | None = None,
     t_base_camera: list[list[float]] | None = None,
+    t_world_camera: list[list[float]] | None = None,
     position_base_offset: list[float] | None = None,
     depth_window: int = 7,
     depth_scale: float = 1.0,
@@ -1078,6 +1091,7 @@ class VisionOpenVocabularyDetectTool:
     red_color_shortcut: bool = False,
     camera_frame: str = "camera_color_optical_frame",
     base_frame: str = "base_link",
+    world_frame: str = "world",
     workspace: dict | None = None,
     detector: OpenVocabularyVisionBackend | None = None,
     mask_refiner: MaskRefinementBackend | None = None,
@@ -1087,6 +1101,7 @@ class VisionOpenVocabularyDetectTool:
     self._camera_info_path = camera_info_path
     self._camera_info = camera_info
     self._t_base_camera = t_base_camera
+    self._t_world_camera = t_world_camera
     self._position_base_offset = position_base_offset
     self._depth_window = depth_window
     self._depth_scale = depth_scale
@@ -1097,6 +1112,7 @@ class VisionOpenVocabularyDetectTool:
     self._red_color_shortcut = red_color_shortcut
     self._camera_frame = camera_frame
     self._base_frame = base_frame
+    self._world_frame = world_frame
     self._workspace = dict(workspace or {})
     try:
       self._table_z = float(self._workspace.get("table_z", 0.12))
@@ -1315,11 +1331,13 @@ class VisionOpenVocabularyDetectTool:
     camera_info_path: str | None,
     camera_info_inline: dict | None,
     t_base_camera: list[list[float]] | None,
+    t_world_camera: list[list[float]] | None,
     position_base_offset: list[float] | None,
     depth_window: int,
     depth_scale: float,
     camera_frame: str,
     base_frame: str,
+    world_frame: str,
   ) -> VisionDetection:
     if (
       not detection.found
@@ -1356,6 +1374,7 @@ class VisionOpenVocabularyDetectTool:
     u, v, depth_m = sample
     position_camera = _project_to_camera(u, v, depth_m, camera_info)
     position_base = _transform_to_base(position_camera, t_base_camera)
+    position_world = _transform_point(position_camera, t_world_camera, "T_world_camera")
     if position_base is None:
       warnings.append("T_base_camera is missing; only camera-frame position is available")
     elif position_base_offset is not None:
@@ -1369,6 +1388,8 @@ class VisionOpenVocabularyDetectTool:
         position_base[index] + float(position_base_offset[index])
         for index in range(3)
       ]
+    if position_world is None and t_world_camera is None:
+      warnings.append("T_world_camera is missing; world-frame position is unavailable")
     pose_3d = None
     position_3d = None
     if position_base is not None:
@@ -1388,10 +1409,12 @@ class VisionOpenVocabularyDetectTool:
       depth_m=depth_m,
       position_camera=position_camera,
       position_base=position_base,
+      position_world=position_world,
       pose_3d=pose_3d,
       position_3d=position_3d,
       camera_frame=camera_frame,
       base_frame=base_frame if position_base is not None else None,
+      world_frame=world_frame if position_world is not None else None,
       timing_ms=timing,
       warnings=warnings,
     )
@@ -1590,6 +1613,7 @@ class VisionOpenVocabularyDetectTool:
         ),
         camera_info_inline=call.input.get("camera_info", self._camera_info),
         t_base_camera=call.input.get("T_base_camera", self._t_base_camera),
+        t_world_camera=call.input.get("T_world_camera", self._t_world_camera),
         position_base_offset=call.input.get(
           "position_base_offset",
           self._position_base_offset,
@@ -1598,6 +1622,7 @@ class VisionOpenVocabularyDetectTool:
         depth_scale=float(call.input.get("depth_scale", self._depth_scale)),
         camera_frame=str(call.input.get("camera_frame", self._camera_frame)),
         base_frame=str(call.input.get("base_frame", self._base_frame)),
+        world_frame=str(call.input.get("world_frame", self._world_frame)),
       )
       if overlay_path is not None and detection.found:
         if image_path is None:

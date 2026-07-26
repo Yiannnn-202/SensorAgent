@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="sensoragent_target_grid_2x2">
+    <static>true</static>
+    <link name="grid">
+      <visual name="area_1_visual">
+        <pose>-0.08 -0.07 0.0005 0 0 0</pose>
+        <geometry><plane><normal>0 0 1</normal><size>0.155 0.135</size></plane></geometry>
+        <material>
+          <ambient>0.10 0.34 0.80 0.45</ambient>
+          <diffuse>0.10 0.34 0.80 0.45</diffuse>
+        </material>
+      </visual>
+      <visual name="area_2_visual">
+        <pose>0.08 -0.07 0.0005 0 0 0</pose>
+        <geometry><plane><normal>0 0 1</normal><size>0.155 0.135</size></plane></geometry>
+        <material>
+          <ambient>0.10 0.65 0.30 0.45</ambient>
+          <diffuse>0.10 0.65 0.30 0.45</diffuse>
+        </material>
+      </visual>
+      <visual name="area_3_visual">
+        <pose>-0.08 0.07 0.0005 0 0 0</pose>
+        <geometry><plane><normal>0 0 1</normal><size>0.155 0.135</size></plane></geometry>
+        <material>
+          <ambient>0.95 0.65 0.08 0.45</ambient>
+          <diffuse>0.95 0.65 0.08 0.45</diffuse>
+        </material>
+      </visual>
+      <visual name="area_4_visual">
+        <pose>0.08 0.07 0.0005 0 0 0</pose>
+        <geometry><plane><normal>0 0 1</normal><size>0.155 0.135</size></plane></geometry>
+        <material>
+          <ambient>0.85 0.12 0.12 0.45</ambient>
+          <diffuse>0.85 0.12 0.12 0.45</diffuse>
+        </material>
+      </visual>
+
+      <visual name="outer_line_x_positive">
+        <pose>0.16 0 0.003 0 0 0</pose>
+        <geometry><box><size>0.006 0.29 0.006</size></box></geometry>
+        <material><diffuse>1.0 1.0 1.0 1</diffuse></material>
+      </visual>
+      <collision name="outer_line_x_positive_collision">
+        <pose>0.16 0 0.003 0 0 0</pose>
+        <geometry><box><size>0.006 0.29 0.006</size></box></geometry>
+      </collision>
+      <visual name="outer_line_x_negative">
+        <pose>-0.16 0 0.003 0 0 0</pose>
+        <geometry><box><size>0.006 0.29 0.006</size></box></geometry>
+        <material><diffuse>1.0 1.0 1.0 1</diffuse></material>
+      </visual>
+      <collision name="outer_line_x_negative_collision">
+        <pose>-0.16 0 0.003 0 0 0</pose>
+        <geometry><box><size>0.006 0.29 0.006</size></box></geometry>
+      </collision>
+      <visual name="outer_line_y_positive">
+        <pose>0 0.14 0.003 0 0 0</pose>
+        <geometry><box><size>0.32 0.006 0.006</size></box></geometry>
+        <material><diffuse>1.0 1.0 1.0 1</diffuse></material>
+      </visual>
+      <collision name="outer_line_y_positive_collision">
+        <pose>0 0.14 0.003 0 0 0</pose>
+        <geometry><box><size>0.32 0.006 0.006</size></box></geometry>
+      </collision>
+      <visual name="outer_line_y_negative">
+        <pose>0 -0.14 0.003 0 0 0</pose>
+        <geometry><box><size>0.32 0.006 0.006</size></box></geometry>
+        <material><diffuse>1.0 1.0 1.0 1</diffuse></material>
+      </visual>
+      <collision name="outer_line_y_negative_collision">
+        <pose>0 -0.14 0.003 0 0 0</pose>
+        <geometry><box><size>0.32 0.006 0.006</size></box></geometry>
+      </collision>
+      <visual name="center_line_x">
+        <pose>0 0 0.004 0 0 0</pose>
+        <geometry><box><size>0.008 0.29 0.008</size></box></geometry>
+        <material><diffuse>1.0 1.0 1.0 1</diffuse></material>
+      </visual>
+      <collision name="center_line_x_collision">
+        <pose>0 0 0.004 0 0 0</pose>
+        <geometry><box><size>0.008 0.29 0.008</size></box></geometry>
+      </collision>
+      <visual name="center_line_y">
+        <pose>0 0 0.004 0 0 0</pose>
+        <geometry><box><size>0.32 0.008 0.008</size></box></geometry>
+        <material><diffuse>1.0 1.0 1.0 1</diffuse></material>
+      </visual>
+      <collision name="center_line_y_collision">
+        <pose>0 0 0.004 0 0 0</pose>
+        <geometry><box><size>0.32 0.008 0.008</size></box></geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>

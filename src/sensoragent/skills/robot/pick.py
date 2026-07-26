@@ -51,6 +51,14 @@ class RobotPickSkill:
 
     for step_name, tool_name, input_data in steps:
       result = context.tool_runtime.invoke(tool_name, input_data, call.trace)
+      if not result.success and step_name == "open_gripper":
+        state_result = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
+        opening = (state_result.output or {}).get("state", {}).get("opening") if state_result.success else None
+        target_opening = float(input_data.get("opening", 0.0848))
+        if isinstance(opening, (int, float)) and float(opening) >= target_opening - 0.003:
+          result = state_result
+      if not result.success and step_name == "lift" and tool_name == "robot.move_linear":
+        result = context.tool_runtime.invoke("robot.move_pose", input_data, call.trace)
       if not result.success:
         return SkillResult(
           skill=self.spec.name,

@@ -19,6 +19,8 @@ from sensoragent.contracts import ContractValidator
 from sensoragent.integrations.robot import FakeRobotControlClient, HttpRobotControlClient
 from sensoragent.logger import TaskLogger
 from sensoragent.schemas import RobotPose, TraceContext
+from sensoragent.schemas import ToolResult
+from sensoragent.skills.base import SkillContext
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.robot import (
   RobotPickSkill,
@@ -99,6 +101,89 @@ class RobotControlTest(TestCase):
     state = client.get_state().state
     self.assertEqual(state["arm"]["pose"], build_place_plan(place).retreat.to_dict())
     self.assertEqual(state["gripper"]["status"], "open")
+
+  def test_pick_skill_falls_back_to_planned_lift_when_cartesian_lift_fails(self) -> None:
+    trace = TraceContext()
+    grasp = RobotPose(
+      position=(0.42, 0.10, 0.32),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_top_down_pick_plan(grasp)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        if (
+          name == "robot.move_linear"
+          and input_data.get("pose", {}).get("position") == plan.lift.to_dict()["position"]
+        ):
+          return ToolResult(
+            tool=name,
+            success=False,
+            error="INCOMPLETE_CARTESIAN_PATH: Cartesian path fraction 0.667 is below 0.980.",
+          )
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPickSkill().run(
+      call=Mock(
+        input={
+          "object_id": "roller_01",
+          "plan": plan.to_dict(),
+          "close_opening": 0.02,
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn(("robot.move_pose", {"pose": plan.lift.to_dict(), "speed": 0.2}), tool_runtime.calls)
+
+  def test_pick_skill_tolerates_open_gripper_failure_when_already_open(self) -> None:
+    trace = TraceContext()
+    grasp = RobotPose(
+      position=(0.42, 0.10, 0.32),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_top_down_pick_plan(grasp)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        if name == "gripper.open":
+          return ToolResult(
+            tool=name,
+            success=False,
+            error="GRIPPER_FAILED: Gripper did not reach the target or detect contact.",
+          )
+        if name == "gripper.get_state":
+          return ToolResult(tool=name, success=True, output={"state": {"opening": 0.0847}})
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPickSkill().run(
+      call=Mock(
+        input={
+          "object_id": "roller_01",
+          "plan": plan.to_dict(),
+          "close_opening": 0.02,
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn(("gripper.get_state", {}), tool_runtime.calls)
 
   def test_robot_tools_register_from_project_configuration(self) -> None:
     bundle = build_agent_from_config(ROOT / "configs" / "robot_mock.yaml")

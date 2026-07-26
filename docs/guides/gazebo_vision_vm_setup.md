@@ -170,7 +170,7 @@ ros2 run tf2_ros tf2_echo base_link sensoragent_rgbd_rig/rig/depth_camera
 Expected translation is approximately:
 
 ```text
-x: 0.47
+x: 0.34
 y: 0.00
 z: 0.88
 ```

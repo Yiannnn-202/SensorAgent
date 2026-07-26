@@ -190,6 +190,7 @@ def _make_runtime(
     "robot.plan_place": lambda _i: next(plan_place_results),
     "robot.move_joints": lambda _i: {"completed": True, "state": {}},
     "robot.move_pose": lambda _i: {"completed": True, "state": {}},
+    "robot.move_linear": lambda _i: {"completed": True, "state": {}},
     "gripper.open": lambda _i: {"completed": True, "state": {"opening": 0.0848}},
     "vision.verify_object_in_bin": lambda _i: next(verify_bin_results),
     "recovery.classify_failure": classify,

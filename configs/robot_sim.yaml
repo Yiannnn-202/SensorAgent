@@ -41,13 +41,13 @@ integrations:
     depth_window: 7
     # Fixed Gazebo transform from ROS optical camera coordinates to base_link,
     # derived from sensoragent_rgbd_rig/model.sdf:
-    #   camera origin in world: (0.47, 0.0, 1.06)
+    #   camera origin in world: (0.34, 0.0, 1.06)
     #   base_link origin in world: (0.0, 0.0, 0.18)
     #   optical +X image-right -> base -Y
     #   optical +Y image-down  -> base -X
     #   optical +Z depth       -> base -Z
     T_base_camera:
-      - [0.0, -1.0, 0.0, 0.47]
+      - [0.0, -1.0, 0.0, 0.34]
       - [-1.0, 0.0, 0.0, 0.0]
       - [0.0, 0.0, -1.0, 0.88]
       - [0.0, 0.0, 0.0, 1.0]
@@ -58,21 +58,9 @@ scene:
   # base_link z = world z - robot_mount_z (0.18).
   # Workbench top at base_link z ≈ 0.12; object centres sit slightly above it.
   objects:
-    # NOTE: the world spawns two rollers (roller_01 at y=+0.23, roller_02 at
-    # y=-0.12). config_detect is a single-pose lookup and always returns
-    # roller_01 here; use vision.open_vocab_detect with a spatial_constraint
-    # when the instruction distinguishes between them.
-    roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
-    silver_roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
-    滚柱: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
-    stepped_shaft: [0.38, 0.23, 0.146, 0.0, 0.0, 0.0]
-    阶梯轴: [0.38, 0.23, 0.146, 0.0, 0.0, 0.0]
-    flange: [0.51, 0.22, 0.137, 0.0, 0.0, 0.0]
-    法兰: [0.51, 0.22, 0.137, 0.0, 0.0, 0.0]
-    short_bolt: [0.28, 0.08, 0.147, 0.0, 0.0, 0.0]
-    螺栓: [0.28, 0.08, 0.147, 0.0, 0.0, 0.0]
-    gear: [0.43, 0.08, 0.130, 0.0, 0.0, 0.0]
-    齿轮: [0.43, 0.08, 0.130, 0.0, 0.0, 0.0]
+    roller: [0.24, 0.18, 0.142, 0.0, 0.0, 0.0]
+    silver_roller: [0.24, 0.18, 0.142, 0.0, 0.0, 0.0]
+    滚柱: [0.24, 0.18, 0.142, 0.0, 0.0, 0.0]
 
   # Reachable workspace envelope in base_link metres. Vision candidates whose
   # back-projected base XY falls outside this box are filtered out before
@@ -80,52 +68,47 @@ scene:
   # depth-free pixel -> base back-projection (camera looks down at the table).
   workspace:
     frame: base_link
-    x: [0.15, 0.60]
-    y: [-0.35, 0.35]
+    x: [0.09, 0.59]
+    y: [-0.375, 0.375]
     z: [0.10, 0.30]
     table_z: 0.12
 
-  # Named place targets. Poses are TCP release poses in base_link.
-  # bin_3x3 is spawned at world (0.50, -0.18, 0.30); each cell is 0.14 x 0.12
-  # with walls 0.08 m tall (bin floor at base_link z ≈ 0.12, wall top ≈ 0.20).
-  # We target the front row (X = 0.36) for best reach on RM65-B; TCP height
-  # 0.30 keeps the gripper ~0.10 m above the wall top so MoveIt does not flag
-  # the fingertips as colliding with the bin walls (object free-falls into the
-  # cell after release).
-  #
-  # Orientation matches what PLACE_PRE_APPROACH_JOINTS reaches: 180° rotation
-  # around ~+X (gripper down, wrist twist aligned with the staging joints).
-  # Matching the staging orientation lets robot.move_linear interpolate only
-  # position between staging and place, which MoveIt handles reliably.
+  # Named place targets. The Gazebo world now uses a flat visual-only 2x2 target
+  # grid instead of a walled bin, so recovery can re-pick from a wrong area
+  # without colliding with bin walls. Poses are TCP release poses in base_link:
+  # z=0.22 keeps the gripper about 0.10 m above the tabletop.
   place_targets:
+    target_area_1:
+      position: [0.24, -0.10, 0.24]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    target_area_2:
+      position: [0.40, -0.10, 0.24]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    target_area_3:
+      position: [0.24, 0.04, 0.24]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    target_area_4:
+      position: [0.40, 0.04, 0.24]
+      orientation: [0.9962, -0.0872, 0.0, 0.0]
+      frame_id: base_link
+    # Backward-compatible aliases for existing scripts and prompts.
     bin_cell_1:
-      position: [0.36, -0.30, 0.30]
+      position: [0.24, -0.10, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     bin_cell_2:
-      position: [0.36, -0.18, 0.30]
+      position: [0.40, -0.10, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     bin_cell_3:
-      position: [0.36, -0.06, 0.30]
+      position: [0.24, 0.04, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
-    # Middle row cells sit further out; use only when reach allows.
     bin_cell_4:
-      position: [0.50, -0.30, 0.30]
-      orientation: [0.9962, -0.0872, 0.0, 0.0]
-      frame_id: base_link
-    bin_cell_5:
-      position: [0.50, -0.18, 0.30]
-      orientation: [0.9962, -0.0872, 0.0, 0.0]
-      frame_id: base_link
-    bin_cell_6:
-      position: [0.50, -0.06, 0.30]
-      orientation: [0.9962, -0.0872, 0.0, 0.0]
-      frame_id: base_link
-    # Reachable fallback near the pick area (mirrors teammate's near_pick offset).
-    near_pick:
-      position: [0.34, 0.11, 0.30]
+      position: [0.40, 0.04, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
 

@@ -143,6 +143,18 @@ def build_industrial_recovery_pick_place_tree() -> DecisionTree:
           "opening": GRIPPER_OPEN_OPENING,
           "speed": GRIPPER_SPEED,
         },
+        on_success="place_lift_clearance",
+        on_failure="classify_failure",
+      ),
+      DecisionNode(
+        name="place_lift_clearance",
+        kind=DecisionNodeKind.TOOL,
+        target="robot.move_linear",
+        input={
+          "pose": "{{ place_plan.plan.retreat }}",
+          "speed": PLACE_SPEED,
+          "wait": True,
+        },
         on_success="place_retreat",
         on_failure="classify_failure",
       ),
@@ -274,7 +286,7 @@ def build_industrial_recovery_pick_place_tree() -> DecisionTree:
           "speed": 0.3,
         },
         max_retries=1,
-        on_success="place_retreat",
+        on_success="place_lift_clearance",
         on_failure="failure",
       ),
       DecisionNode(
