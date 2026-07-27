@@ -21,6 +21,8 @@ class RobotPickSkill:
     speed = call.input.get("speed", 0.2)
     descent_speed = call.input.get("descent_speed", speed)
     completed_steps: list[str] = []
+    stage_results: list[dict] = []
+    plan_output = plan.to_dict()
     steps = [
       (
         "open_gripper",
@@ -57,13 +59,46 @@ class RobotPickSkill:
         target_opening = float(input_data.get("opening", 0.0848))
         if isinstance(opening, (int, float)) and float(opening) >= target_opening - 0.003:
           result = state_result
+      if not result.success and step_name == "close_gripper":
+        state_result = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
+        state = (state_result.output or {}).get("state", {}) if state_result.success else {}
+        opening = state.get("opening") if isinstance(state, dict) else None
+        min_opening = float(call.input.get("verify_min_opening", 0.002))
+        max_opening = float(call.input.get("verify_max_opening", 0.08))
+        if isinstance(opening, (int, float)) and min_opening <= float(opening) <= max_opening:
+          stage_results.append(
+            {
+              "step": "close_gripper_state_check",
+              "tool": "gripper.get_state",
+              "input": {},
+              "success": True,
+              "output": state_result.output,
+              "tolerated_error": result.error,
+            }
+          )
+          result = state_result
       if not result.success and step_name == "lift" and tool_name == "robot.move_linear":
         result = context.tool_runtime.invoke("robot.move_pose", input_data, call.trace)
+      stage_results.append(
+        {
+          "step": step_name,
+          "tool": tool_name,
+          "input": input_data,
+          "success": result.success,
+          "output": result.output,
+          "error": result.error,
+        }
+      )
       if not result.success:
         return SkillResult(
           skill=self.spec.name,
           success=False,
-          output={"completed_steps": completed_steps, "failed_step": step_name},
+          output={
+            "completed_steps": completed_steps,
+            "failed_step": step_name,
+            "plan": plan_output,
+            "stages": stage_results,
+          },
           error=f"{step_name}: {result.error}",
         )
       completed_steps.append(step_name)
@@ -75,5 +110,7 @@ class RobotPickSkill:
         "picked": True,
         "object_id": call.input.get("object_id"),
         "completed_steps": completed_steps,
+        "plan": plan_output,
+        "stages": stage_results,
       },
     )

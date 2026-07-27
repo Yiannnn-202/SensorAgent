@@ -47,7 +47,8 @@ class ConfigLoaderTest(TestCase):
       config.scene.robot_joint_order,
       ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"],
     )
-    self.assertEqual(
-      config.scene.joint_poses["place_staging_joints"],
-      [0.005134, -0.428860, -0.667978, -0.000079, -1.981247, -0.006118],
-    )
+    self.assertIsNone(config.scene.joint_poses["pick_staging_joints"])
+    self.assertIsNone(config.scene.joint_poses["carry_joints"])
+    self.assertIsNone(config.scene.joint_poses["place_staging_joints"])
+    self.assertEqual(config.scene.objects["block"][:3], [0.24, 0.18, 0.14])
+    self.assertEqual(config.scene.objects["cube"], config.scene.objects["block"])

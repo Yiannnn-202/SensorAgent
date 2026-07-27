@@ -158,12 +158,12 @@ The default industrial world includes these approximate Gazebo/world positions:
 --execute                  # actually move the robot and gripper
 --diagnose-only            # only test arm motion
 --arm-diagnostic           # run arm diagnostic before the pick
---speed 2                  # motion speed; default is 2
---pick-descent-speed 1.5   # vertical descent from approach to grasp
---position-offset 0 0 0.03 # visual object XYZ to gripper TCP grasp pose
+--speed 1.2                # motion speed; default is 1.2
+--pick-descent-speed 1.2   # vertical descent from approach to grasp
+--position-offset 0 0 0.02 # visual object XYZ to gripper TCP grasp pose
 --approach-distance 0.10   # vertical approach distance above grasp
 --pregrasp-distance 0.04   # vertical pregrasp distance above grasp
---close-opening 0.02       # gripper opening after close command, in metres
+--close-opening 0.032      # gripper opening after close command, in metres
 --json-out logs/tasks/gazebo_pick_test.json
 ```
 

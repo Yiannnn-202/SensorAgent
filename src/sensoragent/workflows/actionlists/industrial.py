@@ -6,7 +6,6 @@ from typing import Any
 from sensoragent.schemas import ActionList, ActionStep, ActionStepKind
 from sensoragent.tools.robot.joint_poses import (
   DEFAULT_PLACE_STAGING_JOINTS,
-  configured_joint_pose,
   optional_configured_joint_pose,
 )
 
@@ -14,13 +13,14 @@ from sensoragent.tools.robot.joint_poses import (
 PICK_APPROACH_DISTANCE = 0.10
 PICK_PREGRASP_DISTANCE = 0.04
 PICK_LIFT_HEIGHT = 0.12
-PICK_POSITION_OFFSET = [0.0, 0.0, 0.03]
-PICK_SPEED = 2.0
-PICK_DESCENT_SPEED = 1.5
-GRIPPER_CLOSE_OPENING = 0.02
+PICK_POSITION_OFFSET = [0.0, 0.0, 0.02]
+PICK_SPEED = 1.2
+PICK_DESCENT_SPEED = 1.2
+GRIPPER_CLOSE_OPENING = 0.032
+GRIPPER_PICK_FORCE = 1.0
 
 PLACE_CLEARANCE = 0.08
-PLACE_SPEED = 2.0
+PLACE_SPEED = 1.2
 GRIPPER_OPEN_OPENING = 0.0848
 GRIPPER_SPEED = 0.5
 
@@ -28,12 +28,8 @@ GRIPPER_SPEED = 0.5
 PLACE_PRE_APPROACH_JOINTS = DEFAULT_PLACE_STAGING_JOINTS
 
 
-def place_staging_joints(joint_poses: Mapping[str, Any] | None = None) -> list[float]:
-  return configured_joint_pose(
-    joint_poses,
-    "place_staging_joints",
-    DEFAULT_PLACE_STAGING_JOINTS,
-  )
+def place_staging_joints(joint_poses: Mapping[str, Any] | None = None) -> list[float] | None:
+  return optional_configured_joint_pose(joint_poses, "place_staging_joints")
 
 
 def observe_joints(joint_poses: Mapping[str, Any] | None = None) -> list[float] | None:
@@ -125,6 +121,7 @@ def build_industrial_pick_place_actionlist(
           "speed": PICK_SPEED,
           "descent_speed": PICK_DESCENT_SPEED,
           "close_opening": GRIPPER_CLOSE_OPENING,
+          "gripper_force": GRIPPER_PICK_FORCE,
         },
         save_as="pick_result",
       ),
@@ -153,16 +150,7 @@ def build_industrial_pick_place_actionlist(
         },
         save_as="place_plan",
       ),
-      ActionStep(
-        name="place_pre_approach_joints",
-        kind=ActionStepKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": place_staging,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-      ),
+      *optional_move_joints_step("place_pre_approach_joints", place_staging, PLACE_SPEED),
       ActionStep(
         name="place_move_place",
         kind=ActionStepKind.TOOL,
@@ -193,16 +181,7 @@ def build_industrial_pick_place_actionlist(
           "wait": True,
         },
       ),
-      ActionStep(
-        name="place_retreat",
-        kind=ActionStepKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": place_staging,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-      ),
+      *optional_move_joints_step("place_retreat", place_staging, PLACE_SPEED),
       *optional_move_joints_step("observe_after_place", observe, PLACE_SPEED),
       ActionStep(
         name="verify_place",
@@ -262,6 +241,7 @@ def build_industrial_pick_only_actionlist(
           "speed": PICK_SPEED,
           "descent_speed": PICK_DESCENT_SPEED,
           "close_opening": GRIPPER_CLOSE_OPENING,
+          "gripper_force": GRIPPER_PICK_FORCE,
         },
         save_as="pick_result",
       ),
@@ -311,16 +291,7 @@ def build_industrial_place_only_actionlist(
         },
         save_as="place_plan",
       ),
-      ActionStep(
-        name="place_pre_approach_joints",
-        kind=ActionStepKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": place_staging,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-      ),
+      *optional_move_joints_step("place_pre_approach_joints", place_staging, PLACE_SPEED),
       ActionStep(
         name="place_move_place",
         kind=ActionStepKind.TOOL,
@@ -351,16 +322,7 @@ def build_industrial_place_only_actionlist(
           "wait": True,
         },
       ),
-      ActionStep(
-        name="place_retreat",
-        kind=ActionStepKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": place_staging,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-      ),
+      *optional_move_joints_step("place_retreat", place_staging, PLACE_SPEED),
       *optional_move_joints_step("observe_after_place", observe, PLACE_SPEED),
       ActionStep(
         name="verify_place",

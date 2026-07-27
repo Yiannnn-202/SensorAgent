@@ -42,12 +42,16 @@ scene:
     observe_joints: null
     pick_staging_joints: null
     carry_joints: null
-    place_staging_joints: [-0.17, -0.57, -0.61, 0.0, -1.96, 0.0]
+    place_staging_joints: null
 
   objects:
-    roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
-    silver_roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
-    滚柱: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
+    block: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    cube: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    red_block: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    方块: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    roller: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    silver_roller: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    滚柱: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
   place_targets:
     bin_cell_3:
       position: [0.36, -0.06, 0.30]

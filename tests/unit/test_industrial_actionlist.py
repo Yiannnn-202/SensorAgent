@@ -171,11 +171,9 @@ class IndustrialActionListTest(TestCase):
         "verify_grasp",
         "resolve_place_target",
         "plan_place",
-        "place_pre_approach_joints",
         "place_move_place",
         "place_open_gripper",
         "place_lift_clearance",
-        "place_retreat",
         "verify_place",
       ],
     )
@@ -443,16 +441,14 @@ class IndustrialPlaceOnlyTest(TestCase):
       [
         "resolve_place_target",
         "plan_place",
-        "place_pre_approach_joints",
         "place_move_place",
         "place_open_gripper",
         "place_lift_clearance",
-        "place_retreat",
         "verify_place",
       ],
     )
     self.assertIn(
-      ("robot.move_linear", {"pose": {"position": [0.36, -0.06, 0.45], "orientation": [0.9962, -0.0872, 0.0, 0.0], "frame_id": "base_link"}, "speed": 2.0, "wait": True}),
+      ("robot.move_linear", {"pose": {"position": [0.36, -0.06, 0.45], "orientation": [0.9962, -0.0872, 0.0, 0.0], "frame_id": "base_link"}, "speed": 1.2, "wait": True}),
       tool_runtime.calls,
     )
     self.assertNotIn("vision.config_detect", [c[0] for c in tool_runtime.calls])

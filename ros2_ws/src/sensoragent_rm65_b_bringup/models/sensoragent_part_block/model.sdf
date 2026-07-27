@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="sensoragent_part_block">
+    <link name="part">
+      <inertial>
+        <mass>0.20</mass>
+        <inertia>
+          <ixx>0.0000533</ixx>
+          <iyy>0.0000533</iyy>
+          <izz>0.0000533</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><box><size>0.040 0.040 0.040</size></box></geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>20.0</mu>
+              <mu2>20.0</mu2>
+            </ode>
+          </friction>
+          <contact>
+            <ode>
+              <kp>1e+5</kp>
+              <kd>1</kd>
+              <soft_cfm>0</soft_cfm>
+              <soft_erp>0.2</soft_erp>
+              <minDepth>0.002</minDepth>
+              <maxVel>0</maxVel>
+            </ode>
+          </contact>
+        </surface>
+      </collision>
+      <visual name="visual">
+        <geometry><box><size>0.040 0.040 0.040</size></box></geometry>
+        <material>
+          <ambient>0.80 0.18 0.12 1</ambient>
+          <diffuse>0.80 0.18 0.12 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

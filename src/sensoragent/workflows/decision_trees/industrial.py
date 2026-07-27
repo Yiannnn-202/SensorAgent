@@ -11,6 +11,8 @@ from sensoragent.schemas import (
   DecisionTree,
 )
 from sensoragent.workflows.actionlists.industrial import (
+  GRIPPER_CLOSE_OPENING,
+  GRIPPER_PICK_FORCE,
   GRIPPER_OPEN_OPENING,
   GRIPPER_SPEED,
   PICK_APPROACH_DISTANCE,
@@ -46,6 +48,8 @@ def build_industrial_recovery_pick_place_tree(
   after_plan_pick = "pick_staging_joints" if pick_staging is not None else "pick"
   after_verify_grasp = "carry_joints" if carry is not None else "resolve_place_target"
   after_place_retreat = "observe_after_place" if observe is not None else "verify_place"
+  after_plan_place = "place_pre_approach_joints" if place_staging is not None else "place_move_place"
+  after_place_lift = "place_retreat" if place_staging is not None else after_place_retreat
   recover_redetect_target = (
     "recover_observe_before_redetect" if observe is not None else "recover_redetect"
   )
@@ -97,6 +101,8 @@ def build_industrial_recovery_pick_place_tree(
           "object_id": "{{ object.object_id }}",
           "speed": PICK_SPEED,
           "descent_speed": PICK_DESCENT_SPEED,
+          "close_opening": GRIPPER_CLOSE_OPENING,
+          "gripper_force": GRIPPER_PICK_FORCE,
         },
         save_as="pick_result",
         on_success="verify_grasp",
@@ -130,21 +136,10 @@ def build_industrial_recovery_pick_place_tree(
           "clearance": PLACE_CLEARANCE,
         },
         save_as="place_plan",
-        on_success="place_pre_approach_joints",
+        on_success=after_plan_place,
         on_failure="classify_failure",
       ),
-      DecisionNode(
-        name="place_pre_approach_joints",
-        kind=DecisionNodeKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": place_staging,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-        on_success="place_move_place",
-        on_failure="classify_failure",
-      ),
+      *_move_joints_node("place_pre_approach_joints", place_staging, PLACE_SPEED, "place_move_place"),
       DecisionNode(
         name="place_move_place",
         kind=DecisionNodeKind.TOOL,
@@ -177,21 +172,10 @@ def build_industrial_recovery_pick_place_tree(
           "speed": PLACE_SPEED,
           "wait": True,
         },
-        on_success="place_retreat",
+        on_success=after_place_lift,
         on_failure="classify_failure",
       ),
-      DecisionNode(
-        name="place_retreat",
-        kind=DecisionNodeKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": place_staging,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-        on_success=after_place_retreat,
-        on_failure="classify_failure",
-      ),
+      *_move_joints_node("place_retreat", place_staging, PLACE_SPEED, after_place_retreat),
       *_move_joints_node("observe_after_place", observe, PLACE_SPEED, "verify_place"),
       DecisionNode(
         name="verify_place",

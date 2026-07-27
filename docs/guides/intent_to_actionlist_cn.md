@@ -4,7 +4,7 @@ _最近更新_：2026-07-26（同步当前 `main` 文档）
 
 ## 0. 现状 TL;DR
 
-- 端到端管道**已跑通** Gazebo sim baseline：`roller → bin_cell_3` 11 步全绿。
+- 端到端管道当前默认使用稳定方块：`block → target_area_3`。
 - `AgentPlan.intent` 已是一等字段，LLM 输出优先读取顶层 `intent`。
 - `industrial.pick_only_actionlist`、`industrial.place_only_actionlist` 和
   `industrial.vision_pick_place_actionlist` 已注册。
@@ -36,7 +36,7 @@ operator utterance
     ├─ resolve_place_target (tool  robot.resolve_place_target)→ place_target
     ├─ plan_place           (tool  robot.plan_place)          → place_plan
     ├─ place_pre_approach_joints (tool robot.move_joints)     # 中转关节位
-    ├─ place_move_place     (tool  robot.move_pose OMPL)      # 到 bin 上方
+    ├─ place_move_place     (tool  robot.move_pose OMPL)      # 到目标区释放位姿
     ├─ place_open_gripper   (tool  gripper.open)              # stop_on_failure=False
     ├─ place_retreat        (tool  robot.move_joints)         # 关节退位
     └─ verify_place         (skill robot.verify_place)        → place_check
@@ -56,9 +56,9 @@ Sim baseline 记录：`logs/tasks/industrial_sim_run_v8.json` — success=true�
 
 ```python
 plan.intent = {
-  "object": "滚柱",            # 保留操作员用词
+  "object": "方块",            # 保留操作员用词
   "action": "pick" | "place" | "pick_place",
-  "target": "bin_cell_3"       # 目的地 id 或空字符串
+  "target": "target_area_3"    # 目的地 id 或空字符串
 }
 plan.reason = "operator wants ... pick-and-place workflow selected."  # 纯自然语言，不再夹 JSON
 ```
@@ -90,7 +90,7 @@ plan.reason = "operator wants ... pick-and-place workflow selected."  # 纯自�
 
 `src/sensoragent/tools/vision/config_detect.py`。替代 `vision.mock_detect`，从
 `configs/robot_sim.yaml` 的 `scene.objects` 段读取物体表，支持：
-- 中英文物体名（`roller`, `silver_roller`, `滚柱` 都指向同一 pose）
+- 中英文物体名（`block`, `cube`, `red_block`, `方块` 都指向同一 pose）
 - 大小写 / 子串匹配
 
 Contract：`contracts/tools/vision.config_detect.schema.json`。
@@ -104,12 +104,12 @@ Contract：`contracts/tools/vision.config_detect.schema.json`。
 - `bootstrap.py:_build_scene_tool`：把 scene 数据注入到 `vision.config_detect` /
   `robot.resolve_place_target`
 
-`configs/robot_sim.yaml` 的 `scene:` 段已配好 5 类 industrial world 物件
-（滚柱、阶梯轴、法兰、短螺栓、齿轮）的中英文别名，以及 7 个 place target。
+`configs/robot_sim.yaml` 的 `scene:` 段当前默认配好稳定方块和 2x2
+`target_area_*` 目标区；`roller` 等别名暂时映射到同一方块位姿，方便之后切回视觉滚柱验证。
 
 ### 3.5 Place target 寄存器：`robot.resolve_place_target`
 
-`src/sensoragent/tools/robot/place_targets.py`。把 `bin_cell_3` 字符串解析成
+`src/sensoragent/tools/robot/place_targets.py`。把 `target_area_3` 字符串解析成
 具体的 `RobotPose`。默认注册表在代码里；yaml `scene.place_targets` 会覆盖默认。
 
 Contract：`contracts/tools/robot.resolve_place_target.schema.json`。
@@ -120,8 +120,8 @@ Contract：`contracts/tools/robot.resolve_place_target.schema.json`。
 
 - **place 阶段展开在 ActionList 内**（不用 `robot.place` skill），为了灵活控制每步失败策略。
 - **`place_pre_approach_joints`**：关节空间中转位 `[-0.17, -0.57, -0.61, 0, -1.96, 0]`，
-  把 arm 摆到 bin 上方 gripper-down 姿态。避开 pick lift → bin approach 的 OMPL 大幅重定向。
-- **`place_move_place`**：`robot.move_pose` OMPL 到 bin_cell 上方（不用 Cartesian，避免起点漂移导致的 IK 中断）。
+  把 arm 摆到 target grid 上方 gripper-down 姿态。避开 pick lift → target approach 的 OMPL 大幅重定向。
+- **`place_move_place`**：`robot.move_pose` OMPL 到 target area 释放位姿（不用 Cartesian，避免起点漂移导致的 IK 中断）。
 - **`place_open_gripper`**：`stop_on_failure=False`，允许 Robotiq bridge 报 stall 但物件已释放。
 - **`place_retreat`**：`robot.move_joints` 回到 staging，不用 Cartesian/OMPL（避免物件释放后 planning scene 变化引起的失败）。
 
@@ -151,33 +151,30 @@ verify_place 通过的场景返回 `success=True`。
 
 | 名称 | pose_3d（base_link） | 说明 |
 |------|---------------------|------|
-| roller / silver_roller / 滚柱 | `[0.24, 0.23, 0.142]` | baseline，可达 |
-| stepped_shaft / 阶梯轴 | `[0.38, 0.23, 0.146]` | 未测 |
-| flange / 法兰 | `[0.51, 0.22, 0.137]` | 未测 |
-| short_bolt / 螺栓 | `[0.28, 0.08, 0.147]` | 可 pick，place 需要可达 bin |
-| gear / 齿轮 | `[0.43, 0.08, 0.130]` | pick 边缘 workspace，Cartesian descent 挂 |
+| block / cube / red_block / 方块 | `[0.24, 0.18, 0.140]` | 当前默认，可达且不滚动 |
+| roller / silver_roller / 滚柱 | `[0.24, 0.18, 0.140]` | 临时别名，当前也指向方块位姿 |
 
 ### 4.2 Place targets（TCP 释放位姿）
 
-- z=0.30（base_link）：bin 壁顶 0.20 上方 0.10m，避免 MoveIt 判 finger-wall 碰撞
+- z=0.24（base_link）：target grid 上方释放高度，避免 gripper 压桌
 - orientation `(0.9962, -0.0872, 0, 0)`：匹配 staging pose 到达时的实际姿态，避开 IK 奇异
 
 | 名称 | position | 可达性 |
 |------|----------|--------|
-| bin_cell_2 | `[0.36, -0.18, 0.30]` | ✓（已验证从 staging OMPL 通） |
-| bin_cell_3 | `[0.36, -0.06, 0.30]` | ✓（baseline） |
-| bin_cell_1 | `[0.36, -0.30, 0.30]` | ✗（Y=-0.30 超出 RM65 top-down 可达域） |
-| bin_cell_4/5/6 | X=0.50（中排） | 未测 |
-| near_pick | `[0.34, 0.11, 0.30]` | ✓（fallback） |
+| target_area_1 | `[0.24, -0.10, 0.24]` | 2x2 grid 前左 |
+| target_area_2 | `[0.40, -0.10, 0.24]` | 2x2 grid 前右 |
+| target_area_3 | `[0.24, 0.04, 0.24]` | 当前推荐目标 |
+| target_area_4 | `[0.40, 0.04, 0.24]` | 2x2 grid 后右 |
+| bin_cell_1..4 | 同上 | 向后兼容别名 |
 
 ## 5. Sim 实测结果
 
 ### 5.1 Baseline
 
-`Round 1: roller → bin_cell_3`：**success**。
-- pick 6 步 ✓，`verify_grasp opening=0.0397, held=True`
-- place 5 步 ✓，`verify_place opening=0.0847, released=True`
-- arm 返回 staging，gripper 全开
+当前推荐 baseline：`block → target_area_3`。
+- pick 6 步；
+- place 采用已调好的 `place_staging_joints`；
+- arm 返回 staging，gripper 全开。
 
 ### 5.2 边界发现
 
@@ -195,9 +192,9 @@ verify_place 通过的场景返回 `success=True`。
 | IK 奇异 `(0, 1, 0, 0)` | OMPL 找不到解 | 用 5° tilt / 微扰动 quaternion |
 | Cartesian planner 严格阈值 0.98 | 偶发失败 | Place 阶段改用 OMPL 而非 Cartesian |
 | 抓物件时 OMPL 拒绝规划 | 起点判 in-collision | 用 move_joints 中转关节位、Cartesian 到近 target |
-| 单 staging pose 覆盖有限 | bin_cell_1 够不到 | 只用 bin_cell_2/3 作为主要目的地 |
+| 单 staging pose 覆盖有限 | 极端 target 够不到 | 先用 `target_area_3` 作为主要目的地 |
 | gear 位置抓不了 | workspace 边缘 | 后续换 oriented pick 或调 pick offset |
-| Sim world 物件不自动 reset | 跑一次后 roller 在 bin 里 | 每轮之间重启 sim |
+| Sim world 物件不自动 reset | 跑一次后 block 已移动 | 每轮之间重启 sim |
 
 ## 7. 使用方式
 
@@ -228,7 +225,7 @@ bash scripts/linux/run_rm65_b_sim.sh
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
-  --planner static --object-query roller --target bin_cell_3 --execute \
+  --planner static --object-query block --target target_area_3 --execute \
   --json-out logs/tasks/baseline.json
 ```
 
@@ -236,7 +233,7 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.p
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
-  --planner llm --utterance "把滚柱放到 bin_cell_3" --execute \
+  --planner llm --utterance "把方块放到 target_area_3" --execute \
   --json-out logs/tasks/llm_run.json
 ```
 
