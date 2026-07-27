@@ -113,6 +113,7 @@ Key SensorAgent documents:
 - [Testing guide](docs/guides/testing.md)
 - [Audio guide](docs/guides/audio.md)
 - [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
+- [RM65-B named joint pose tuning](docs/guides/rm65_b_named_joint_poses.md)
 - [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
 - [Industrial intent to ActionList guide](docs/guides/intent_to_actionlist_cn.md)
 - [Failure detection and recovery guide](docs/guides/failure_recovery_cn.md)

@@ -1,5 +1,8 @@
 """Industrial pick-and-place ActionList backed by open-vocabulary vision."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from sensoragent.schemas import ActionList, ActionStep, ActionStepKind
 from sensoragent.workflows.actionlists.industrial import (
   GRIPPER_CLOSE_OPENING,
@@ -12,13 +15,16 @@ from sensoragent.workflows.actionlists.industrial import (
   PICK_PREGRASP_DISTANCE,
   PICK_SPEED,
   PLACE_CLEARANCE,
-  PLACE_PRE_APPROACH_JOINTS,
   PLACE_SPEED,
+  place_staging_joints,
 )
 
 
-def build_industrial_vision_pick_place_actionlist() -> ActionList:
+def build_industrial_vision_pick_place_actionlist(
+  joint_poses: Mapping[str, Any] | None = None,
+) -> ActionList:
   """Build an industrial pick-place workflow using vision.open_vocab_detect."""
+  place_staging = place_staging_joints(joint_poses)
 
   return ActionList(
     name="industrial.vision_pick_place_actionlist",
@@ -105,7 +111,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
         kind=ActionStepKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },
@@ -145,7 +151,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
         kind=ActionStepKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },

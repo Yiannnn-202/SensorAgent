@@ -1,5 +1,8 @@
 """Industrial DecisionTree workflows with classified recovery branches."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from sensoragent.schemas import (
   ConditionOperator,
   DecisionCondition,
@@ -17,13 +20,14 @@ from sensoragent.workflows.actionlists.industrial import (
   PICK_PREGRASP_DISTANCE,
   PICK_SPEED,
   PLACE_CLEARANCE,
-  PLACE_PRE_APPROACH_JOINTS,
   PLACE_SPEED,
+  place_staging_joints,
 )
 
 
 def build_industrial_recovery_pick_place_tree(
   *,
+  joint_poses: Mapping[str, Any] | None = None,
   detect_tool: str = "vision.config_detect",
   capture_tool: str | None = None,
   live_verify: bool = False,
@@ -47,6 +51,7 @@ def build_industrial_recovery_pick_place_tree(
     spatial_constraint_input: When True, detections forward the request's
       ``spatial_constraint`` input to the detector.
   """
+  place_staging = place_staging_joints(joint_poses)
 
   detect_nodes = _detect_sequence(
     detect_tool=detect_tool,
@@ -187,7 +192,7 @@ def build_industrial_recovery_pick_place_tree(
         kind=DecisionNodeKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },
@@ -234,7 +239,7 @@ def build_industrial_recovery_pick_place_tree(
         kind=DecisionNodeKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },

@@ -79,6 +79,11 @@ def load_config(path: str | Path) -> SensorAgentConfig:
     scene=SceneConfig(
       objects=_as_mapping(scene.get("objects"), "scene.objects"),
       place_targets=_as_mapping(scene.get("place_targets"), "scene.place_targets"),
+      robot_joint_order=_as_string_list(
+        scene.get("robot_joint_order"),
+        "scene.robot_joint_order",
+      ),
+      joint_poses=_as_mapping(scene.get("joint_poses"), "scene.joint_poses"),
       workspace=_as_mapping(scene.get("workspace"), "scene.workspace"),
     ),
   )
