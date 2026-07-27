@@ -190,6 +190,22 @@ class IndustrialActionListTest(TestCase):
     self.assertNotIn("robot.plan_place", [call[0] for call in tool_runtime.calls])
     self.assertNotIn("robot.move_joints", [call[0] for call in tool_runtime.calls])
 
+  def test_configured_place_staging_joints_override_default(self) -> None:
+    custom_joints = [0.1, -0.2, 0.3, -0.4, 0.5, -0.6]
+    actionlist = build_industrial_pick_place_actionlist(
+      {"place_staging_joints": custom_joints}
+    )
+
+    staging_steps = [
+      step
+      for step in actionlist.steps
+      if step.name in {"place_pre_approach_joints", "place_retreat"}
+    ]
+
+    self.assertEqual(len(staging_steps), 2)
+    self.assertEqual(staging_steps[0].input["joints"], custom_joints)
+    self.assertEqual(staging_steps[1].input["joints"], custom_joints)
+
 
 class LLMPlannerAllowedTargetsTest(TestCase):
   def test_planner_accepts_industrial_target(self) -> None:
@@ -274,6 +290,25 @@ class IndustrialPickOnlyTest(TestCase):
 
 
 class IndustrialPlaceOnlyTest(TestCase):
+  def test_configured_place_staging_joints_override_default(self) -> None:
+    from sensoragent.workflows.actionlists.industrial import (
+      build_industrial_place_only_actionlist,
+    )
+
+    custom_joints = [0.1, -0.2, 0.3, -0.4, 0.5, -0.6]
+    actionlist = build_industrial_place_only_actionlist(
+      {"place_staging_joints": custom_joints}
+    )
+    staging_steps = [
+      step
+      for step in actionlist.steps
+      if step.name in {"place_pre_approach_joints", "place_retreat"}
+    ]
+
+    self.assertEqual(len(staging_steps), 2)
+    self.assertEqual(staging_steps[0].input["joints"], custom_joints)
+    self.assertEqual(staging_steps[1].input["joints"], custom_joints)
+
   def test_place_only_runs_clearance_lift_before_retreat(self) -> None:
     from sensoragent.workflows.actionlists.industrial import (
       build_industrial_place_only_actionlist,

@@ -307,13 +307,14 @@ def build_agent(
 
   skill_runtime = SkillRuntime(skill_registry, tool_runtime, logger)
   actionlist_runtime = ActionListRuntime(tool_runtime, skill_runtime, logger)
+  joint_poses = config.scene.joint_poses
   actionlists = {
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
-    "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(),
+    "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(joint_poses),
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
-    "industrial.place_only_actionlist": build_industrial_place_only_actionlist(),
-    "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(),
+    "industrial.place_only_actionlist": build_industrial_place_only_actionlist(joint_poses),
+    "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(joint_poses),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,
@@ -323,7 +324,7 @@ def build_agent(
     logger,
   )
   decision_trees: dict[str, object] = {
-    "industrial.recovery_pick_place_tree": build_industrial_recovery_pick_place_tree(),
+    "industrial.recovery_pick_place_tree": build_industrial_recovery_pick_place_tree(joint_poses),
   }
   task_store = InMemoryTaskStore()
   event_stream = InMemoryEventStream()

@@ -55,10 +55,13 @@ from run_gazebo_vision_actionlist_sim import _capture_frame, _frame_manifest  # 
 from sensoragent.agent import build_agent  # noqa: E402
 from sensoragent.schemas import ToolCall, ToolResult, TraceContext  # noqa: E402
 from sensoragent.tools.base import Tool  # noqa: E402
+from sensoragent.tools.robot.joint_poses import (  # noqa: E402
+  DEFAULT_HOME_JOINTS,
+  configured_joint_pose,
+)
 
 
 TREE_NAME = "industrial.recovery_pick_place_tree"
-HOME_JOINTS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 TABLETOP_PLACE_POSE = {
   "position": [0.28, 0.22, 0.20],
   "orientation": [0.9962, -0.0872, 0.0, 0.0],
@@ -665,10 +668,10 @@ def _inject_failure(bundle, args: argparse.Namespace, config: Any) -> dict:
   raise ValueError(f"Unsupported failure mode: {args.failure}")
 
 
-def _reset_home(bundle, trace: TraceContext) -> None:
+def _reset_home(bundle, trace: TraceContext, home_joints: list[float]) -> None:
   result = bundle.tool_runtime.invoke(
     "robot.move_joints",
-    {"joints": HOME_JOINTS, "speed": 2.0, "wait": True},
+    {"joints": home_joints, "speed": 2.0, "wait": True},
     trace,
   )
   _print_section("reset_home", {"success": result.success, "error": result.error})
@@ -698,7 +701,12 @@ def main() -> int:
   injection_state = _inject_failure(bundle, args, active_config)
   trace = TraceContext()
   if args.execute and args.reset_home:
-    _reset_home(bundle, trace)
+    home_joints = configured_joint_pose(
+      config.scene.joint_poses,
+      "home_joints",
+      DEFAULT_HOME_JOINTS,
+    )
+    _reset_home(bundle, trace, home_joints)
 
   request_input = {
     "object_query": args.object_query,

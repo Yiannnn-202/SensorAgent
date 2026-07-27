@@ -1,5 +1,8 @@
 """Industrial DecisionTree workflows with classified recovery branches."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from sensoragent.schemas import (
   ConditionOperator,
   DecisionCondition,
@@ -17,12 +20,14 @@ from sensoragent.workflows.actionlists.industrial import (
   PICK_PREGRASP_DISTANCE,
   PICK_SPEED,
   PLACE_CLEARANCE,
-  PLACE_PRE_APPROACH_JOINTS,
   PLACE_SPEED,
+  place_staging_joints,
 )
 
 
-def build_industrial_recovery_pick_place_tree() -> DecisionTree:
+def build_industrial_recovery_pick_place_tree(
+  joint_poses: Mapping[str, Any] | None = None,
+) -> DecisionTree:
   """Build an industrial pick/place tree with typed failure recovery.
 
   The tree keeps the nominal flow explicit and routes all recoverable failures
@@ -30,6 +35,7 @@ def build_industrial_recovery_pick_place_tree() -> DecisionTree:
   actions are intentionally bounded: each recovery branch performs one local
   repair and then rejoins the main workflow or terminates.
   """
+  place_staging = place_staging_joints(joint_poses)
 
   return DecisionTree(
     name="industrial.recovery_pick_place_tree",
@@ -116,7 +122,7 @@ def build_industrial_recovery_pick_place_tree() -> DecisionTree:
         kind=DecisionNodeKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },
@@ -163,7 +169,7 @@ def build_industrial_recovery_pick_place_tree() -> DecisionTree:
         kind=DecisionNodeKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },

@@ -1,6 +1,13 @@
 """Industrial pick-and-place ActionList definitions."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from sensoragent.schemas import ActionList, ActionStep, ActionStepKind
+from sensoragent.tools.robot.joint_poses import (
+  DEFAULT_PLACE_STAGING_JOINTS,
+  configured_joint_pose,
+)
 
 
 PICK_APPROACH_DISTANCE = 0.10
@@ -16,16 +23,21 @@ PLACE_SPEED = 2.0
 GRIPPER_OPEN_OPENING = 0.0848
 GRIPPER_SPEED = 0.5
 
-# Joint-space staging pose inserted before the place approach. Chosen to put
-# the arm in a "hover over workbench, gripper pointing down" configuration
-# whose J6=0, so OMPL doesn't need to twist the wrist by more than half a
-# revolution when planning to the Cartesian bin approach. J1 is biased toward
-# -Y to match the industrial bin_cell_* column (Y ≈ -0.06 to -0.30). Values in
-# radians for the RM65-B DOF order [J1..J6].
-PLACE_PRE_APPROACH_JOINTS = [-0.17, -0.57, -0.61, 0.0, -1.96, 0.0]
+# Backward-compatible alias for tests and scripts that import the old constant.
+PLACE_PRE_APPROACH_JOINTS = DEFAULT_PLACE_STAGING_JOINTS
 
 
-def build_industrial_pick_place_actionlist() -> ActionList:
+def place_staging_joints(joint_poses: Mapping[str, Any] | None = None) -> list[float]:
+  return configured_joint_pose(
+    joint_poses,
+    "place_staging_joints",
+    DEFAULT_PLACE_STAGING_JOINTS,
+  )
+
+
+def build_industrial_pick_place_actionlist(
+  joint_poses: Mapping[str, Any] | None = None,
+) -> ActionList:
   """Build the industrial pick → verify_grasp → place → verify_place workflow.
 
   The place phase is expanded inline rather than delegated to robot.place so
@@ -36,6 +48,7 @@ def build_industrial_pick_place_actionlist() -> ActionList:
   gripper.open once the object is already released, and (d) retreat via a
   joint-space move because move_pose is similarly rejected right after release.
   """
+  place_staging = place_staging_joints(joint_poses)
 
   return ActionList(
     name="industrial.pick_place_actionlist",
@@ -105,7 +118,7 @@ def build_industrial_pick_place_actionlist() -> ActionList:
         kind=ActionStepKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },
@@ -145,7 +158,7 @@ def build_industrial_pick_place_actionlist() -> ActionList:
         kind=ActionStepKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },
@@ -215,10 +228,13 @@ def build_industrial_pick_only_actionlist() -> ActionList:
   )
 
 
-def build_industrial_place_only_actionlist() -> ActionList:
+def build_industrial_place_only_actionlist(
+  joint_poses: Mapping[str, Any] | None = None,
+) -> ActionList:
   """Place a held object into a named destination. Assumes the arm is already
   gripping the payload (verify_grasp is not run at entry — the caller is
   responsible for ensuring the object is held)."""
+  place_staging = place_staging_joints(joint_poses)
 
   return ActionList(
     name="industrial.place_only_actionlist",
@@ -248,7 +264,7 @@ def build_industrial_place_only_actionlist() -> ActionList:
         kind=ActionStepKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },
@@ -288,7 +304,7 @@ def build_industrial_place_only_actionlist() -> ActionList:
         kind=ActionStepKind.TOOL,
         target="robot.move_joints",
         input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
+          "joints": place_staging,
           "speed": PLACE_SPEED,
           "wait": True,
         },

@@ -56,9 +56,10 @@ from sensoragent.schemas import (  # noqa: E402
   PlanTargetKind,
   TraceContext,
 )
-
-
-HOME_JOINTS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+from sensoragent.tools.robot.joint_poses import (  # noqa: E402
+  DEFAULT_HOME_JOINTS,
+  configured_joint_pose,
+)
 
 
 DEFAULT_UTTERANCE = "pick roller and place into bin_cell_3"
@@ -159,12 +160,12 @@ def _dispatch_directly(bundle, actionlist_input):
   }
 
 
-def _reset_home(bundle, trace: TraceContext) -> None:
+def _reset_home(bundle, trace: TraceContext, home_joints: list[float]) -> None:
   """Send the arm to the zero-joints home so cartesian planning has a clean start."""
 
   result = bundle.tool_runtime.invoke(
     "robot.move_joints",
-    {"joints": HOME_JOINTS, "speed": 2.0, "wait": True},
+    {"joints": home_joints, "speed": 2.0, "wait": True},
     trace,
   )
   _print_section("reset_home", {"success": result.success, "error": result.error})
@@ -202,7 +203,12 @@ def main() -> int:
     )
 
   if args.execute and args.reset_home:
-    _reset_home(bundle, TraceContext())
+    home_joints = configured_joint_pose(
+      config.scene.joint_poses,
+      "home_joints",
+      DEFAULT_HOME_JOINTS,
+    )
+    _reset_home(bundle, TraceContext(), home_joints)
 
   actionlist_input = _actionlist_input(args)
   _print_section(
