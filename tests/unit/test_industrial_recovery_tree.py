@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 
 from sensoragent.schemas import TraceContext
 from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
+from sensoragent.tools.vision import VisionVerifyObjectInBinTool
 from sensoragent.workflows.actionlists import (
   ActionListRuntime,
   build_industrial_pick_only_actionlist,
@@ -145,17 +146,128 @@ class IndustrialRecoveryTreeTest(TestCase):
     self.assertGreaterEqual([call[0] for call in tool_runtime.calls].count("vision.verify_object_in_bin"), 2)
 
 
+class LiveDetectRecoveryTreeTest(TestCase):
+  """The perception-driven variant must observe placement, not assume it."""
+
+  def test_live_tree_captures_a_frame_before_each_detection(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    names = [call[0] for call in tool_runtime.calls]
+    self.assertNotIn("vision.config_detect", names)
+    self.assertEqual(names[0], "vision.capture_frame")
+    self.assertEqual(names[1], "vision.open_vocab_detect")
+    # One capture for the initial detection, one after placing.
+    self.assertEqual(names.count("vision.capture_frame"), 2)
+
+  def test_live_detection_receives_captured_frame_and_spatial_constraint(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    detect_input = next(
+      input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
+    )
+    self.assertTrue(str(detect_input["image_path"]).endswith("rgb.npy"))
+    self.assertTrue(str(detect_input["depth_path"]).endswith("depth.npy"))
+    self.assertEqual(detect_input["T_base_camera"], _T_BASE_CAMERA)
+    self.assertEqual(detect_input["spatial_constraint"], {"relation": "left", "ordinal": 1})
+
+  def test_wrong_bin_is_observed_from_re_detection_not_commanded_pose(self) -> None:
+    # The object is detected away from bin_cell_3 after the first place, so the
+    # real verify tool must report WRONG_BIN. A commanded-pose check could not.
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.55, -0.30, 0.31])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("redetect_post_place", node_names)
+    self.assertIn("recover_pick", node_names)
+    self.assertEqual(result.output["classification"]["failure_type"], "WRONG_BIN")
+    verify_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "vision.verify_object_in_bin"
+    ]
+    self.assertIn("object_pose", verify_inputs[0])
+    self.assertNotIn("pose_3d", verify_inputs[0])
+    # The verified position is the re-detected one, not the commanded release
+    # pose (which would be the in-target [0.36, -0.06, 0.30]).
+    self.assertEqual(verify_inputs[0]["object_pose"]["pose_3d"][:3], [0.55, -0.30, 0.31])
+    self.assertIn(
+      "WRONG_BIN",
+      str(result.output["classification"]["evidence"]["error"]),
+    )
+
+  def test_default_tree_still_uses_commanded_pose(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(real_verify_in_bin=True)
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    names = [call[0] for call in tool_runtime.calls]
+    self.assertNotIn("vision.capture_frame", names)
+    self.assertNotIn("vision.open_vocab_detect", names)
+    verify_input = next(
+      input_data for name, input_data in tool_runtime.calls if name == "vision.verify_object_in_bin"
+    )
+    self.assertIn("pose_3d", verify_input)
+
+
+def _live_tree():
+  return build_industrial_recovery_pick_place_tree(
+    detect_tool="vision.open_vocab_detect",
+    capture_tool="vision.capture_frame",
+    live_verify=True,
+    spatial_constraint_input=True,
+  )
+
+
+def _live_request() -> dict:
+  return {
+    "object_query": "roller",
+    "target": "bin_cell_3",
+    "spatial_constraint": {"relation": "left", "ordinal": 1},
+  }
+
+
 def _make_runtime(
   *,
   verify_grasp_sequence: list[_StubResult] | None = None,
   plan_place_sequence: list[_StubResult] | None = None,
   verify_bin_sequence: list[_StubResult] | None = None,
+  open_vocab_sequence: list[_StubResult] | None = None,
+  real_verify_in_bin: bool = False,
 ):
   verify_grasp_results = _sequence(
     verify_grasp_sequence or [_StubResult(True, {"held": True, "opening": 0.03})]
   )
   plan_place_results = _sequence(plan_place_sequence or [_StubResult(True, _place_plan())])
   verify_bin_results = _sequence(verify_bin_sequence or [_StubResult(True, _bin_check(True))])
+  open_vocab_results = _sequence(open_vocab_sequence or [_StubResult(True, _detection())])
 
   classify_tool = RecoveryClassifyFailureTool()
   plan_tool = RecoveryPlanTool()
@@ -168,6 +280,14 @@ def _make_runtime(
     result = plan_tool.run(_tool_call("recovery.plan", input_data))
     return _from_tool_result(result)
 
+  verify_in_bin_tool = VisionVerifyObjectInBinTool(_PLACE_TARGETS)
+
+  def verify_in_bin(input_data):
+    """Run the real geometric check so live tests exercise the observation path."""
+
+    result = verify_in_bin_tool.run(_tool_call("vision.verify_object_in_bin", input_data))
+    return _from_tool_result(result)
+
   tool_runtime = _StubRuntime({
     "vision.config_detect": lambda _i: {
       "found": True,
@@ -176,6 +296,14 @@ def _make_runtime(
       "object_id": "roller",
       "pose_3d": [0.24, 0.23, 0.142, 0.0, 0.0, 0.0],
     },
+    "vision.capture_frame": lambda input_data: {
+      "image_path": f"{input_data.get('out_dir', 'logs/frame')}/rgb.npy",
+      "depth_path": f"{input_data.get('out_dir', 'logs/frame')}/depth.npy",
+      "camera_info_path": f"{input_data.get('out_dir', 'logs/frame')}/camera_info.json",
+      "T_base_camera": _T_BASE_CAMERA,
+      "T_world_camera": None,
+    },
+    "vision.open_vocab_detect": lambda _i: next(open_vocab_results),
     "robot.plan_top_down_pick": lambda _i: {
       "plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}
     },
@@ -192,7 +320,9 @@ def _make_runtime(
     "robot.move_pose": lambda _i: {"completed": True, "state": {}},
     "robot.move_linear": lambda _i: {"completed": True, "state": {}},
     "gripper.open": lambda _i: {"completed": True, "state": {"opening": 0.0848}},
-    "vision.verify_object_in_bin": lambda _i: next(verify_bin_results),
+    "vision.verify_object_in_bin": (
+      verify_in_bin if real_verify_in_bin else lambda _i: next(verify_bin_results)
+    ),
     "recovery.classify_failure": classify,
     "recovery.plan": plan_recovery,
     "robot.stop": lambda _i: {"completed": True, "state": {}},
@@ -246,6 +376,35 @@ def _bin_check(success: bool) -> dict:
     "object_position": [0.36, -0.06, 0.30],
     "target_position": [0.36, -0.06, 0.30],
     "distance_xy": 0.0,
+  }
+
+
+_T_BASE_CAMERA = [
+  [0.0, -1.0, 0.0, 0.34],
+  [-1.0, 0.0, 0.0, 0.0],
+  [0.0, 0.0, -1.0, 0.88],
+  [0.0, 0.0, 0.0, 1.0],
+]
+
+# Same cell the stub robot.resolve_place_target hands back, so the real
+# verify_object_in_bin tool can compare a detection against it.
+_PLACE_TARGETS = {
+  "bin_cell_3": {
+    "position": [0.36, -0.06, 0.30],
+    "orientation": [0.9962, -0.0872, 0.0, 0.0],
+    "frame_id": "base_link",
+  }
+}
+
+
+def _detection(position: list[float] | None = None) -> dict:
+  pose = list(position or [0.24, 0.23, 0.142])
+  return {
+    "found": True,
+    "label": "roller",
+    "confidence": 0.91,
+    "object_id": "roller",
+    "pose_3d": [*pose[:3], 0.0, 0.0, 0.0],
   }
 
 
