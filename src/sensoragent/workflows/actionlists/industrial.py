@@ -7,6 +7,7 @@ from sensoragent.schemas import ActionList, ActionStep, ActionStepKind
 from sensoragent.tools.robot.joint_poses import (
   DEFAULT_PLACE_STAGING_JOINTS,
   configured_joint_pose,
+  optional_configured_joint_pose,
 )
 
 
@@ -35,6 +36,39 @@ def place_staging_joints(joint_poses: Mapping[str, Any] | None = None) -> list[f
   )
 
 
+def observe_joints(joint_poses: Mapping[str, Any] | None = None) -> list[float] | None:
+  return optional_configured_joint_pose(joint_poses, "observe_joints")
+
+
+def pick_staging_joints(joint_poses: Mapping[str, Any] | None = None) -> list[float] | None:
+  return optional_configured_joint_pose(joint_poses, "pick_staging_joints")
+
+
+def carry_joints(joint_poses: Mapping[str, Any] | None = None) -> list[float] | None:
+  return optional_configured_joint_pose(joint_poses, "carry_joints")
+
+
+def optional_move_joints_step(
+  name: str,
+  joints: list[float] | None,
+  speed: float,
+) -> list[ActionStep]:
+  if joints is None:
+    return []
+  return [
+    ActionStep(
+      name=name,
+      kind=ActionStepKind.TOOL,
+      target="robot.move_joints",
+      input={
+        "joints": joints,
+        "speed": speed,
+        "wait": True,
+      },
+    )
+  ]
+
+
 def build_industrial_pick_place_actionlist(
   joint_poses: Mapping[str, Any] | None = None,
 ) -> ActionList:
@@ -48,6 +82,9 @@ def build_industrial_pick_place_actionlist(
   gripper.open once the object is already released, and (d) retreat via a
   joint-space move because move_pose is similarly rejected right after release.
   """
+  observe = observe_joints(joint_poses)
+  pick_staging = pick_staging_joints(joint_poses)
+  carry = carry_joints(joint_poses)
   place_staging = place_staging_joints(joint_poses)
 
   return ActionList(
@@ -56,6 +93,7 @@ def build_industrial_pick_place_actionlist(
     inputs={"object_query": "string", "target": "string"},
     tags=("industrial", "pick-place", "verify"),
     steps=[
+      *optional_move_joints_step("observe_before_detect", observe, PICK_SPEED),
       ActionStep(
         name="detect_object",
         kind=ActionStepKind.TOOL,
@@ -76,6 +114,7 @@ def build_industrial_pick_place_actionlist(
         },
         save_as="pick_plan",
       ),
+      *optional_move_joints_step("pick_staging_joints", pick_staging, PICK_SPEED),
       ActionStep(
         name="pick",
         kind=ActionStepKind.SKILL,
@@ -96,6 +135,7 @@ def build_industrial_pick_place_actionlist(
         input={},
         save_as="grasp_check",
       ),
+      *optional_move_joints_step("carry_joints", carry, PICK_SPEED),
       ActionStep(
         name="resolve_place_target",
         kind=ActionStepKind.TOOL,
@@ -163,6 +203,7 @@ def build_industrial_pick_place_actionlist(
           "wait": True,
         },
       ),
+      *optional_move_joints_step("observe_after_place", observe, PLACE_SPEED),
       ActionStep(
         name="verify_place",
         kind=ActionStepKind.SKILL,
@@ -174,9 +215,14 @@ def build_industrial_pick_place_actionlist(
   )
 
 
-def build_industrial_pick_only_actionlist() -> ActionList:
+def build_industrial_pick_only_actionlist(
+  joint_poses: Mapping[str, Any] | None = None,
+) -> ActionList:
   """Pick an object and hold it. No destination is required; the arm ends at the
   lift pose with the gripper closed on the object."""
+  observe = observe_joints(joint_poses)
+  pick_staging = pick_staging_joints(joint_poses)
+  carry = carry_joints(joint_poses)
 
   return ActionList(
     name="industrial.pick_only_actionlist",
@@ -184,6 +230,7 @@ def build_industrial_pick_only_actionlist() -> ActionList:
     inputs={"object_query": "string"},
     tags=("industrial", "pick", "verify"),
     steps=[
+      *optional_move_joints_step("observe_before_detect", observe, PICK_SPEED),
       ActionStep(
         name="detect_object",
         kind=ActionStepKind.TOOL,
@@ -204,6 +251,7 @@ def build_industrial_pick_only_actionlist() -> ActionList:
         },
         save_as="pick_plan",
       ),
+      *optional_move_joints_step("pick_staging_joints", pick_staging, PICK_SPEED),
       ActionStep(
         name="pick",
         kind=ActionStepKind.SKILL,
@@ -224,6 +272,7 @@ def build_industrial_pick_only_actionlist() -> ActionList:
         input={},
         save_as="grasp_check",
       ),
+      *optional_move_joints_step("carry_joints", carry, PICK_SPEED),
     ],
   )
 
@@ -234,6 +283,8 @@ def build_industrial_place_only_actionlist(
   """Place a held object into a named destination. Assumes the arm is already
   gripping the payload (verify_grasp is not run at entry — the caller is
   responsible for ensuring the object is held)."""
+  observe = observe_joints(joint_poses)
+  carry = carry_joints(joint_poses)
   place_staging = place_staging_joints(joint_poses)
 
   return ActionList(
@@ -242,6 +293,7 @@ def build_industrial_place_only_actionlist(
     inputs={"target": "string"},
     tags=("industrial", "place", "verify"),
     steps=[
+      *optional_move_joints_step("carry_joints", carry, PLACE_SPEED),
       ActionStep(
         name="resolve_place_target",
         kind=ActionStepKind.TOOL,
@@ -309,6 +361,7 @@ def build_industrial_place_only_actionlist(
           "wait": True,
         },
       ),
+      *optional_move_joints_step("observe_after_place", observe, PLACE_SPEED),
       ActionStep(
         name="verify_place",
         kind=ActionStepKind.SKILL,

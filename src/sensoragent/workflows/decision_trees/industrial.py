@@ -21,7 +21,10 @@ from sensoragent.workflows.actionlists.industrial import (
   PICK_SPEED,
   PLACE_CLEARANCE,
   PLACE_SPEED,
+  carry_joints,
+  observe_joints,
   place_staging_joints,
+  pick_staging_joints,
 )
 
 
@@ -35,7 +38,17 @@ def build_industrial_recovery_pick_place_tree(
   actions are intentionally bounded: each recovery branch performs one local
   repair and then rejoins the main workflow or terminates.
   """
+  observe = observe_joints(joint_poses)
+  pick_staging = pick_staging_joints(joint_poses)
+  carry = carry_joints(joint_poses)
   place_staging = place_staging_joints(joint_poses)
+  start = "observe_before_detect" if observe is not None else "detect_object"
+  after_plan_pick = "pick_staging_joints" if pick_staging is not None else "pick"
+  after_verify_grasp = "carry_joints" if carry is not None else "resolve_place_target"
+  after_place_retreat = "observe_after_place" if observe is not None else "verify_place"
+  recover_redetect_target = (
+    "recover_observe_before_redetect" if observe is not None else "recover_redetect"
+  )
 
   return DecisionTree(
     name="industrial.recovery_pick_place_tree",
@@ -46,8 +59,9 @@ def build_industrial_recovery_pick_place_tree(
       "max_recovery_attempts": "integer",
     },
     tags=("industrial", "pick-place", "recovery", "decision-tree"),
-    start="detect_object",
+    start=start,
     nodes=[
+      *_move_joints_node("observe_before_detect", observe, PICK_SPEED, "detect_object"),
       DecisionNode(
         name="detect_object",
         kind=DecisionNodeKind.TOOL,
@@ -70,9 +84,10 @@ def build_industrial_recovery_pick_place_tree(
           "lift_height": PICK_LIFT_HEIGHT,
         },
         save_as="pick_plan",
-        on_success="pick",
+        on_success=after_plan_pick,
         on_failure="classify_failure",
       ),
+      *_move_joints_node("pick_staging_joints", pick_staging, PICK_SPEED, "pick"),
       DecisionNode(
         name="pick",
         kind=DecisionNodeKind.SKILL,
@@ -93,9 +108,10 @@ def build_industrial_recovery_pick_place_tree(
         target="robot.verify_grasp",
         input={},
         save_as="grasp_check",
-        on_success="resolve_place_target",
+        on_success=after_verify_grasp,
         on_failure="classify_failure",
       ),
+      *_move_joints_node("carry_joints", carry, PICK_SPEED, "resolve_place_target"),
       DecisionNode(
         name="resolve_place_target",
         kind=DecisionNodeKind.TOOL,
@@ -173,9 +189,10 @@ def build_industrial_recovery_pick_place_tree(
           "speed": PLACE_SPEED,
           "wait": True,
         },
-        on_success="verify_place",
+        on_success=after_place_retreat,
         on_failure="classify_failure",
       ),
+      *_move_joints_node("observe_after_place", observe, PLACE_SPEED, "verify_place"),
       DecisionNode(
         name="verify_place",
         kind=DecisionNodeKind.SKILL,
@@ -227,9 +244,9 @@ def build_industrial_recovery_pick_place_tree(
         on_success="is_object_not_found",
         on_failure="failure",
       ),
-      _failure_type_check("is_object_not_found", "OBJECT_NOT_FOUND", "recover_redetect", "is_low_confidence"),
-      _failure_type_check("is_low_confidence", "LOW_CONFIDENCE", "recover_redetect", "is_pose_invalid"),
-      _failure_type_check("is_pose_invalid", "POSE_INVALID", "recover_redetect", "is_pick_plan_failed"),
+      _failure_type_check("is_object_not_found", "OBJECT_NOT_FOUND", recover_redetect_target, "is_low_confidence"),
+      _failure_type_check("is_low_confidence", "LOW_CONFIDENCE", recover_redetect_target, "is_pose_invalid"),
+      _failure_type_check("is_pose_invalid", "POSE_INVALID", recover_redetect_target, "is_pick_plan_failed"),
       _failure_type_check("is_pick_plan_failed", "PICK_PLAN_FAILED", "recover_pick", "is_pick_exec_failed"),
       _failure_type_check("is_pick_exec_failed", "PICK_EXEC_FAILED", "recover_pick", "is_grasp_empty"),
       _failure_type_check("is_grasp_empty", "GRASP_EMPTY", "recover_pick", "is_dropped_object"),
@@ -241,6 +258,13 @@ def build_industrial_recovery_pick_place_tree(
       _failure_type_check("is_gripper_failed", "GRIPPER_FAILED", "recover_release", "is_bridge_error"),
       _failure_type_check("is_bridge_error", "BRIDGE_ERROR", "recover_bridge", "is_robot_not_ready"),
       _failure_type_check("is_robot_not_ready", "ROBOT_NOT_READY", "recover_bridge", "failure"),
+      *_move_joints_node(
+        "recover_observe_before_redetect",
+        observe,
+        PICK_SPEED,
+        "recover_redetect",
+        on_failure="failure",
+      ),
       DecisionNode(
         name="recover_redetect",
         kind=DecisionNodeKind.TOOL,
@@ -308,6 +332,32 @@ def build_industrial_recovery_pick_place_tree(
       DecisionNode(name="failure", kind=DecisionNodeKind.TERMINAL, terminal_success=False),
     ],
   )
+
+
+def _move_joints_node(
+  name: str,
+  joints: list[float] | None,
+  speed: float,
+  on_success: str,
+  *,
+  on_failure: str = "classify_failure",
+) -> list[DecisionNode]:
+  if joints is None:
+    return []
+  return [
+    DecisionNode(
+      name=name,
+      kind=DecisionNodeKind.TOOL,
+      target="robot.move_joints",
+      input={
+        "joints": joints,
+        "speed": speed,
+        "wait": True,
+      },
+      on_success=on_success,
+      on_failure=on_failure,
+    )
+  ]
 
 
 def _failure_type_check(

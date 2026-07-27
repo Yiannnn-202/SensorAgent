@@ -55,9 +55,9 @@ integrations:
 scene:
   robot_joint_order: [joint1, joint2, joint3, joint4, joint5, joint6]
   joint_poses:
-    # Values are radians in robot_joint_order. Replace the null placeholders
-    # after tuning in RViz/MoveIt2; only home_joints and place_staging_joints
-    # are currently consumed by scripts/workflows.
+    # Values are radians in robot_joint_order. Demo reset scripts use
+    # home_joints; industrial workflows use observe, pick staging, carry, and
+    # place staging when configured.
     home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     observe_joints: [0.005147, 0.979996, -1.261626, 0.018753, -1.205676, -0.006029]
     pick_staging_joints: [0.005134, -0.428860, -0.667978, -0.000079, -1.981247, -0.006118]

@@ -67,6 +67,62 @@ class IndustrialRecoveryTreeTest(TestCase):
     self.assertEqual(result.nodes[-1].node, "success")
     self.assertNotIn("recovery.classify_failure", [call[0] for call in tool_runtime.calls])
 
+  def test_configured_intermediate_joints_are_in_nominal_tree(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime()
+    joint_poses = {
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "pick_staging_joints": [0.1, 0.2, -0.3, 0.4, -0.5, 0.6],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+      "place_staging_joints": [0.3, 0.4, -0.5, 0.6, -0.7, 0.8],
+    }
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(joint_poses),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(
+      [node.node for node in result.nodes],
+      [
+        "observe_before_detect",
+        "detect_object",
+        "plan_pick",
+        "pick_staging_joints",
+        "pick",
+        "verify_grasp",
+        "carry_joints",
+        "resolve_place_target",
+        "plan_place",
+        "place_pre_approach_joints",
+        "place_move_place",
+        "place_open_gripper",
+        "place_lift_clearance",
+        "place_retreat",
+        "observe_after_place",
+        "verify_place",
+        "verify_object_in_bin",
+        "success",
+      ],
+    )
+    move_joints_inputs = [
+      input_data["joints"]
+      for name, input_data in tool_runtime.calls
+      if name == "robot.move_joints"
+    ]
+    self.assertEqual(
+      move_joints_inputs,
+      [
+        joint_poses["observe_joints"],
+        joint_poses["pick_staging_joints"],
+        joint_poses["carry_joints"],
+        joint_poses["place_staging_joints"],
+        joint_poses["place_staging_joints"],
+        joint_poses["observe_joints"],
+      ],
+    )
+
   def test_grasp_failure_recovers_by_re_pick(self) -> None:
     runtime, tool_runtime, skill_runtime = _make_runtime(
       verify_grasp_sequence=[
