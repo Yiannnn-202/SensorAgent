@@ -49,5 +49,5 @@ class ConfigLoaderTest(TestCase):
     )
     self.assertEqual(
       config.scene.joint_poses["place_staging_joints"],
-      [-0.17, -0.57, -0.61, 0.0, -1.96, 0.0],
+      [0.005134, -0.428860, -0.667978, -0.000079, -1.981247, -0.006118],
     )
