@@ -58,8 +58,10 @@ integrations:
     recovery_live_detect: true
     capture:
       script: scripts/linux/capture_gazebo_rgbd_frame.py
-      # null -> probe SENSORAGENT_ROS_PYTHON, ROS_PYTHON, then python3 for rclpy.
+      # null -> run python3 under the discovered ROS setup script. rclpy needs
+      # the paths that setup exports, so the capture subprocess sources it.
       ros_python: null
+      ros_setup: null
       image_topic: /industrial_camera/image
       depth_topic: /industrial_camera/depth_image
       camera_info_topic: /industrial_camera/camera_info

@@ -1,22 +1,28 @@
 """RGB-D frame capture tool backed by the ROS capture script.
 
-The capture script imports rclpy, which is only available in the ROS 2 Python
-environment. To keep ROS out of the agent process, this tool shells out to the
-script and reads back its manifest.
+The capture script imports rclpy, which lives in the ROS 2 environment rather
+than the agent's virtualenv. To keep ROS out of the agent process, this tool
+shells out to the script -- sourcing the ROS setup script first, since rclpy
+needs the PYTHONPATH and library paths it exports -- and reads back the manifest.
 """
 
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from sensoragent.schemas import ToolCall, ToolResult, ToolSpec
 
 DEFAULT_SCRIPT = "scripts/linux/capture_gazebo_rgbd_frame.py"
 DEFAULT_OUT_DIR = "logs/vision/latest"
-_ROS_PROBE = "import rclpy"
+_ROS_SETUP_CANDIDATES = (
+  "/opt/ros/humble/setup.bash",
+  "/opt/ros/jazzy/setup.bash",
+  "/opt/ros/iron/setup.bash",
+)
 
 
 class VisionCaptureFrameTool:
@@ -38,6 +44,7 @@ class VisionCaptureFrameTool:
     *,
     script: str = DEFAULT_SCRIPT,
     ros_python: str | None = None,
+    ros_setup: str | None = None,
     image_topic: str = "/industrial_camera/image",
     depth_topic: str = "/industrial_camera/depth_image",
     camera_info_topic: str = "/industrial_camera/camera_info",
@@ -49,6 +56,7 @@ class VisionCaptureFrameTool:
   ) -> None:
     self._script = str(script)
     self._ros_python = str(ros_python) if ros_python else None
+    self._ros_setup = str(ros_setup) if ros_setup else None
     self._image_topic = str(image_topic)
     self._depth_topic = str(depth_topic)
     self._camera_info_topic = str(camera_info_topic)
@@ -59,9 +67,14 @@ class VisionCaptureFrameTool:
     self._fallback_t_base_camera = fallback_t_base_camera
 
   def _python_executable(self) -> str:
-    if self._ros_python:
-      return self._ros_python
-    return _discover_ros_python()
+    return self._ros_python or "python3"
+
+  def _setup_script(self) -> str | None:
+    """Path to the ROS setup script to source, if one is needed and available."""
+
+    if self._ros_setup:
+      return self._ros_setup
+    return _discover_ros_setup()
 
   def _argv(self, out_dir: Path, call: ToolCall) -> list[str]:
     timeout = float(call.input.get("timeout_seconds", self._timeout_seconds))
@@ -84,6 +97,26 @@ class VisionCaptureFrameTool:
       str(timeout),
     ]
 
+  def _command(self, out_dir: Path, call: ToolCall) -> tuple[list[str], bool]:
+    """Return the command to run and whether it must go through a shell.
+
+    rclpy needs the PYTHONPATH and library paths exported by the ROS setup
+    script, so unless the caller pinned an interpreter that already has them the
+    command is wrapped in a shell that sources the setup first. The agent's own
+    PYTHONPATH is cleared so it cannot shadow the ROS packages.
+    """
+
+    argv = self._argv(out_dir, call)
+    setup = self._setup_script()
+    if setup is None:
+      return argv, False
+    quoted = " ".join(shlex.quote(item) for item in argv)
+    return [
+      "bash",
+      "-c",
+      f"unset PYTHONHOME PYTHONPATH; . {shlex.quote(setup)} >/dev/null 2>&1 && exec {quoted}",
+    ], True
+
   def run(self, call: ToolCall) -> ToolResult:
     out_dir = Path(str(call.input.get("out_dir", self._out_dir)))
     try:
@@ -95,11 +128,11 @@ class VisionCaptureFrameTool:
         error=f"CAPTURE_FAILED: cannot create out_dir {out_dir}: {exc}",
       )
 
-    argv = self._argv(out_dir, call)
+    command, _via_shell = self._command(out_dir, call)
     process_timeout = float(call.input.get("timeout_seconds", self._timeout_seconds)) + 30.0
     try:
       completed = subprocess.run(
-        argv,
+        command,
         capture_output=True,
         text=True,
         timeout=process_timeout,
@@ -143,31 +176,25 @@ class VisionCaptureFrameTool:
     return ToolResult(tool=self.spec.name, success=True, output=manifest)
 
 
-def _discover_ros_python() -> str:
-  import os
-  import shutil
+def _discover_ros_setup() -> str | None:
+  """Find a ROS setup script to source, or None to run the command as-is.
 
-  candidates: Sequence[str | None] = (
-    os.environ.get("SENSORAGENT_ROS_PYTHON"),
-    os.environ.get("ROS_PYTHON"),
-    "python3",
-  )
-  for candidate in candidates:
-    if not candidate:
-      continue
-    executable = shutil.which(candidate) or candidate
-    try:
-      probe = subprocess.run(
-        [executable, "-c", _ROS_PROBE],
-        capture_output=True,
-        text=True,
-        timeout=30.0,
-      )
-    except (OSError, subprocess.SubprocessError):
-      continue
-    if probe.returncode == 0:
-      return executable
-  return "python3"
+  ``SENSORAGENT_ROS_SETUP`` overrides discovery. Note that an inherited
+  ``AMENT_PREFIX_PATH`` is not treated as "ROS is ready": the variable often
+  survives into environments where rclpy is still unimportable (a virtualenv on
+  a different Python minor version, or a cleared PYTHONPATH), so the setup
+  script is sourced whenever one is available.
+  """
+
+  import os
+
+  override = os.environ.get("SENSORAGENT_ROS_SETUP")
+  if override:
+    return override if Path(override).is_file() else None
+  for candidate in _ROS_SETUP_CANDIDATES:
+    if Path(candidate).is_file():
+      return candidate
+  return None
 
 
 def _load_manifest(manifest_path: Path, stdout: str) -> dict[str, Any] | None:

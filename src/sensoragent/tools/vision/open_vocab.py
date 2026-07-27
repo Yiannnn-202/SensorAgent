@@ -662,7 +662,6 @@ class GroundingDinoBackend:
   ) -> VisionDetection:
     """Run text-grounded detection and return the best matching box."""
 
-    del depth_path
     candidates = self.detect_all(
       query=query,
       image_path=image_path,

@@ -74,6 +74,14 @@ def build_industrial_recovery_pick_place_tree(
     on_success="plan_pick",
     on_failure="failure",
   )
+  lifted_nodes = _verify_lifted_sequence(
+    detect_tool=detect_tool,
+    capture_tool=capture_tool,
+    live_verify=live_verify,
+    spatial_constraint_input=spatial_constraint_input,
+    on_success="resolve_place_target",
+    on_failure="classify_failure",
+  )
   verify_nodes = _verify_in_bin_sequence(
     detect_tool=detect_tool,
     capture_tool=capture_tool,
@@ -112,13 +120,17 @@ def build_industrial_recovery_pick_place_tree(
     "target": "string",
     "max_recovery_attempts": "integer",
   }
+  input_defaults: dict = {}
   if spatial_constraint_input:
     inputs["spatial_constraint"] = "object"
+    # Callers may omit the constraint; None means "no spatial filtering".
+    input_defaults["spatial_constraint"] = None
 
   return DecisionTree(
     name="industrial.recovery_pick_place_tree",
     description="Industrial pick-place DecisionTree with classified local recovery branches.",
     inputs=inputs,
+    input_defaults=input_defaults,
     tags=("industrial", "pick-place", "recovery", "decision-tree"),
     start=detect_nodes[0].name,
     nodes=[
@@ -158,9 +170,10 @@ def build_industrial_recovery_pick_place_tree(
         target="robot.verify_grasp",
         input={},
         save_as="grasp_check",
-        on_success="resolve_place_target",
+        on_success=lifted_nodes[0].name if lifted_nodes else "resolve_place_target",
         on_failure="classify_failure",
       ),
+      *lifted_nodes,
       DecisionNode(
         name="resolve_place_target",
         kind=DecisionNodeKind.TOOL,
@@ -490,6 +503,77 @@ def _verify_in_bin_sequence(
         "object_pose": f"{{{{ {observed_key} }}}}",
       },
       save_as=save_as,
+      on_success=on_success,
+      on_failure=on_failure,
+    ),
+  ]
+
+
+def _verify_lifted_sequence(
+  *,
+  detect_tool: str,
+  capture_tool: str | None,
+  live_verify: bool,
+  spatial_constraint_input: bool,
+  on_success: str,
+  on_failure: str,
+) -> list[DecisionNode]:
+  """Build post-grasp lift verification nodes.
+
+  Without live verification this is empty: the gripper-state check in
+  ``verify_grasp`` is all the evidence available, so an object that slipped out
+  after closing cannot be observed.
+
+  With live verification a fresh frame is re-detected and the object's z rise
+  compared against its pre-grasp pose. The re-detection is deliberately
+  non-blocking: a lifted object is often occluded by the gripper, so "not
+  detected" is not evidence of a drop. Only a detection that shows the object
+  still resting near its original height fails, which the failure detector maps
+  to DROPPED_OBJECT via the ``verify_object_lifted`` step name.
+  """
+
+  if not (live_verify and capture_tool):
+    return []
+
+  return [
+    DecisionNode(
+      name="capture_post_grasp",
+      kind=DecisionNodeKind.TOOL,
+      target=capture_tool,
+      input={"out_dir": "logs/vision/recovery/post_grasp"},
+      save_as="post_grasp_frame",
+      max_retries=1,
+      on_success="redetect_post_grasp",
+      # A capture problem is not a grasp problem; keep transporting.
+      on_failure=on_success,
+    ),
+    DecisionNode(
+      name="redetect_post_grasp",
+      kind=DecisionNodeKind.TOOL,
+      target=detect_tool,
+      input=_detect_input(
+        detect_tool=detect_tool,
+        frame_key="post_grasp_frame",
+        spatial_constraint_input=spatial_constraint_input,
+      ),
+      save_as="lifted_object",
+      # Occlusion by the gripper is a stable state, not a transient glitch:
+      # retrying would burn another frame without changing the outcome.
+      max_retries=0,
+      # Absence proves nothing, so a missing detection is not a drop.
+      on_failure=on_success,
+      on_success="verify_object_lifted",
+    ),
+    DecisionNode(
+      name="verify_object_lifted",
+      kind=DecisionNodeKind.TOOL,
+      target="vision.verify_object_lifted",
+      input={
+        "before_pose": "{{ object.pose_3d }}",
+        "after_pose": "{{ lifted_object }}",
+        "min_lift_delta": PICK_LIFT_HEIGHT / 2.0,
+      },
+      save_as="lift_check",
       on_success=on_success,
       on_failure=on_failure,
     ),

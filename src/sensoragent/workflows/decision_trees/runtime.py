@@ -76,6 +76,9 @@ class DecisionTreeRuntime:
     rendered_input = _render_value(node.input, context)
     if not isinstance(rendered_input, dict):
       raise WorkflowExecutionError(f"Node input must render to object: {node.name}")
+    # An optional input the caller omitted renders to None. Drop the key rather
+    # than passing null, which tool contracts reject on typed fields.
+    rendered_input = {key: value for key, value in rendered_input.items() if value is not None}
 
     last_result = None
     attempts = max(0, node.max_retries) + 1
@@ -122,7 +125,7 @@ class DecisionTreeRuntime:
         error=f"Unknown start node: {tree.start}",
       )
 
-    context: dict[str, Any] = dict(input_data)
+    context: dict[str, Any] = {**tree.input_defaults, **input_data}
     results: list[DecisionNodeResult] = []
     current_name: str | None = tree.start
     self._logger.log("decision_tree_started", trace, {"decision_tree": tree.name})

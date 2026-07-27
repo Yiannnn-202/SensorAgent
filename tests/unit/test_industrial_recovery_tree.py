@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
 
 from sensoragent.schemas import TraceContext
 from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
-from sensoragent.tools.vision import VisionVerifyObjectInBinTool
+from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
 from sensoragent.workflows.actionlists import (
   ActionListRuntime,
   build_industrial_pick_only_actionlist,
@@ -154,6 +154,7 @@ class LiveDetectRecoveryTreeTest(TestCase):
       real_verify_in_bin=True,
       open_vocab_sequence=[
         _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
         _StubResult(True, _detection([0.36, -0.06, 0.30])),
       ],
     )
@@ -165,14 +166,15 @@ class LiveDetectRecoveryTreeTest(TestCase):
     self.assertNotIn("vision.config_detect", names)
     self.assertEqual(names[0], "vision.capture_frame")
     self.assertEqual(names[1], "vision.open_vocab_detect")
-    # One capture for the initial detection, one after placing.
-    self.assertEqual(names.count("vision.capture_frame"), 2)
+    # One capture for the initial detection, one after grasping, one after placing.
+    self.assertEqual(names.count("vision.capture_frame"), 3)
 
   def test_live_detection_receives_captured_frame_and_spatial_constraint(self) -> None:
     runtime, tool_runtime, _ = _make_runtime(
       real_verify_in_bin=True,
       open_vocab_sequence=[
         _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
         _StubResult(True, _detection([0.36, -0.06, 0.30])),
       ],
     )
@@ -194,6 +196,7 @@ class LiveDetectRecoveryTreeTest(TestCase):
       real_verify_in_bin=True,
       open_vocab_sequence=[
         _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
         _StubResult(True, _detection([0.55, -0.30, 0.31])),
         _StubResult(True, _detection([0.36, -0.06, 0.30])),
       ],
@@ -237,6 +240,114 @@ class LiveDetectRecoveryTreeTest(TestCase):
     self.assertIn("pose_3d", verify_input)
 
 
+  def test_lift_verification_detects_a_dropped_object(self) -> None:
+    # The object is re-detected still on the table after grasping, so the lift
+    # check must fail and route through DROPPED_OBJECT recovery.
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      real_verify_lifted=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        # Still resting on the table after the grasp -> dropped.
+        _StubResult(True, _detection([0.24, 0.23, 0.145])),
+        # Recovery re-picks, then the post-place check sees the target cell.
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("verify_object_lifted", node_names)
+    self.assertIn("recover_pick", node_names)
+    self.assertEqual(
+      result.output["classification"]["failure_type"],
+      "DROPPED_OBJECT",
+      msg=f"nodes={node_names}",
+    )
+    # The step name is what the detector keys DROPPED_OBJECT off, so pin it.
+    self.assertEqual(
+      result.output["classification"]["evidence"]["failed_step"],
+      "verify_object_lifted",
+    )
+    self.assertEqual(result.output["classification"]["phase"], "transport")
+
+  def test_lift_verification_passes_when_object_rises(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      real_verify_lifted=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertNotIn("recover_pick", [node.node for node in result.nodes])
+    self.assertTrue(result.output["lift_check"]["lifted"])
+
+  def test_occluded_object_after_grasp_does_not_block_transport(self) -> None:
+    # A lifted object is often hidden by the gripper; absence is not a drop.
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      real_verify_lifted=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(False, None, "OBJECT_NOT_FOUND: no match for roller"),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("redetect_post_grasp", node_names)
+    self.assertNotIn("verify_object_lifted", node_names)
+    self.assertNotIn("recover_pick", node_names)
+
+  def test_default_tree_has_no_lift_verification(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(real_verify_in_bin=True)
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertNotIn("vision.verify_object_lifted", [call[0] for call in tool_runtime.calls])
+
+
+  def test_live_tree_runs_without_a_spatial_constraint(self) -> None:
+    # The sim config enables the constraint input unconditionally, but callers
+    # usually omit it; an absent value must not break variable resolution.
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(
+      _live_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    detect_input = next(
+      input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
+    )
+    # Absent rather than null: tool contracts type the field as an object.
+    self.assertNotIn("spatial_constraint", detect_input)
+
+
 def _live_tree():
   return build_industrial_recovery_pick_place_tree(
     detect_tool="vision.open_vocab_detect",
@@ -261,6 +372,7 @@ def _make_runtime(
   verify_bin_sequence: list[_StubResult] | None = None,
   open_vocab_sequence: list[_StubResult] | None = None,
   real_verify_in_bin: bool = False,
+  real_verify_lifted: bool = False,
 ):
   verify_grasp_results = _sequence(
     verify_grasp_sequence or [_StubResult(True, {"held": True, "opening": 0.03})]
@@ -281,11 +393,16 @@ def _make_runtime(
     return _from_tool_result(result)
 
   verify_in_bin_tool = VisionVerifyObjectInBinTool(_PLACE_TARGETS)
+  verify_lifted_tool = VisionVerifyObjectLiftedTool()
 
   def verify_in_bin(input_data):
     """Run the real geometric check so live tests exercise the observation path."""
 
     result = verify_in_bin_tool.run(_tool_call("vision.verify_object_in_bin", input_data))
+    return _from_tool_result(result)
+
+  def verify_lifted(input_data):
+    result = verify_lifted_tool.run(_tool_call("vision.verify_object_lifted", input_data))
     return _from_tool_result(result)
 
   tool_runtime = _StubRuntime({
@@ -322,6 +439,9 @@ def _make_runtime(
     "gripper.open": lambda _i: {"completed": True, "state": {"opening": 0.0848}},
     "vision.verify_object_in_bin": (
       verify_in_bin if real_verify_in_bin else lambda _i: next(verify_bin_results)
+    ),
+    "vision.verify_object_lifted": (
+      verify_lifted if real_verify_lifted else lambda _i: {"lifted": True}
     ),
     "recovery.classify_failure": classify,
     "recovery.plan": plan_recovery,
