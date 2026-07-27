@@ -206,6 +206,42 @@ class IndustrialActionListTest(TestCase):
     self.assertEqual(staging_steps[0].input["joints"], custom_joints)
     self.assertEqual(staging_steps[1].input["joints"], custom_joints)
 
+  def test_configured_intermediate_joints_are_inserted(self) -> None:
+    joint_poses = {
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "pick_staging_joints": [0.1, 0.2, -0.3, 0.4, -0.5, 0.6],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+      "place_staging_joints": [0.3, 0.4, -0.5, 0.6, -0.7, 0.8],
+    }
+    actionlist = build_industrial_pick_place_actionlist(joint_poses)
+
+    self.assertEqual(
+      [step.name for step in actionlist.steps],
+      [
+        "observe_before_detect",
+        "detect_object",
+        "plan_pick",
+        "pick_staging_joints",
+        "pick",
+        "verify_grasp",
+        "carry_joints",
+        "resolve_place_target",
+        "plan_place",
+        "place_pre_approach_joints",
+        "place_move_place",
+        "place_open_gripper",
+        "place_lift_clearance",
+        "place_retreat",
+        "observe_after_place",
+        "verify_place",
+      ],
+    )
+    inputs = {step.name: step.input for step in actionlist.steps}
+    self.assertEqual(inputs["observe_before_detect"]["joints"], joint_poses["observe_joints"])
+    self.assertEqual(inputs["pick_staging_joints"]["joints"], joint_poses["pick_staging_joints"])
+    self.assertEqual(inputs["carry_joints"]["joints"], joint_poses["carry_joints"])
+    self.assertEqual(inputs["place_pre_approach_joints"]["joints"], joint_poses["place_staging_joints"])
+
 
 class LLMPlannerAllowedTargetsTest(TestCase):
   def test_planner_accepts_industrial_target(self) -> None:
@@ -288,6 +324,30 @@ class IndustrialPickOnlyTest(TestCase):
     self.assertNotIn("robot.resolve_place_target", [c[0] for c in tool_runtime.calls])
     self.assertNotIn("robot.verify_place", [c[0] for c in skill_runtime.calls])
 
+  def test_pick_only_uses_configured_staging_and_carry(self) -> None:
+    from sensoragent.workflows.actionlists.industrial import (
+      build_industrial_pick_only_actionlist,
+    )
+
+    actionlist = build_industrial_pick_only_actionlist({
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "pick_staging_joints": [0.1, 0.2, -0.3, 0.4, -0.5, 0.6],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+    })
+
+    self.assertEqual(
+      [step.name for step in actionlist.steps],
+      [
+        "observe_before_detect",
+        "detect_object",
+        "plan_pick",
+        "pick_staging_joints",
+        "pick",
+        "verify_grasp",
+        "carry_joints",
+      ],
+    )
+
 
 class IndustrialPlaceOnlyTest(TestCase):
   def test_configured_place_staging_joints_override_default(self) -> None:
@@ -308,6 +368,33 @@ class IndustrialPlaceOnlyTest(TestCase):
     self.assertEqual(len(staging_steps), 2)
     self.assertEqual(staging_steps[0].input["joints"], custom_joints)
     self.assertEqual(staging_steps[1].input["joints"], custom_joints)
+
+  def test_place_only_uses_configured_carry_and_observe(self) -> None:
+    from sensoragent.workflows.actionlists.industrial import (
+      build_industrial_place_only_actionlist,
+    )
+
+    actionlist = build_industrial_place_only_actionlist({
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+      "place_staging_joints": [0.3, 0.4, -0.5, 0.6, -0.7, 0.8],
+    })
+
+    self.assertEqual(
+      [step.name for step in actionlist.steps],
+      [
+        "carry_joints",
+        "resolve_place_target",
+        "plan_place",
+        "place_pre_approach_joints",
+        "place_move_place",
+        "place_open_gripper",
+        "place_lift_clearance",
+        "place_retreat",
+        "observe_after_place",
+        "verify_place",
+      ],
+    )
 
   def test_place_only_runs_clearance_lift_before_retreat(self) -> None:
     from sensoragent.workflows.actionlists.industrial import (

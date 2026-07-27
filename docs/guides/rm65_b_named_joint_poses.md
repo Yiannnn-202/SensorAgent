@@ -155,8 +155,10 @@ blocked, retune the pose in RViz and overwrite the config value.
 
 ## Current code usage
 
-`home_joints` is used by Gazebo demo reset scripts. `place_staging_joints` is
-used by the industrial pick/place ActionList, vision ActionList, place-only
-ActionList, and recovery DecisionTree. `observe_joints`, `pick_staging_joints`,
-and `carry_joints` are reserved config slots for the next workflow optimization
-step.
+`home_joints` is used by Gazebo demo reset scripts. The industrial pick/place
+ActionList, vision ActionList, pick-only ActionList, place-only ActionList, and
+recovery DecisionTree consume the other named poses when configured:
+`observe_joints` before detection and after place retreat, `pick_staging_joints`
+before pick execution, `carry_joints` after grasp verification or before
+place-only execution, and `place_staging_joints` before and after the place
+descent.

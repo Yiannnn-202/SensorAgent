@@ -350,7 +350,7 @@ def build_agent(
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
     "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(joint_poses),
-    "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
+    "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(joint_poses),
     "industrial.place_only_actionlist": build_industrial_place_only_actionlist(joint_poses),
     "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(joint_poses),
   }

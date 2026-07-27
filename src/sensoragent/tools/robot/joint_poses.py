@@ -39,3 +39,15 @@ def configured_joint_pose(
   if value is None:
     return normalize_joint_pose(name, fallback)
   return normalize_joint_pose(name, value)
+
+
+def optional_configured_joint_pose(
+  joint_poses: Mapping[str, Any] | None,
+  name: str,
+) -> list[float] | None:
+  """Return a configured named joint pose, or None when intentionally unset."""
+
+  value = (joint_poses or {}).get(name)
+  if value is None:
+    return None
+  return normalize_joint_pose(name, value)
