@@ -267,6 +267,79 @@ Goal: implement competition-specific task logic after the generic framework is s
 - [ ] Save report-ready CSV/JSONL summaries and failure-case artifacts for the
   technical report and demonstration video.
 
+## Vision model four-stage plan
+
+Goal: deliver a measurable model component without taking ownership of the ROS 2,
+Gazebo, or physical-arm integration owned by other modules. This plan records the
+scope agreed in the 2026-07-26 vision discussion.
+
+### Stage 1 - YOLOE temporary baseline
+
+- [x] Preserve `vision.open_vocab_detect` and the YOLOE backend as the temporary
+  Gazebo-compatible model interface.
+- [x] Keep `configs/robot_sim.yaml` on the existing baseline so Grounding DINO
+  experiments do not change the default simulation workflow.
+- [ ] Restore or train `models/vision/yoloe.pt`; weights stay local and must not be
+  committed.
+- [ ] Re-run the YOLOE baseline on the final competition class list and save the
+  same metrics as later stages.
+- [ ] Let the simulation owner complete end-to-end Gazebo acceptance; the vision
+  owner supplies model output and diagnoses model-side failures.
+
+### Stage 2 - Grounding DINO and SAM 2 teacher model
+
+- [x] Implement Grounding DINO text-grounded boxes and SAM 2 box-prompted masks.
+- [x] Keep strict-mask mode and explicit box fallback diagnostics.
+- [x] Complete real-image smoke tests for bus, wrench, screwdriver, conveyor
+  roller, and spur gear; all five mask runs used `grounding_dino_sam2` without
+  box fallback.
+- [x] Add a portable JSONL dataset contract, leakage/license validation, batch
+  evaluation, report JSON, and configurable acceptance thresholds.
+- [ ] Build a labeled competition validation set with positive, negative,
+  occluded, reflective, weak-texture, and multi-instance scenes.
+- [ ] Measure precision, recall, box IoU, mask IoU, center error, and warm latency
+  on that fixed validation set. Single-image confidence is not an accuracy metric.
+- [ ] Add real RGB-D samples, camera intrinsics, and hand-eye calibration before
+  claiming base-frame position accuracy.
+
+### Stage 3 - Industrial fine-tuning and lightweight student model
+
+- [ ] Use the Stage 2 teacher to draft boxes and masks, then manually review every
+  training annotation.
+- [ ] Split complete capture scenes/sessions before augmentation to prevent nearby
+  frames from leaking across train, validation, and test sets.
+- [ ] Fine-tune a fixed-class YOLOE/segmentation student for the final industrial
+  categories; keep the teacher as a low-confidence or hard-sample fallback.
+- [ ] Compare teacher, student, and hybrid routing on the exact same test split.
+- [ ] Run ablations for fine-tuning data, mask refinement, model size, input size,
+  and fallback threshold. Report accuracy, latency, VRAM, and model size together.
+- [ ] Export the selected student artifact only after its preprocessing and class
+  map are frozen; publish the download path and checksum, not the weight file.
+
+### Stage 4 - Real industrial acceptance
+
+- [ ] Freeze an untouched real-scene test set covering all required categories and
+  at least one negative scene per common confusing object.
+- [ ] Evaluate normal light, dim light, glare, occlusion, clutter, rotation, scale,
+  multi-instance, and out-of-distribution objects.
+- [ ] Record per-class and aggregate metrics, failure cases, warm latency, hardware,
+  model checksum, thresholds, and software version.
+- [ ] Repeat RGB-D position tests after camera calibration and report error in the
+  camera and `base_link` frames separately.
+- [ ] Obtain team sign-off on the final model/threshold version before integrating
+  it into the competition demo branch.
+
+### Progress rhythm and ownership boundary
+
+- [x] Prepare the 2026-07-29 model progress report with verified evidence and open
+  dependencies.
+- [ ] Post a short model update every 3-4 days: completed evidence, current metric,
+  blocker, and next deliverable.
+- [ ] Confirm the final semantic class list, camera output contract, and model
+  runtime budget with the owners of intent parsing, simulation, and robot control.
+- [ ] Do not claim ROS 2, Gazebo-to-arm, physical grasp, or safety acceptance from
+  model-only tests.
+
 ## Robotics simulation and learning environment
 
 Goal: provide a reproducible RM65-B manipulation environment before building

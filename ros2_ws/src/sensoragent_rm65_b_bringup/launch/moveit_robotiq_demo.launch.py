@@ -63,4 +63,17 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([move_group, rviz])
+    static_scene_publisher = Node(
+        package="sensoragent_robot_bridge",
+        executable="static_scene_publisher",
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": True,
+                "base_frame": "base_link",
+                "publish_period": 2.0,
+            },
+        ],
+    )
+
+    return LaunchDescription([move_group, static_scene_publisher, rviz])

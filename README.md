@@ -113,12 +113,43 @@ Key SensorAgent documents:
 - [Testing guide](docs/guides/testing.md)
 - [Audio guide](docs/guides/audio.md)
 - [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
+- [RM65-B named joint pose tuning](docs/guides/rm65_b_named_joint_poses.md)
 - [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
 - [Industrial intent to ActionList guide](docs/guides/intent_to_actionlist_cn.md)
 - [Failure detection and recovery guide](docs/guides/failure_recovery_cn.md)
 - [Gazebo failure recovery demo](docs/guides/gazebo_recovery_demo_cn.md)
 - [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
 - [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
+
+## Vision Model Evaluation
+
+The open-vocabulary model path uses `vision.open_vocab_detect` for both the
+temporary YOLOE baseline and the Grounding DINO + SAM 2 teacher model. Validate a
+portable dataset manifest before running a long evaluation:
+
+```powershell
+python scripts\vision_eval.py validate `
+  --manifest configs\vision_dataset.example.jsonl `
+  --allow-missing-files
+```
+
+Run a labeled local dataset with one persistent model instance:
+
+```powershell
+python scripts\vision_eval.py run `
+  --manifest data\vision\competition_test.jsonl `
+  --config configs\vision_grounding_dino.yaml `
+  --output-dir runs\vision\competition_test `
+  --device 0 `
+  --require-masks `
+  --save-overlays
+```
+
+The runner saves per-sample JSONL, aggregate metrics, Tool logs, and optional
+overlays. Dataset images, model weights, caches, and `runs/` outputs remain local.
+See the [Chinese open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
+for the manifest contract, data-source plan, evaluation metrics, and teacher to
+student optimization route.
 
 ## RM65-B and Robotiq Simulation
 
@@ -263,8 +294,8 @@ Run the config-based industrial ActionList without moving the robot:
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
   --planner static \
-  --object-query roller \
-  --target bin_cell_3
+  --object-query block \
+  --target target_area_3
 ```
 
 Add `--execute` after checking the scene and bridge readiness. The optional
@@ -273,8 +304,8 @@ executes the parallel vision ActionList:
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query "red roller" \
-  --target bin_cell_3 \
+  --object-query "red block" \
+  --target target_area_3 \
   --execute
 ```
 
@@ -289,9 +320,9 @@ For a video-ready failure-recovery demo, inject a wrong-bin placement in Gazebo:
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
   --failure wrong-bin \
-  --object-query roller \
-  --target bin_cell_3 \
-  --wrong-target bin_cell_2 \
+  --object-query block \
+  --target target_area_3 \
+  --wrong-target target_area_2 \
   --execute \
   --json-out logs/tasks/recovery_wrong_bin_demo.json
 ```

@@ -33,16 +33,16 @@ from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 
 
 UTTERANCES = [
-  "把滚柱放到 bin_cell_3",
-  "pick the roller and place into bin_cell_3",
-  "put the silver roller into cell 3",
-  "把那个银色的滚柱拿过去放到第三个格子",
+  "把方块放到 target_area_3",
+  "pick the block and place into target_area_3",
+  "put the red block into target area 3",
+  "把那个红色方块拿过去放到第三个目标区",
   # pick-only cases
-  "just grab the roller",
-  "先把滚柱抓起来",
+  "just grab the block",
+  "先把方块抓起来",
   # place-only cases
-  "release what you are holding into bin_cell_3",
-  "把手里的东西放到 3 号格子",
+  "release what you are holding into target_area_3",
+  "把手里的东西放到 3 号目标区",
 ]
 
 ALLOWED_TARGETS = (

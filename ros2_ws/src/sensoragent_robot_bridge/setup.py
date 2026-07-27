@@ -22,6 +22,7 @@ setup(
     entry_points={
         "console_scripts": [
             "robot_bridge = sensoragent_robot_bridge.bridge_node:main",
+            "static_scene_publisher = sensoragent_robot_bridge.planning_scene_publisher:main",
         ],
     },
 )

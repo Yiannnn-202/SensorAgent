@@ -164,7 +164,7 @@ hang below a `Link6` target and touch the table. The scripts use these safe
 defaults:
 
 ```bash
---pick-offset 0 0 0.03
+--pick-offset 0 0 0.02
 --place-offset 0 0 0.08
 --place-clearance 0.15
 ```
@@ -177,9 +177,9 @@ to the place approach pose. If placement succeeds, lower
 
 ```bash
 --execute                     # actually move the robot and gripper
---speed 2                     # motion speed, default 2
---pick-descent-speed 1.5      # vertical descent from pick approach to grasp
---pick-offset 0 0 0.03        # visual object XYZ to gripper TCP grasp pose
+--speed 1.2                   # motion speed, default 1.2
+--pick-descent-speed 1.2      # vertical descent from pick approach to grasp
+--pick-offset 0 0 0.02        # visual object XYZ to gripper TCP grasp pose
 --approach-distance 0.10      # vertical approach distance above pick grasp
 --pregrasp-distance 0.04      # vertical pregrasp distance above pick grasp
 --place-offset 0 0 0.08       # place target to gripper TCP place pose
@@ -192,7 +192,7 @@ to the place approach pose. If placement succeeds, lower
 --place-area-size 0.24 0.18   # area dimensions in metres
 --place-area-samples 3 3      # candidate grid resolution
 --no-place-fallbacks          # disable nearby fallback place positions
---close-opening 0.02          # gripper opening after close command, metres
+--close-opening 0.032         # gripper opening after close command, metres
 --json-out logs/tasks/pick_place_test.json
 ```
 

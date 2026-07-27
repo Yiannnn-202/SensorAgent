@@ -263,3 +263,146 @@ scene:
 物件名里剥出来：`"把左侧的扳手放到料箱第三格"` 会解析成
 `object_query="扳手"` 加 `spatial_constraint={"relation":"left","ordinal":1}`，
 避免把"左侧的扳手"整串丢给检测器。
+
+## 8. 数据清单与防泄漏检查
+
+训练集和测试集统一使用 JSONL 清单。每一行是一张图，示例在
+`configs/vision_dataset.example.jsonl`。核心字段如下：
+
+```json
+{
+  "sample_id": "factory_wrench_001",
+  "scene_id": "capture_session_20260729_a",
+  "split": "test",
+  "query": "wrench",
+  "image": "../data/vision/images/factory_wrench_001.jpg",
+  "expected": {
+    "found": true,
+    "bbox_2d": [120, 80, 360, 300],
+    "mask": "../data/vision/masks/factory_wrench_001.png",
+    "center_px": [240, 190]
+  },
+  "source": {
+    "kind": "owned",
+    "capture_session": "capture_session_20260729_a"
+  }
+}
+```
+
+路径必须相对清单，不能写 `C:\...`、`D:\...` 等个人电脑绝对路径。公开图片必须填写
+`source.url` 和已核对的 `source.license`。同一连续拍摄场景的邻近帧使用同一个
+`scene_id`，整个场景只能进入一个 split，不能把相邻帧分别放进训练集和测试集。
+
+仅检查模板结构：
+
+```powershell
+python scripts\vision_eval.py validate `
+  --manifest configs\vision_dataset.example.jsonl `
+  --allow-missing-files
+```
+
+检查正式清单时去掉 `--allow-missing-files`。工具会检查文件是否存在、JSON 字段、
+重复 `sample_id`、框坐标、公共数据授权记录和 `scene_id` 跨集合泄漏。
+
+## 9. 批量评测
+
+正式评测必须复用同一个模型实例，首张图作为预热，不要逐张启动 Python。示例：
+
+```powershell
+python scripts\vision_eval.py run `
+  --manifest data\vision\competition_test.jsonl `
+  --config configs\vision_grounding_dino.yaml `
+  --output-dir runs\vision\competition_test `
+  --device 0 `
+  --require-masks `
+  --save-overlays `
+  --warmup-runs 1
+```
+
+输出目录包含：
+
+- `results.jsonl`：每个样本的输入标识、预测、TP/FP/TN/FN、单图指标和墙钟耗时；
+- `summary.json`：precision、recall、F1、box/mask IoU、中心误差、掩码输出率和热启动
+  P50/P95；
+- `tool_calls.jsonl`：原始 Tool 调用日志；
+- `overlays/`：使用 `--save-overlays` 时生成的肉眼检查图。
+
+需要在自动验收中设门槛时，可追加：
+
+```powershell
+  --min-precision 0.90 `
+  --min-recall 0.90 `
+  --min-box-iou 0.50 `
+  --min-mask-iou 0.50 `
+  --max-center-error-px 20 `
+  --max-warm-p95-ms 3000
+```
+
+这些数值只是命令格式示例，不是已经通过评审的比赛指标。只在同一冻结测试集上比较
+模型；更换图片、标注、阈值或硬件后要生成新的结果，不能与旧表直接拼接。
+
+## 10. 数据来源路线
+
+比赛语义类别和工业几何验证需要分两条路线准备，不能指望一个公开数据集解决全部问题。
+
+语义训练优先级：
+
+1. 比赛 Gazebo 精确类别：`roller`、`gear`、`hex_nut`、`short_bolt`、
+   `stepped_shaft`、`flange`；自动生成多视角、遮挡和光照变化后人工抽检标注。
+2. 团队自采真实工位数据：使用最终相机、背景、摆放方式和干扰物，记录完整采集会话。
+3. Open Images V7：可补充 `Wrench`、`Screwdriver`、`Drill (Tool)`、`Tool`，但没有
+   覆盖全部比赛零件，下载前还要核对图片级许可证。
+
+几何和鲁棒性参考：
+
+- T-LESS、ITODD：含 6D 位姿、2D 框和二值掩码，适合研究弱纹理、遮挡和位姿评测；
+  对象常用实例编号，不适合作为自然语言语义类别的唯一训练集。
+- MVTec D2S：适合实例分割和工业数据采集设计参考；许可证为
+  `CC BY-NC-SA 4.0`，不能在没有额外授权时当作商业可用数据。
+
+任何公开数据进入训练前都要记录下载页、许可证、原始类别、映射后的比赛类别和处理
+脚本。比赛现场图片是否允许上传公共仓库由团队确认；未确认前只提交清单模板和脚本，
+不提交原图。
+
+## 11. 教师模型、学生模型与消融
+
+第三阶段采用教师/学生方案：
+
+```mermaid
+flowchart LR
+  data["Gazebo + 真实工业图"] --> teacher["Grounding DINO + SAM 2 教师"]
+  teacher --> draft["框和掩码草稿"]
+  draft --> review["人工逐张复核"]
+  review --> student["固定类别轻量学生模型"]
+  student --> route["常规快速推理"]
+  route -->|"低置信度或困难样本"| teacher
+```
+
+学生模型候选可以是 YOLOE 或固定类别实例分割模型，但必须在同一个测试 split 上比较后
+再决定。至少保留以下消融：是否使用工业微调数据、是否使用 SAM 2 掩码、不同模型尺寸、
+不同输入分辨率、是否启用教师回退。每次同时记录精度、延迟、显存、模型文件大小，不能
+只报“更快”或“更准”。
+
+教师输出只能作为标注草稿。细长工具、反光金属、齿轮孔洞、互相遮挡的同类零件都容易
+产生错误掩码，未经人工复核的伪标签不能直接当真值。
+
+## 12. 当前证据与待补项
+
+2026-07-26 已在 RTX 4060 Laptop GPU 上完成 Grounding DINO Tiny + SAM 2 Tiny 的
+真实 RGB 单图测试：
+
+| 对象 | 置信度 | DINO | SAM 2 | CLI 冷启动 |
+| --- | ---: | ---: | ---: | ---: |
+| bus | 0.9049 | 893.6 ms | 1682.8 ms | 25.86 s |
+| wrench | 0.9311 | 810.3 ms | 1548.4 ms | 25.82 s |
+| screwdriver | 0.8152 | 882.3 ms | 1472.5 ms | 23.07 s |
+| conveyor roller | 0.6682 | 755.4 ms | 1462.6 ms | 22.38 s |
+| spur gear | 0.8692 | 692.2 ms | 1395.5 ms | 22.85 s |
+
+五组掩码的 `source` 都是 `grounding_dino_sam2`，没有 box fallback。这证明代码和
+真实模型链路在该机器上跑通过，但图片数量太少、没有人工真值，不能计算比赛 precision、
+recall、mAP 或 mask IoU，也不是热启动吞吐测试。
+
+当前仍需外部条件才能完成的项目：最终类别表、足量真实工业图和人工标注、RGB-D 同步
+数据、相机内参、`T_base_camera`、机械臂侧允许的延迟/显存预算。拿到这些输入后，用
+第 8、9 节的固定清单和评测命令产出可比较指标。
