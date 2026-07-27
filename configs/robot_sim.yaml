@@ -59,10 +59,10 @@ scene:
     # after tuning in RViz/MoveIt2; only home_joints and place_staging_joints
     # are currently consumed by scripts/workflows.
     home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    observe_joints: null
-    pick_staging_joints: null
-    carry_joints: null
-    place_staging_joints: [-0.17, -0.57, -0.61, 0.0, -1.96, 0.0]
+    observe_joints: [0.005147, 0.979996, -1.261626, 0.018753, -1.205676, -0.006029]
+    pick_staging_joints: [0.005134, -0.428860, -0.667978, -0.000079, -1.981247, -0.006118]
+    carry_joints: [0.005105, 0.000091, -1.267384, 0.000093, -1.640225, -0.006128]
+    place_staging_joints: [0.005134, -0.428860, -0.667978, -0.000079, -1.981247, -0.006118]
 
   # Object catalog for vision.config_detect. Positions are in base_link metres.
   # Derived from ros2_ws/.../worlds/industrial_pgs.sdf spawn poses using
