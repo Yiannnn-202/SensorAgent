@@ -311,7 +311,7 @@ def _build_parser() -> argparse.ArgumentParser:
     "--position-offset",
     type=float,
     nargs=3,
-    default=[0.0, 0.0, 0.03],
+    default=[0.0, 0.0, 0.02],
     metavar=("DX", "DY", "DZ"),
     help=(
       "Offset from visual object XYZ to the gripper TCP grasp pose."
@@ -330,17 +330,17 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--approach-distance", type=float, default=0.10)
   parser.add_argument("--pregrasp-distance", type=float, default=0.04)
   parser.add_argument("--lift-height", type=float, default=0.12)
-  parser.add_argument("--speed", type=float, default=2.0)
+  parser.add_argument("--speed", type=float, default=1.2)
   parser.add_argument(
     "--pick-descent-speed",
     type=float,
-    default=1.5,
+    default=1.2,
     help="Speed for the vertical descent from approach to pregrasp/grasp.",
   )
   parser.add_argument("--open-opening", type=float, default=0.0848)
-  parser.add_argument("--close-opening", type=float, default=0.02)
+  parser.add_argument("--close-opening", type=float, default=0.032)
   parser.add_argument("--gripper-speed", type=float, default=0.5)
-  parser.add_argument("--gripper-force", type=float, default=0.5)
+  parser.add_argument("--gripper-force", type=float, default=1.0)
   parser.add_argument(
     "--execute",
     action="store_true",
@@ -367,7 +367,7 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument(
     "--joint-tolerance",
     type=float,
-    default=0.03,
+    default=0.02,
     help="Allowed joint-state error for --arm-diagnostic.",
   )
   parser.add_argument(
@@ -390,13 +390,13 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument(
     "--min-grasp-z",
     type=float,
-    default=0.02,
+    default=0.03,
     help="Minimum allowed planned grasp Z in base_link metres.",
   )
   parser.add_argument(
     "--pose-tolerance",
     type=float,
-    default=0.03,
+    default=0.02,
     help="Allowed final TCP position error after execution.",
   )
   parser.add_argument(

@@ -84,18 +84,18 @@ In terminal 2:
 ```bash
 cd ~/SensorAgent
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query roller \
-  --target bin_cell_3 \
+  --object-query block \
+  --target target_area_3 \
   --execute
 ```
 
-For the red roller, use a more descriptive open-vocabulary query:
+For the red block, use a more descriptive open-vocabulary query:
 
 ```bash
 cd ~/SensorAgent
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query "red roller" \
-  --target bin_cell_3 \
+  --object-query "red block" \
+  --target target_area_3 \
   --execute
 ```
 
@@ -104,8 +104,8 @@ If you only want to test detection and planning without moving the robot, omit
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query "red roller" \
-  --target bin_cell_3
+  --object-query "red block" \
+  --target target_area_3
 ```
 
 If frame capture cannot find ROS Python, set it explicitly:
@@ -114,8 +114,8 @@ If frame capture cannot find ROS Python, set it explicitly:
 export SENSORAGENT_ROS_PYTHON="$HOME/snap/copilot-cli/common/micromamba/envs/sensoragent-ros-humble/bin/python"
 
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query roller \
-  --target bin_cell_3 \
+  --object-query block \
+  --target target_area_3 \
   --execute
 ```
 
@@ -199,15 +199,15 @@ configs/robot_sim.yaml
 box for the text prompt in `--object-query`. For example, if you pass:
 
 ```bash
---object-query roller
+--object-query block
 ```
 
-the detector searches for exactly that text concept. For the red roller, try:
+the detector searches for exactly that text concept. For the red block, try:
 
 ```bash
---object-query "red roller"
---object-query "red cylinder"
---object-query "red cylindrical object"
+--object-query "red block"
+--object-query "red cube"
+--object-query "red box"
 ```
 
 The runner prints the failed `detect_object` step, including the detector output:
@@ -218,20 +218,20 @@ The runner prints the failed `detect_object` step, including the detector output
   "success": false,
   "output": {
     "found": false,
-    "label": "red roller",
+    "label": "red block",
     "confidence": 0.0
   },
   "error": "OBJECT_NOT_FOUND"
 }
 ```
 
-## 8. If the roller slips out during transfer
+## 8. If the block slips out during transfer
 
-The roller and gripper finger collision surfaces are tuned for higher Gazebo
+The block and gripper finger collision surfaces are tuned for higher Gazebo
 friction:
 
 ```text
-ros2_ws/src/sensoragent_rm65_b_bringup/models/sensoragent_part_roller/model.sdf
+ros2_ws/src/sensoragent_rm65_b_bringup/models/sensoragent_part_block/model.sdf
 ros2_ws/src/robotiq_description/urdf/robotiq_2f_85_macro.urdf.xacro
 ```
 
@@ -254,7 +254,7 @@ Then rerun the pipeline:
 ```bash
 cd ~/SensorAgent
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query "red cylinder" \
-  --target bin_cell_3 \
+  --object-query "red block" \
+  --target target_area_3 \
   --execute
 ```

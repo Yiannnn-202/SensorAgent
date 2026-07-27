@@ -69,14 +69,31 @@ integrations:
       timeout_seconds: 10.0
 
 scene:
+  robot_joint_order: [joint1, joint2, joint3, joint4, joint5, joint6]
+  joint_poses:
+    # Values are radians in robot_joint_order. Current Gazebo workflows keep
+    # only observe_joints active: pick -> place -> observe -> visual check.
+    home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    observe_joints: [0.005147, 0.979996, -1.261626, 0.018753, -1.205676, -0.006029]
+    pick_staging_joints: null
+    carry_joints: null
+    place_staging_joints: null
+
   # Object catalog for vision.config_detect. Positions are in base_link metres.
   # Derived from ros2_ws/.../worlds/industrial_pgs.sdf spawn poses using
   # base_link z = world z - robot_mount_z (0.18).
   # Workbench top at base_link z ≈ 0.12; object centres sit slightly above it.
   objects:
-    roller: [0.24, 0.18, 0.142, 0.0, 0.0, 0.0]
-    silver_roller: [0.24, 0.18, 0.142, 0.0, 0.0, 0.0]
-    滚柱: [0.24, 0.18, 0.142, 0.0, 0.0, 0.0]
+    block: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
+    cube: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
+    red_block: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
+    方块: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
+    # Temporary aliases keep older commands usable while the default Gazebo
+    # object is a stable block. Remove or repoint these when returning to the
+    # roller for visual-pipeline validation.
+    roller: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
+    silver_roller: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
+    滚柱: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
 
   # Reachable workspace envelope in base_link metres. Vision candidates whose
   # back-projected base XY falls outside this box are filtered out before

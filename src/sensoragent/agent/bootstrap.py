@@ -106,10 +106,13 @@ def _build_recovery_tree(config: SensorAgentConfig):
 
   vision_config = config.integrations.vision
   if not bool(vision_config.get("recovery_live_detect", False)):
-    return build_industrial_recovery_pick_place_tree()
+    return build_industrial_recovery_pick_place_tree(
+      joint_poses=config.scene.joint_poses,
+    )
   enabled_tools = set(config.tools.enabled or ())
   capture_tool = "vision.capture_frame" if "vision.capture_frame" in enabled_tools else None
   return build_industrial_recovery_pick_place_tree(
+    joint_poses=config.scene.joint_poses,
     detect_tool="vision.open_vocab_detect",
     capture_tool=capture_tool,
     live_verify=capture_tool is not None,
@@ -342,13 +345,14 @@ def build_agent(
 
   skill_runtime = SkillRuntime(skill_registry, tool_runtime, logger)
   actionlist_runtime = ActionListRuntime(tool_runtime, skill_runtime, logger)
+  joint_poses = config.scene.joint_poses
   actionlists = {
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
-    "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(),
-    "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
-    "industrial.place_only_actionlist": build_industrial_place_only_actionlist(),
-    "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(),
+    "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(joint_poses),
+    "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(joint_poses),
+    "industrial.place_only_actionlist": build_industrial_place_only_actionlist(joint_poses),
+    "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(joint_poses),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,

@@ -54,7 +54,7 @@ The industrial camera topics should be available:
 
 Current scene layout:
 
-- one `roller` only, spawned near base_link `[0.24, 0.18, 0.142]`;
+- one stable `block` only, spawned near base_link `[0.24, 0.18, 0.140]`;
 - a flat 2x2 target grid instead of a walled bin; colored areas are visual-only,
   while white boundaries are low-profile physical strips;
 - target names are `target_area_1` to `target_area_4`;
@@ -86,7 +86,7 @@ Plan-only / fake robot backend:
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query roller \
+  --object-query block \
   --target target_area_3 \
   --no-capture
 ```
@@ -95,14 +95,14 @@ Capture and execute against Gazebo:
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query roller \
+  --object-query block \
   --target target_area_3 \
   --execute
 ```
 
-If a descriptive prompt like `red roller` is too narrow for YOLOE, the runner
-now retries practical aliases such as `roller`, `red cylinder`, and
-`red cylindrical object`. The selected detection output includes
+If a descriptive prompt like `red block` is too narrow for YOLOE, the runner
+now retries practical aliases such as `block`, `cube`, `box`, and
+`industrial part`. The selected detection output includes
 `query_attempts` so you can see which prompt/threshold succeeded.
 
 The runner passes an empty object (`{}`) when no spatial selector is requested.
@@ -111,13 +111,13 @@ object.
 
 ## 5. Optional spatial selection
 
-The current default world has only one roller, so spatial selection is normally
+The current default world has only one block, so spatial selection is normally
 unnecessary. You can still test the spatial resolver if you add multiple
 objects or use a custom world:
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query roller \
+  --object-query block \
   --spatial-relation left \
   --target target_area_3 \
   --execute

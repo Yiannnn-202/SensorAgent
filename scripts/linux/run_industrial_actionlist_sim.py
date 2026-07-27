@@ -11,12 +11,12 @@ Prerequisites:
 Plan-only dry run:
 
   PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
-    --utterance "pick roller and place into bin_cell_3"
+    --utterance "pick block and place into target_area_3"
 
 Execute the workflow against Gazebo (arm will move):
 
   PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
-    --utterance "pick roller and place into bin_cell_3" --execute
+    --utterance "pick block and place into target_area_3" --execute
 
 Use `--planner llm` to route the utterance through DeepSeek. Requires the usual
 `SENSORAGENT_LLM_*` environment variables from `.env`.
@@ -56,15 +56,17 @@ from sensoragent.schemas import (  # noqa: E402
   PlanTargetKind,
   TraceContext,
 )
+from sensoragent.tools.robot.joint_poses import (  # noqa: E402
+  DEFAULT_HOME_JOINTS,
+  configured_joint_pose,
+)
 
 
-HOME_JOINTS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
-
-DEFAULT_UTTERANCE = "pick roller and place into bin_cell_3"
-DEFAULT_TARGET = "bin_cell_3"
-DEFAULT_OBJECT_QUERY = "roller"
+DEFAULT_UTTERANCE = "pick block and place into target_area_3"
+DEFAULT_TARGET = "target_area_3"
+DEFAULT_OBJECT_QUERY = "block"
 ACTIONLIST_NAME = "industrial.pick_place_actionlist"
+ARM_MOTION_SPEED = 1.2
 
 
 def _json_dump(value: Any) -> str:
@@ -88,7 +90,7 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument(
     "--target",
     default=DEFAULT_TARGET,
-    help="Static planner fallback: named place target (e.g. bin_cell_3).",
+    help="Static planner fallback: named place target (e.g. target_area_3).",
   )
   parser.add_argument(
     "--planner",
@@ -159,12 +161,12 @@ def _dispatch_directly(bundle, actionlist_input):
   }
 
 
-def _reset_home(bundle, trace: TraceContext) -> None:
+def _reset_home(bundle, trace: TraceContext, home_joints: list[float]) -> None:
   """Send the arm to the zero-joints home so cartesian planning has a clean start."""
 
   result = bundle.tool_runtime.invoke(
     "robot.move_joints",
-    {"joints": HOME_JOINTS, "speed": 2.0, "wait": True},
+    {"joints": home_joints, "speed": ARM_MOTION_SPEED, "wait": True},
     trace,
   )
   _print_section("reset_home", {"success": result.success, "error": result.error})
@@ -202,7 +204,12 @@ def main() -> int:
     )
 
   if args.execute and args.reset_home:
-    _reset_home(bundle, TraceContext())
+    home_joints = configured_joint_pose(
+      config.scene.joint_poses,
+      "home_joints",
+      DEFAULT_HOME_JOINTS,
+    )
+    _reset_home(bundle, TraceContext(), home_joints)
 
   actionlist_input = _actionlist_input(args)
   _print_section(

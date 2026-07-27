@@ -24,16 +24,16 @@ ros2_ws/src/sensoragent_rm65_b_bringup/worlds/industrial_pgs.sdf
 
 | 模型目录 | 场景名称 | 主要形状 |
 | --- | --- | --- |
-| `sensoragent_part_roller` | `roller_01`、`roller_02` | 圆柱滚柱 |
+| `sensoragent_part_block` | `block_01` | 稳定方块，当前默认抓取物 |
+| `sensoragent_part_roller` | 可手动生成 `roller_*` | 圆柱滚柱，视觉管线集成后再切回 |
 | `sensoragent_part_stepped_shaft` | `stepped_shaft_01` | 阶梯轴 |
 | `sensoragent_part_flange` | `flange_01` | 法兰圆柱 |
 | `sensoragent_part_hex_nut` | `hex_nut_01` | 简化六角螺母 |
 | `sensoragent_part_short_bolt` | `short_bolt_01` | 无螺纹短螺栓 |
 | `sensoragent_part_gear` | `gear_01` | 简化齿轮 |
 
-滚柱刻意放了两个实例（`roller_01` 在 base_link `(0.24, 0.23)`、`roller_02` 在
-`(0.24, -0.12)`），用来给 `vision.open_vocab_detect` 的空间选择器提供"多个同类
-物件"的真实场景，验证"左边那个滚柱"这类指令。详见
+当前默认只生成一个方块，避免圆柱放置后滚动影响 pick/place bringup。需要验证
+视觉空间选择器时，可再手动生成多个滚柱或多个方块实例。详见
 [gazebo_vision_actionlist_test.md](gazebo_vision_actionlist_test.md)。
 
 模型使用基础几何体和简化碰撞体，尺寸均控制在 Robotiq 2F-85 的
@@ -132,16 +132,16 @@ package_share="$(
 )/share/sensoragent_rm65_b_bringup"
 ```
 
-在工作台上额外生成一个直立滚柱：
+在工作台上额外生成一个方块：
 
 ```bash
 ros2 run ros_gz_sim create \
   -world empty \
-  -file "${package_share}/models/sensoragent_part_roller/model.sdf" \
-  -name roller_02 \
+  -file "${package_share}/models/sensoragent_part_block/model.sdf" \
+  -name block_02 \
   -x 0.34 \
   -y 0.16 \
-  -z 0.34
+  -z 0.32
 ```
 
 台面顶面为 `z=0.30 m`。生成其他零件时，需要根据模型高度设置其中心
@@ -159,9 +159,9 @@ ros2_ws/src/sensoragent_rm65_b_bringup/worlds/industrial_pgs.sdf
 
 ```xml
 <include>
-  <uri>model://sensoragent_part_roller</uri>
-  <name>roller_01</name>
-  <pose>0.24 0.23 0.462 1.570796 0 0</pose>
+  <uri>model://sensoragent_part_block</uri>
+  <name>block_01</name>
+  <pose>0.24 0.18 0.320 0 0 0</pose>
 </include>
 ```
 

@@ -171,11 +171,9 @@ class IndustrialActionListTest(TestCase):
         "verify_grasp",
         "resolve_place_target",
         "plan_place",
-        "place_pre_approach_joints",
         "place_move_place",
         "place_open_gripper",
         "place_lift_clearance",
-        "place_retreat",
         "verify_place",
       ],
     )
@@ -189,6 +187,58 @@ class IndustrialActionListTest(TestCase):
     self.assertEqual(result.steps[-1].step, "verify_grasp")
     self.assertNotIn("robot.plan_place", [call[0] for call in tool_runtime.calls])
     self.assertNotIn("robot.move_joints", [call[0] for call in tool_runtime.calls])
+
+  def test_configured_place_staging_joints_override_default(self) -> None:
+    custom_joints = [0.1, -0.2, 0.3, -0.4, 0.5, -0.6]
+    actionlist = build_industrial_pick_place_actionlist(
+      {"place_staging_joints": custom_joints}
+    )
+
+    staging_steps = [
+      step
+      for step in actionlist.steps
+      if step.name in {"place_pre_approach_joints", "place_retreat"}
+    ]
+
+    self.assertEqual(len(staging_steps), 2)
+    self.assertEqual(staging_steps[0].input["joints"], custom_joints)
+    self.assertEqual(staging_steps[1].input["joints"], custom_joints)
+
+  def test_configured_intermediate_joints_are_inserted(self) -> None:
+    joint_poses = {
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "pick_staging_joints": [0.1, 0.2, -0.3, 0.4, -0.5, 0.6],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+      "place_staging_joints": [0.3, 0.4, -0.5, 0.6, -0.7, 0.8],
+    }
+    actionlist = build_industrial_pick_place_actionlist(joint_poses)
+
+    self.assertEqual(
+      [step.name for step in actionlist.steps],
+      [
+        "observe_before_detect",
+        "detect_object",
+        "plan_pick",
+        "pick_staging_joints",
+        "pick",
+        "verify_grasp",
+        "carry_joints",
+        "resolve_place_target",
+        "plan_place",
+        "place_pre_approach_joints",
+        "place_move_place",
+        "place_open_gripper",
+        "place_lift_clearance",
+        "place_retreat",
+        "observe_after_place",
+        "verify_place",
+      ],
+    )
+    inputs = {step.name: step.input for step in actionlist.steps}
+    self.assertEqual(inputs["observe_before_detect"]["joints"], joint_poses["observe_joints"])
+    self.assertEqual(inputs["pick_staging_joints"]["joints"], joint_poses["pick_staging_joints"])
+    self.assertEqual(inputs["carry_joints"]["joints"], joint_poses["carry_joints"])
+    self.assertEqual(inputs["place_pre_approach_joints"]["joints"], joint_poses["place_staging_joints"])
 
 
 class LLMPlannerAllowedTargetsTest(TestCase):
@@ -272,8 +322,78 @@ class IndustrialPickOnlyTest(TestCase):
     self.assertNotIn("robot.resolve_place_target", [c[0] for c in tool_runtime.calls])
     self.assertNotIn("robot.verify_place", [c[0] for c in skill_runtime.calls])
 
+  def test_pick_only_uses_configured_staging_and_carry(self) -> None:
+    from sensoragent.workflows.actionlists.industrial import (
+      build_industrial_pick_only_actionlist,
+    )
+
+    actionlist = build_industrial_pick_only_actionlist({
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "pick_staging_joints": [0.1, 0.2, -0.3, 0.4, -0.5, 0.6],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+    })
+
+    self.assertEqual(
+      [step.name for step in actionlist.steps],
+      [
+        "observe_before_detect",
+        "detect_object",
+        "plan_pick",
+        "pick_staging_joints",
+        "pick",
+        "verify_grasp",
+        "carry_joints",
+      ],
+    )
+
 
 class IndustrialPlaceOnlyTest(TestCase):
+  def test_configured_place_staging_joints_override_default(self) -> None:
+    from sensoragent.workflows.actionlists.industrial import (
+      build_industrial_place_only_actionlist,
+    )
+
+    custom_joints = [0.1, -0.2, 0.3, -0.4, 0.5, -0.6]
+    actionlist = build_industrial_place_only_actionlist(
+      {"place_staging_joints": custom_joints}
+    )
+    staging_steps = [
+      step
+      for step in actionlist.steps
+      if step.name in {"place_pre_approach_joints", "place_retreat"}
+    ]
+
+    self.assertEqual(len(staging_steps), 2)
+    self.assertEqual(staging_steps[0].input["joints"], custom_joints)
+    self.assertEqual(staging_steps[1].input["joints"], custom_joints)
+
+  def test_place_only_uses_configured_carry_and_observe(self) -> None:
+    from sensoragent.workflows.actionlists.industrial import (
+      build_industrial_place_only_actionlist,
+    )
+
+    actionlist = build_industrial_place_only_actionlist({
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+      "place_staging_joints": [0.3, 0.4, -0.5, 0.6, -0.7, 0.8],
+    })
+
+    self.assertEqual(
+      [step.name for step in actionlist.steps],
+      [
+        "carry_joints",
+        "resolve_place_target",
+        "plan_place",
+        "place_pre_approach_joints",
+        "place_move_place",
+        "place_open_gripper",
+        "place_lift_clearance",
+        "place_retreat",
+        "observe_after_place",
+        "verify_place",
+      ],
+    )
+
   def test_place_only_runs_clearance_lift_before_retreat(self) -> None:
     from sensoragent.workflows.actionlists.industrial import (
       build_industrial_place_only_actionlist,
@@ -321,16 +441,14 @@ class IndustrialPlaceOnlyTest(TestCase):
       [
         "resolve_place_target",
         "plan_place",
-        "place_pre_approach_joints",
         "place_move_place",
         "place_open_gripper",
         "place_lift_clearance",
-        "place_retreat",
         "verify_place",
       ],
     )
     self.assertIn(
-      ("robot.move_linear", {"pose": {"position": [0.36, -0.06, 0.45], "orientation": [0.9962, -0.0872, 0.0, 0.0], "frame_id": "base_link"}, "speed": 2.0, "wait": True}),
+      ("robot.move_linear", {"pose": {"position": [0.36, -0.06, 0.45], "orientation": [0.9962, -0.0872, 0.0, 0.0], "frame_id": "base_link"}, "speed": 1.2, "wait": True}),
       tool_runtime.calls,
     )
     self.assertNotIn("vision.config_detect", [c[0] for c in tool_runtime.calls])

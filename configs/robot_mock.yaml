@@ -36,10 +36,22 @@ integrations:
     maximum_opening: 0.0848
 
 scene:
+  robot_joint_order: [joint1, joint2, joint3, joint4, joint5, joint6]
+  joint_poses:
+    home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    observe_joints: null
+    pick_staging_joints: null
+    carry_joints: null
+    place_staging_joints: null
+
   objects:
-    roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
-    silver_roller: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
-    滚柱: [0.24, 0.23, 0.142, 0.0, 0.0, 0.0]
+    block: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    cube: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    red_block: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    方块: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    roller: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    silver_roller: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
+    滚柱: [0.24, 0.23, 0.140, 0.0, 0.0, 0.0]
   place_targets:
     bin_cell_3:
       position: [0.36, -0.06, 0.30]

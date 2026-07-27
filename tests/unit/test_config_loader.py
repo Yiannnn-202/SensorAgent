@@ -43,3 +43,12 @@ class ConfigLoaderTest(TestCase):
     self.assertEqual(config.integrations.vision["backend"], "yoloe")
     self.assertEqual(config.integrations.vision["model_path"], "models/vision/yoloe.pt")
     self.assertIn("vision.open_vocab_detect", config.tools.enabled)
+    self.assertEqual(
+      config.scene.robot_joint_order,
+      ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"],
+    )
+    self.assertIsNone(config.scene.joint_poses["pick_staging_joints"])
+    self.assertIsNone(config.scene.joint_poses["carry_joints"])
+    self.assertIsNone(config.scene.joint_poses["place_staging_joints"])
+    self.assertEqual(config.scene.objects["block"][:3], [0.24, 0.18, 0.14])
+    self.assertEqual(config.scene.objects["cube"], config.scene.objects["block"])

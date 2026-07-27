@@ -24,7 +24,7 @@ Run Gazebo first:
 Then run the demo:
 
   PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
-    --failure wrong-table --object-query roller --target target_area_3 --execute
+    --failure wrong-table --object-query block --target target_area_3 --execute
 """
 
 from __future__ import annotations
@@ -61,10 +61,14 @@ from run_gazebo_vision_actionlist_sim import _capture_frame, _frame_manifest  # 
 from sensoragent.agent import build_agent  # noqa: E402
 from sensoragent.schemas import ToolCall, ToolResult, TraceContext  # noqa: E402
 from sensoragent.tools.base import Tool  # noqa: E402
+from sensoragent.tools.robot.joint_poses import (  # noqa: E402
+  DEFAULT_HOME_JOINTS,
+  configured_joint_pose,
+)
 
 
 TREE_NAME = "industrial.recovery_pick_place_tree"
-HOME_JOINTS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+ARM_MOTION_SPEED = 1.2
 TABLETOP_PLACE_POSE = {
   "position": [0.28, 0.22, 0.20],
   "orientation": [0.9962, -0.0872, 0.0, 0.0],
@@ -128,7 +132,7 @@ def _build_parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(
     description="Run a Gazebo industrial recovery-tree demo with deterministic failure injection.",
   )
-  parser.add_argument("--object-query", default="roller")
+  parser.add_argument("--object-query", default="block")
   parser.add_argument("--target", default="target_area_3")
   parser.add_argument(
     "--failure",
@@ -219,6 +223,16 @@ def _vision_backend(config: Any) -> str:
 def _recovery_vision_queries(query: object) -> list[str]:
   base = str(query or "").strip()
   queries = [base] if base else []
+  if "block" in base.casefold() or "cube" in base.casefold() or "方块" in base:
+    queries.extend([
+      "red block",
+      "red cube",
+      "cube",
+      "block",
+      "box",
+      "red box",
+      "industrial part",
+    ])
   if "roller" in base.casefold() or "滚柱" in base:
     queries.extend([
       "red roller",
@@ -230,7 +244,7 @@ def _recovery_vision_queries(query: object) -> list[str]:
       "metal cylinder",
       "industrial part",
     ])
-  for fallback in ("object", "part"):
+  for fallback in ("block", "object", "part"):
     queries.append(fallback)
 
   result: list[str] = []
@@ -362,6 +376,60 @@ class _WrongBinVerifyTool:
     if not result.success and result.error and "WRONG_BIN" in result.error:
       self._state["wrong_bin_detected"] = True
       self._state["wrong_bin_evidence"] = result.output
+    return result
+
+
+class _WrongTableGripperOpenTool:
+  """Track when the injected wrong-table placement has released the object."""
+
+  def __init__(self, wrapped: Tool, *, state: dict) -> None:
+    self.spec = wrapped.spec
+    self._wrapped = wrapped
+    self._state = state
+
+  def run(self, call: ToolCall) -> ToolResult:
+    result = self._wrapped.run(call)
+    if (
+      result.success
+      and self._state.get("failure") == "wrong-table"
+      and self._state.get("wrong_target") == "tabletop"
+      and self._state.get("misplaced_pose")
+    ):
+      self._state["wrong_table_released"] = True
+    return result
+
+
+class _WrongTablePostReleaseMoveJointsTool:
+  """Let wrong-table demos continue to visual verification after retreat aborts."""
+
+  def __init__(self, wrapped: Tool, *, state: dict) -> None:
+    self.spec = wrapped.spec
+    self._wrapped = wrapped
+    self._state = state
+
+  def run(self, call: ToolCall) -> ToolResult:
+    result = self._wrapped.run(call)
+    if result.success:
+      return result
+    if (
+      self._state.get("failure") == "wrong-table"
+      and self._state.get("wrong_table_released")
+      and self._state.get("wrong_target") == "tabletop"
+    ):
+      tolerated = self._state.setdefault("post_release_move_joints_failures_tolerated", [])
+      tolerated.append({"input": call.input, "error": result.error})
+      return ToolResult(
+        tool=self.spec.name,
+        success=True,
+        output={
+          "completed": True,
+          "message": (
+            "Tolerated post-release joint retreat failure in wrong-table demo; "
+            "continuing to visual target verification."
+          ),
+          "tolerated_error": result.error,
+        },
+      )
     return result
 
 
@@ -677,6 +745,22 @@ def _inject_failure(bundle, args: argparse.Namespace, config: Any) -> dict:
     )
     _replace_tool(
       bundle,
+      "gripper.open",
+      _WrongTableGripperOpenTool(
+        bundle.tool_registry.get("gripper.open"),
+        state=state,
+      ),
+    )
+    _replace_tool(
+      bundle,
+      "robot.move_joints",
+      _WrongTablePostReleaseMoveJointsTool(
+        bundle.tool_registry.get("robot.move_joints"),
+        state=state,
+      ),
+    )
+    _replace_tool(
+      bundle,
       "robot.plan_top_down_pick",
       _WrongBinRecoveryPickPlanTool(
         bundle.tool_registry.get("robot.plan_top_down_pick"),
@@ -707,10 +791,10 @@ def _inject_failure(bundle, args: argparse.Namespace, config: Any) -> dict:
   raise ValueError(f"Unsupported failure mode: {args.failure}")
 
 
-def _reset_home(bundle, trace: TraceContext) -> None:
+def _reset_home(bundle, trace: TraceContext, home_joints: list[float]) -> None:
   result = bundle.tool_runtime.invoke(
     "robot.move_joints",
-    {"joints": HOME_JOINTS, "speed": 2.0, "wait": True},
+    {"joints": home_joints, "speed": ARM_MOTION_SPEED, "wait": True},
     trace,
   )
   _print_section("reset_home", {"success": result.success, "error": result.error})
@@ -740,7 +824,12 @@ def main() -> int:
   injection_state = _inject_failure(bundle, args, active_config)
   trace = TraceContext()
   if args.execute and args.reset_home:
-    _reset_home(bundle, trace)
+    home_joints = configured_joint_pose(
+      config.scene.joint_poses,
+      "home_joints",
+      DEFAULT_HOME_JOINTS,
+    )
+    _reset_home(bundle, trace, home_joints)
 
   request_input = {
     "object_query": args.object_query,

@@ -3,22 +3,22 @@
 本文说明如何在 Gazebo 中演示 SensorAgent 的失败检测与恢复能力。推荐视频演示
 使用 `wrong-table` 模式：系统第一次故意把物体放到桌面上的错误位置，随后检测到
 `WRONG_BIN`，进入恢复树后重新采集 RGB-D 图像，并通过 YOLOE
-(`vision.open_vocab_detect`) 重新定位桌面上的 roller 抓取点，再放入正确格。这个模式
+(`vision.open_vocab_detect`) 重新定位桌面上的 block 抓取点，再放入正确目标区。这个模式
 比从 bin 内重新抓取更容易，因为桌面位姿没有 bin 壁碰撞约束。
 
-当前 Gazebo 场景只保留一个 `roller`，并把原来的 3x3 盒子替换成桌面上的 2x2
+当前 Gazebo 场景只保留一个稳定 `block`，并把原来的 3x3 盒子替换成桌面上的 2x2
 平面目标区：`target_area_1` 到 `target_area_4`。彩色区域是视觉标记，白色边界线是
-低矮实体碰撞条（约 6-8 mm 厚），用于阻挡/提示滚柱越界。桌面碰撞面使用高摩擦系数。
+低矮实体碰撞条（约 6-8 mm 厚）。桌面碰撞面使用高摩擦系数。
 
 工作台尺寸为 `0.5 x 0.75 m`，桌面大约覆盖 base_link
-`x=[0.09,0.59]`、`y=[-0.375,0.375]`。演示用的 roller 和 2x2 目标区放在靠近机械臂的
+`x=[0.09,0.59]`、`y=[-0.375,0.375]`。演示用的 block 和 2x2 目标区放在靠近机械臂的
 可达中心区域内，用于降低恢复抓取难度。
 
 四个目标区放在这个可达桌面范围内，中心点为：
 `target_area_1=[0.24,-0.10]`、`target_area_2=[0.40,-0.10]`、
 `target_area_3=[0.24,0.04]`、`target_area_4=[0.40,0.04]`（单位 m，base_link）。
-`wrong-table` 故障会把物体放到靠近起始滚柱位置的中性桌面区域 `[0.28,0.22]` 附近，
-并用适中的释放高度做“轻放”，避免夹爪压桌或滚柱撞桌后滚出工作台；默认目标为
+`wrong-table` 故障会把物体放到靠近起始方块位置的中性桌面区域 `[0.28,0.22]` 附近，
+并用适中的释放高度做“轻放”，避免夹爪压桌；默认目标为
 `target_area_3`。
 
 ## 1. 演示脚本
@@ -76,7 +76,7 @@ gripper_cmd
 cd ~/SensorAgent
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
   --failure wrong-table \
-  --object-query roller \
+  --object-query block \
   --target target_area_3 \
   --execute \
   --json-out logs/tasks/recovery_wrong_table_demo.json
@@ -84,20 +84,20 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
 
 预期行为：
 
-1. 机器人从当前工业场景中抓取 `roller`；
+1. 机器人从当前工业场景中抓取 `block`；
 2. 首次放置被故障注入改到桌面上的可达错误位置；
 3. `vision.verify_object_in_bin` 使用目标 `target_area_3` 验证时失败；
 4. `recovery.classify_failure` 分类为 `WRONG_BIN`；
 5. `recovery.plan` 输出 `repick_from_observed_pose`；
-6. 脚本采集一帧新的 Gazebo RGB-D 图像，并调用 YOLOE 重新定位桌面上的 `roller`
-   （会按 `roller`、`red roller`、`red cylinder`、`blue roller`、`blue cylinder`
+6. 脚本采集一帧新的 Gazebo RGB-D 图像，并调用 YOLOE 重新定位桌面上的 `block`
+   （会按 `block`、`red block`、`cube`、`box`、`industrial part`
    等提示词和较低阈值重试）；
 7. 恢复树进入 `recover_pick`，使用 YOLOE 返回的 `pose_3d` 重新抓取；
    脚本会对 YOLOE 深度点使用较小但安全的 Z 偏移（2 cm），避免按配置位姿的 3 cm
    偏移抓空，同时减少夹爪压入桌面的风险；
 8. 后续 `robot.resolve_place_target` 恢复为 `target_area_3`；
 9. 机器人重新放置后，先保持夹爪朝向不变做一段约 8 cm 的严格竖直 Cartesian 抬升；
-   只有夹爪已经离开滚柱接触范围后，才执行后续普通 MoveIt/关节退回；
+   只有夹爪已经离开方块接触范围后，才执行后续普通 MoveIt/关节退回；
 10. 最后通过目标格验证。
 
 视频中建议同时拍摄：
@@ -114,7 +114,7 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
   --failure wrong-table \
-  --object-query roller \
+  --object-query block \
   --target target_area_3 \
   --json-out logs/tasks/recovery_wrong_table_dry_run.json
 ```
@@ -148,7 +148,7 @@ repick_from_observed_pose
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
   --failure wrong-bin \
-  --object-query roller \
+  --object-query block \
   --target target_area_3 \
   --wrong-target target_area_2 \
   --execute \
@@ -163,7 +163,7 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
   --failure place-plan \
-  --object-query roller \
+  --object-query block \
   --target target_area_3 \
   --execute \
   --json-out logs/tasks/recovery_place_plan_demo.json
@@ -180,7 +180,7 @@ PLACE_PLAN_FAILED → retry_place_candidates / recover_place
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
   --failure release \
-  --object-query roller \
+  --object-query block \
   --target target_area_3 \
   --execute \
   --json-out logs/tasks/recovery_release_demo.json

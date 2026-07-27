@@ -1,5 +1,8 @@
 """Industrial pick-and-place ActionList backed by open-vocabulary vision."""
 
+from collections.abc import Mapping
+from typing import Any
+
 from sensoragent.schemas import ActionList, ActionStep, ActionStepKind
 from sensoragent.workflows.actionlists.industrial import (
   GRIPPER_CLOSE_OPENING,
@@ -12,13 +15,23 @@ from sensoragent.workflows.actionlists.industrial import (
   PICK_PREGRASP_DISTANCE,
   PICK_SPEED,
   PLACE_CLEARANCE,
-  PLACE_PRE_APPROACH_JOINTS,
   PLACE_SPEED,
+  carry_joints,
+  observe_joints,
+  optional_move_joints_step,
+  place_staging_joints,
+  pick_staging_joints,
 )
 
 
-def build_industrial_vision_pick_place_actionlist() -> ActionList:
+def build_industrial_vision_pick_place_actionlist(
+  joint_poses: Mapping[str, Any] | None = None,
+) -> ActionList:
   """Build an industrial pick-place workflow using vision.open_vocab_detect."""
+  observe = observe_joints(joint_poses)
+  pick_staging = pick_staging_joints(joint_poses)
+  carry = carry_joints(joint_poses)
+  place_staging = place_staging_joints(joint_poses)
 
   return ActionList(
     name="industrial.vision_pick_place_actionlist",
@@ -35,6 +48,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
     },
     tags=("industrial", "pick-place", "vision", "verify"),
     steps=[
+      *optional_move_joints_step("observe_before_detect", observe, PICK_SPEED),
       ActionStep(
         name="detect_object",
         kind=ActionStepKind.TOOL,
@@ -63,6 +77,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
         },
         save_as="pick_plan",
       ),
+      *optional_move_joints_step("pick_staging_joints", pick_staging, PICK_SPEED),
       ActionStep(
         name="pick",
         kind=ActionStepKind.SKILL,
@@ -83,6 +98,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
         input={},
         save_as="grasp_check",
       ),
+      *optional_move_joints_step("carry_joints", carry, PICK_SPEED),
       ActionStep(
         name="resolve_place_target",
         kind=ActionStepKind.TOOL,
@@ -100,16 +116,7 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
         },
         save_as="place_plan",
       ),
-      ActionStep(
-        name="place_pre_approach_joints",
-        kind=ActionStepKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-      ),
+      *optional_move_joints_step("place_pre_approach_joints", place_staging, PLACE_SPEED),
       ActionStep(
         name="place_move_place",
         kind=ActionStepKind.TOOL,
@@ -140,16 +147,8 @@ def build_industrial_vision_pick_place_actionlist() -> ActionList:
           "wait": True,
         },
       ),
-      ActionStep(
-        name="place_retreat",
-        kind=ActionStepKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": PLACE_PRE_APPROACH_JOINTS,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-      ),
+      *optional_move_joints_step("place_retreat", place_staging, PLACE_SPEED),
+      *optional_move_joints_step("observe_after_place", observe, PLACE_SPEED),
       ActionStep(
         name="verify_place",
         kind=ActionStepKind.SKILL,

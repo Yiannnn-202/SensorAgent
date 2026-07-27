@@ -37,6 +37,7 @@ from sensoragent_robot_bridge.gripper_mapping import (
     closure_to_opening,
     opening_to_closure,
 )
+from sensoragent_robot_bridge.scene_obstacles import camera_rig_collision_objects
 from sensoragent_robot_bridge.trajectory_scaling import (
     MAX_SPEED,
     scale_joint_trajectory_speed,
@@ -375,60 +376,8 @@ class RobotBridgeNode(Node):
             raise ValueError(f"speed must be greater than 0 and at most {MAX_SPEED:g}")
         return speed
 
-    def _box_collision_object(
-        self,
-        object_id: str,
-        *,
-        center: tuple[float, float, float],
-        size: tuple[float, float, float],
-    ) -> CollisionObject:
-        collision = CollisionObject()
-        collision.header.frame_id = self._base_frame
-        collision.id = object_id
-        primitive = SolidPrimitive()
-        primitive.type = SolidPrimitive.BOX
-        primitive.dimensions = [float(value) for value in size]
-        pose = Pose()
-        pose.position.x = float(center[0])
-        pose.position.y = float(center[1])
-        pose.position.z = float(center[2])
-        pose.orientation.w = 1.0
-        collision.primitives.append(primitive)
-        collision.primitive_poses.append(pose)
-        collision.operation = CollisionObject.ADD
-        return collision
-
     def _camera_rig_collision_objects(self) -> list[CollisionObject]:
-        """Collision objects matching sensoragent_rgbd_rig/model.sdf.
-
-        The SDF poses are in world coordinates; base_link is mounted at world
-        z=0.18 with aligned x/y axes, so these base-frame z centers subtract
-        0.18 m. Keeping these objects in MoveIt's planning scene prevents the
-        arm from planning through the Gazebo camera posts or crossbar.
-        """
-
-        return [
-            self._box_collision_object(
-                "sensoragent_camera_left_post",
-                center=(0.34, 0.42, 0.39),
-                size=(0.04, 0.04, 1.14),
-            ),
-            self._box_collision_object(
-                "sensoragent_camera_right_post",
-                center=(0.34, -0.42, 0.39),
-                size=(0.04, 0.04, 1.14),
-            ),
-            self._box_collision_object(
-                "sensoragent_camera_crossbar",
-                center=(0.34, 0.0, 0.94),
-                size=(0.05, 0.88, 0.05),
-            ),
-            self._box_collision_object(
-                "sensoragent_camera_body",
-                center=(0.34, 0.0, 0.90),
-                size=(0.10, 0.06, 0.04),
-            ),
-        ]
+        return camera_rig_collision_objects(frame_id=self._base_frame)
 
     def _publish_static_obstacles(self) -> None:
         scene = PlanningScene()

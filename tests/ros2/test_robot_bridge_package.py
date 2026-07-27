@@ -30,6 +30,8 @@ class RobotBridgePackageTest(TestCase):
     paths = [
       BRIDGE_ROOT / "sensoragent_robot_bridge" / "bridge_node.py",
       BRIDGE_ROOT / "sensoragent_robot_bridge" / "gripper_mapping.py",
+      BRIDGE_ROOT / "sensoragent_robot_bridge" / "planning_scene_publisher.py",
+      BRIDGE_ROOT / "sensoragent_robot_bridge" / "scene_obstacles.py",
       BRIDGE_ROOT / "sensoragent_robot_bridge" / "trajectory_scaling.py",
       BRIDGE_ROOT / "launch" / "robot_bridge.launch.py",
       ROOT
@@ -42,6 +44,7 @@ class RobotBridgePackageTest(TestCase):
       ROOT / "scripts" / "linux" / "test_gazebo_place_pipeline.py",
       ROOT / "scripts" / "linux" / "test_gazebo_pick_place_pipeline.py",
       ROOT / "scripts" / "linux" / "capture_gazebo_rgbd_frame.py",
+      ROOT / "scripts" / "linux" / "record_rm65_joint_pose.py",
       ROOT / "scripts" / "linux" / "run_gazebo_vision_actionlist_sim.py",
     ]
 
@@ -80,11 +83,30 @@ class RobotBridgePackageTest(TestCase):
     ).read_text(encoding="utf-8")
 
     self.assertIn("PlanningScene", bridge_source)
-    self.assertIn("sensoragent_camera_left_post", bridge_source)
-    self.assertIn("sensoragent_camera_right_post", bridge_source)
-    self.assertIn("sensoragent_camera_crossbar", bridge_source)
-    self.assertIn("sensoragent_camera_body", bridge_source)
     self.assertIn("planning_scene_diff.world.collision_objects", bridge_source)
+
+    obstacle_source = (
+      BRIDGE_ROOT / "sensoragent_robot_bridge" / "scene_obstacles.py"
+    ).read_text(encoding="utf-8")
+    setup_source = (BRIDGE_ROOT / "setup.py").read_text(encoding="utf-8")
+    moveit_launch = (
+      ROOT
+      / "ros2_ws"
+      / "src"
+      / "sensoragent_rm65_b_bringup"
+      / "launch"
+      / "moveit_robotiq_demo.launch.py"
+    ).read_text(encoding="utf-8")
+
+    self.assertIn("sensoragent_camera_left_post", obstacle_source)
+    self.assertIn("sensoragent_camera_right_post", obstacle_source)
+    self.assertIn("sensoragent_camera_crossbar", obstacle_source)
+    self.assertIn("sensoragent_camera_body", obstacle_source)
+    self.assertIn("size=(0.14, 0.14, 1.20)", obstacle_source)
+    self.assertIn("size=(0.13, 0.98, 0.13)", obstacle_source)
+    self.assertIn("size=(0.18, 0.14, 0.12)", obstacle_source)
+    self.assertIn("static_scene_publisher", setup_source)
+    self.assertIn("static_scene_publisher", moveit_launch)
 
   def test_robotiq_fingers_use_high_friction(self) -> None:
     robotiq_path = (
@@ -103,6 +125,21 @@ class RobotBridgePackageTest(TestCase):
     self.assertGreaterEqual(len(mu2_values), 4)
     self.assertTrue(all(value >= 5.0 for value in mu_values))
     self.assertTrue(all(value >= 5.0 for value in mu2_values))
+
+  def test_industrial_world_uses_stable_block_by_default(self) -> None:
+    bringup_root = ROOT / "ros2_ws" / "src" / "sensoragent_rm65_b_bringup"
+    world = (bringup_root / "worlds" / "industrial_pgs.sdf").read_text(
+      encoding="utf-8"
+    )
+    block_model = (
+      bringup_root / "models" / "sensoragent_part_block" / "model.sdf"
+    ).read_text(encoding="utf-8")
+
+    self.assertIn("model://sensoragent_part_block", world)
+    self.assertIn("<name>block_01</name>", world)
+    self.assertNotIn("model://sensoragent_part_roller", world)
+    self.assertIn("<box><size>0.040 0.040 0.040</size></box>", block_model)
+    self.assertIn("<mu>20.0</mu>", block_model)
 
   def test_gripper_mapping_matches_simulated_action_semantics(self) -> None:
     maximum = 0.0848

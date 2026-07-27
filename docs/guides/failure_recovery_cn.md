@@ -214,8 +214,8 @@ response = bundle.agent.handle(
   AgentRequest(
     decision_tree="industrial.recovery_pick_place_tree",
     input={
-      "object_query": "roller",
-      "target": "bin_cell_3",
+      "object_query": "block",
+      "target": "target_area_3",
       "max_decision_nodes": 100,
     },
     trace=TraceContext(),
@@ -242,9 +242,9 @@ docs/guides/gazebo_recovery_demo_cn.md
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
   --failure wrong-bin \
-  --object-query roller \
-  --target bin_cell_3 \
-  --wrong-target bin_cell_2 \
+  --object-query block \
+  --target target_area_3 \
+  --wrong-target target_area_2 \
   --execute \
   --json-out logs/tasks/recovery_wrong_bin_demo.json
 ```

@@ -104,7 +104,7 @@ def _build_parser() -> argparse.ArgumentParser:
     default=0.15,
     help="Vertical approach/retreat clearance above the adjusted place pose.",
   )
-  parser.add_argument("--speed", type=float, default=2.0)
+  parser.add_argument("--speed", type=float, default=1.2)
   parser.add_argument("--open-opening", type=float, default=0.0848)
   parser.add_argument("--gripper-speed", type=float, default=0.5)
   parser.add_argument(
