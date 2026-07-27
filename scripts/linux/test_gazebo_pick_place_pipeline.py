@@ -60,7 +60,7 @@ def _build_parser() -> argparse.ArgumentParser:
     "--pick-offset",
     type=float,
     nargs=3,
-    default=[0.0, 0.0, 0.03],
+    default=[0.0, 0.0, 0.02],
     help=(
       "Offset from visual object XYZ to the gripper TCP grasp pose."
     ),
@@ -118,17 +118,17 @@ def _build_parser() -> argparse.ArgumentParser:
     metavar=("NX", "NY"),
     help="Candidate grid samples across the place area.",
   )
-  parser.add_argument("--speed", type=float, default=2.0)
+  parser.add_argument("--speed", type=float, default=1.2)
   parser.add_argument(
     "--pick-descent-speed",
     type=float,
-    default=1.5,
+    default=1.2,
     help="Speed for the vertical descent from pick approach to pregrasp/grasp.",
   )
   parser.add_argument("--open-opening", type=float, default=0.0848)
-  parser.add_argument("--close-opening", type=float, default=0.02)
+  parser.add_argument("--close-opening", type=float, default=0.032)
   parser.add_argument("--gripper-speed", type=float, default=0.5)
-  parser.add_argument("--gripper-force", type=float, default=0.5)
+  parser.add_argument("--gripper-force", type=float, default=1.0)
   parser.add_argument(
     "--pre-place-joints",
     type=float,

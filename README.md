@@ -294,8 +294,8 @@ Run the config-based industrial ActionList without moving the robot:
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
   --planner static \
-  --object-query roller \
-  --target bin_cell_3
+  --object-query block \
+  --target target_area_3
 ```
 
 Add `--execute` after checking the scene and bridge readiness. The optional
@@ -304,8 +304,8 @@ executes the parallel vision ActionList:
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py \
-  --object-query "red roller" \
-  --target bin_cell_3 \
+  --object-query "red block" \
+  --target target_area_3 \
   --execute
 ```
 
@@ -320,9 +320,9 @@ For a video-ready failure-recovery demo, inject a wrong-bin placement in Gazebo:
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
   --failure wrong-bin \
-  --object-query roller \
-  --target bin_cell_3 \
-  --wrong-target bin_cell_2 \
+  --object-query block \
+  --target target_area_3 \
+  --wrong-target target_area_2 \
   --execute \
   --json-out logs/tasks/recovery_wrong_bin_demo.json
 ```

@@ -116,16 +116,7 @@ def build_industrial_vision_pick_place_actionlist(
         },
         save_as="place_plan",
       ),
-      ActionStep(
-        name="place_pre_approach_joints",
-        kind=ActionStepKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": place_staging,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-      ),
+      *optional_move_joints_step("place_pre_approach_joints", place_staging, PLACE_SPEED),
       ActionStep(
         name="place_move_place",
         kind=ActionStepKind.TOOL,
@@ -156,16 +147,7 @@ def build_industrial_vision_pick_place_actionlist(
           "wait": True,
         },
       ),
-      ActionStep(
-        name="place_retreat",
-        kind=ActionStepKind.TOOL,
-        target="robot.move_joints",
-        input={
-          "joints": place_staging,
-          "speed": PLACE_SPEED,
-          "wait": True,
-        },
-      ),
+      *optional_move_joints_step("place_retreat", place_staging, PLACE_SPEED),
       *optional_move_joints_step("observe_after_place", observe, PLACE_SPEED),
       ActionStep(
         name="verify_place",

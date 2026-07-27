@@ -88,9 +88,9 @@
     </include>
 
     <include>
-      <uri>model://sensoragent_part_roller</uri>
-      <name>roller_01</name>
-      <pose>0.24 0.18 0.322 1.570796 0 0</pose>
+      <uri>model://sensoragent_part_block</uri>
+      <name>block_01</name>
+      <pose>0.24 0.18 0.320 0 0 0</pose>
     </include>
   </world>
 </sdf>

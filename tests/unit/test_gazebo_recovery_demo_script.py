@@ -36,7 +36,7 @@ class GazeboRecoveryDemoScriptTest(TestCase):
       "--failure",
       "wrong-bin",
       "--object-query",
-      "roller",
+      "block",
       "--target",
       "bin_cell_3",
       "--wrong-target",
@@ -64,7 +64,7 @@ class GazeboRecoveryDemoScriptTest(TestCase):
     )
     self.assertAlmostEqual(
       data["result"]["recovered_pick"]["pick_plan"]["plan"]["approach"]["position"][2],
-      0.30,
+      0.29,
     )
 
   def test_wrong_table_demo_runs_without_gazebo(self) -> None:
@@ -75,7 +75,7 @@ class GazeboRecoveryDemoScriptTest(TestCase):
       "--failure",
       "wrong-table",
       "--object-query",
-      "roller",
+      "block",
       "--target",
       "bin_cell_3",
       "--json-out",
@@ -181,6 +181,45 @@ class GazeboRecoveryDemoScriptTest(TestCase):
     self.assertEqual(state["recovery_vision"]["backend"], "yoloe")
     self.assertEqual(open_vocab.calls[0]["query"], "roller")
     self.assertEqual(open_vocab.calls[0]["image_path"], "rgb.npy")
+
+  def test_wrong_table_post_release_move_joints_failure_is_tolerated(self) -> None:
+    module = _load_demo_module()
+    state = {
+      "failure": "wrong-table",
+      "wrong_target": "tabletop",
+      "misplaced_pose": module.TABLETOP_PLACE_POSE,
+      "wrong_table_released": True,
+    }
+
+    class FailingMoveJoints:
+      spec = SimpleNamespace(name="robot.move_joints")
+
+      def run(self, call):
+        return module.ToolResult(
+          tool=self.spec.name,
+          success=False,
+          error="MOVEIT_-2: ACTION_ABORTED: MoveIt planning or execution failed.",
+        )
+
+    tool = module._WrongTablePostReleaseMoveJointsTool(
+      FailingMoveJoints(),
+      state=state,
+    )
+
+    result = tool.run(
+      module.ToolCall(
+        tool="robot.move_joints",
+        input={"joints": [0.0] * 6, "speed": module.ARM_MOTION_SPEED, "wait": True},
+        trace=module.TraceContext(),
+      )
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn("Tolerated post-release", result.output["message"])
+    self.assertEqual(
+      state["post_release_move_joints_failures_tolerated"][0]["error"],
+      "MOVEIT_-2: ACTION_ABORTED: MoveIt planning or execution failed.",
+    )
 
   def test_summary_serializer_handles_recursive_outputs(self) -> None:
     module = _load_demo_module()

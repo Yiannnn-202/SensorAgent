@@ -39,6 +39,16 @@ def _json_dump(value) -> str:
 def _vision_query_aliases(query: str) -> list[str]:
   aliases = [query]
   normalized = query.casefold()
+  if "block" in normalized or "cube" in normalized or "方块" in query:
+    aliases.extend([
+      "block",
+      "red block",
+      "cube",
+      "red cube",
+      "box",
+      "red box",
+      "industrial part",
+    ])
   if "roller" in normalized or "cylinder" in normalized or "滚柱" in query:
     aliases.extend([
       "roller",
@@ -48,6 +58,7 @@ def _vision_query_aliases(query: str) -> list[str]:
       "blue roller",
       "blue cylinder",
     ])
+  aliases.extend(["block", "object", "part"])
   result: list[str] = []
   seen: set[str] = set()
   for alias in aliases:
@@ -128,9 +139,9 @@ def _build_parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(
     description="Capture Gazebo RGB-D, run open-vocabulary vision, then execute industrial pick-place.",
   )
-  parser.add_argument("--utterance", default="pick roller and place into bin_cell_3")
-  parser.add_argument("--object-query", default="roller")
-  parser.add_argument("--target", default="bin_cell_3")
+  parser.add_argument("--utterance", default="pick block and place into target_area_3")
+  parser.add_argument("--object-query", default="block")
+  parser.add_argument("--target", default="target_area_3")
   parser.add_argument(
     "--spatial-relation",
     default=None,

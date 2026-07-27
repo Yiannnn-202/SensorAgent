@@ -124,6 +124,13 @@ class IndustrialRecoveryTreeTest(TestCase):
       ],
     )
 
+  def test_pick_node_uses_block_close_opening(self) -> None:
+    tree = build_industrial_recovery_pick_place_tree()
+    pick_node = next(node for node in tree.nodes if node.name == "pick")
+
+    self.assertEqual(pick_node.input["close_opening"], 0.032)
+    self.assertEqual(pick_node.input["gripper_force"], 1.0)
+
   def test_grasp_failure_recovers_by_re_pick(self) -> None:
     runtime, tool_runtime, skill_runtime = _make_runtime(
       verify_grasp_sequence=[

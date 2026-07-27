@@ -113,8 +113,8 @@ On a machine with the Agent Python environment:
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py \
   --planner static \
-  --object-query roller \
-  --target bin_cell_3
+  --object-query block \
+  --target target_area_3
 ```
 
 Without `--execute`, the script swaps the robot backend to fake and validates
@@ -140,9 +140,9 @@ Then use the targeted scripts as needed:
 
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/test_gazebo_pick_pipeline.py --diagnose-only
-PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py --planner static --object-query roller --target bin_cell_3 --execute
-PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py --object-query "red roller" --target bin_cell_3 --execute
-PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py --failure wrong-bin --object-query roller --target bin_cell_3 --wrong-target bin_cell_2 --execute
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_actionlist_sim.py --planner static --object-query block --target target_area_3 --execute
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py --object-query "red block" --target target_area_3 --execute
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py --failure wrong-bin --object-query block --target target_area_3 --wrong-target target_area_2 --execute
 ```
 
 The repository currently has no automated ROS 2, Gazebo, or grasp-stability test
