@@ -57,6 +57,7 @@ from sensoragent.tools.robot import (
 )
 from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
 from sensoragent.tools.vision import VisionConfigDetectTool, VisionOpenVocabularyDetectTool
+from sensoragent.tools.vision import VisionCaptureFrameTool
 from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
 from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
@@ -94,9 +95,29 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
 SCENE_TOOL_NAMES = {
   "vision.config_detect",
   "vision.open_vocab_detect",
+  "vision.capture_frame",
   "vision.verify_object_in_bin",
   "robot.resolve_place_target",
 }
+
+
+def _build_recovery_tree(config: SensorAgentConfig):
+  """Build the recovery tree in mock or perception-driven mode."""
+
+  vision_config = config.integrations.vision
+  if not bool(vision_config.get("recovery_live_detect", False)):
+    return build_industrial_recovery_pick_place_tree(
+      joint_poses=config.scene.joint_poses,
+    )
+  enabled_tools = set(config.tools.enabled or ())
+  capture_tool = "vision.capture_frame" if "vision.capture_frame" in enabled_tools else None
+  return build_industrial_recovery_pick_place_tree(
+    joint_poses=config.scene.joint_poses,
+    detect_tool="vision.open_vocab_detect",
+    capture_tool=capture_tool,
+    live_verify=capture_tool is not None,
+    spatial_constraint_input=True,
+  )
 
 
 def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
@@ -127,6 +148,23 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       ),
       base_frame=str(vision_config.get("base_frame", "base_link")),
       workspace=dict(config.scene.workspace or {}),
+    )
+  if tool_name == "vision.capture_frame":
+    vision_config = config.integrations.vision
+    capture_config = dict(vision_config.get("capture") or {})
+    return VisionCaptureFrameTool(
+      script=str(capture_config.get("script", "scripts/linux/capture_gazebo_rgbd_frame.py")),
+      ros_python=capture_config.get("ros_python"),
+      image_topic=str(capture_config.get("image_topic", "/industrial_camera/image")),
+      depth_topic=str(capture_config.get("depth_topic", "/industrial_camera/depth_image")),
+      camera_info_topic=str(
+        capture_config.get("camera_info_topic", "/industrial_camera/camera_info")
+      ),
+      base_frame=str(capture_config.get("base_frame", "base_link")),
+      world_frame=str(capture_config.get("world_frame", "world")),
+      out_dir=str(capture_config.get("out_dir", "logs/vision/latest")),
+      timeout_seconds=float(capture_config.get("timeout_seconds", 10.0)),
+      fallback_t_base_camera=vision_config.get("T_base_camera"),
     )
   if tool_name == "robot.resolve_place_target":
     targets = config.scene.place_targets or default_place_target_registry()
@@ -324,7 +362,7 @@ def build_agent(
     logger,
   )
   decision_trees: dict[str, object] = {
-    "industrial.recovery_pick_place_tree": build_industrial_recovery_pick_place_tree(joint_poses),
+    "industrial.recovery_pick_place_tree": _build_recovery_tree(config),
   }
   task_store = InMemoryTaskStore()
   event_stream = InMemoryEventStream()

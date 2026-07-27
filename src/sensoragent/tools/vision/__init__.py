@@ -1,5 +1,6 @@
 """Vision tool adapters."""
 
+from sensoragent.tools.vision.capture import VisionCaptureFrameTool
 from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 from sensoragent.tools.vision.open_vocab import (
   SPATIAL_RELATIONS,
@@ -24,6 +25,7 @@ __all__ = [
   "OpenVocabularyVisionBackend",
   "SpatialConstraint",
   "UltralyticsSam2Backend",
+  "VisionCaptureFrameTool",
   "VisionConfigDetectTool",
   "VisionDetection",
   "VisionInferenceOptions",

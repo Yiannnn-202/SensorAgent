@@ -18,6 +18,7 @@ tools:
     - gripper.get_state
     - vision.config_detect
     - vision.open_vocab_detect
+    - vision.capture_frame
     - vision.verify_object_lifted
     - vision.verify_object_in_bin
     - recovery.classify_failure
@@ -51,6 +52,21 @@ integrations:
       - [-1.0, 0.0, 0.0, 0.0]
       - [0.0, 0.0, -1.0, 0.88]
       - [0.0, 0.0, 0.0, 1.0]
+    # Drive the recovery DecisionTree with real perception: capture a fresh
+    # RGB-D frame before each detection and re-detect after placing, so a wrong
+    # bin is observed instead of inferred from the commanded release pose.
+    recovery_live_detect: true
+    capture:
+      script: scripts/linux/capture_gazebo_rgbd_frame.py
+      # null -> probe SENSORAGENT_ROS_PYTHON, ROS_PYTHON, then python3 for rclpy.
+      ros_python: null
+      image_topic: /industrial_camera/image
+      depth_topic: /industrial_camera/depth_image
+      camera_info_topic: /industrial_camera/camera_info
+      base_frame: base_link
+      world_frame: world
+      out_dir: logs/vision/latest
+      timeout_seconds: 10.0
 
 scene:
   robot_joint_order: [joint1, joint2, joint3, joint4, joint5, joint6]

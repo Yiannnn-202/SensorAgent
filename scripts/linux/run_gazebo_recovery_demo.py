@@ -7,9 +7,15 @@ Default demo story:
   2. Inject a wrong placement by resolving the first place target to another
      bin cell or a reachable tabletop pose while keeping the requested target
      unchanged.
-  3. Let vision.verify_object_in_bin classify the mismatch as WRONG_BIN.
+  3. Capture a fresh RGB-D frame, re-detect the object, and let
+     vision.verify_object_in_bin classify the observed mismatch as WRONG_BIN.
+     (With recovery_live_detect disabled this step falls back to comparing the
+     commanded release pose, which cannot observe a wrong bin.)
   4. Re-detect the object at the injected wrong-bin pose, re-pick it, and place
      it into the requested target through industrial.recovery_pick_place_tree.
+
+Dry runs (without --execute) force the deterministic mock detector because no
+Gazebo camera is available.
 
 Run Gazebo first:
 
@@ -160,6 +166,17 @@ def _build_parser() -> argparse.ArgumentParser:
   )
   parser.add_argument("--max-decision-nodes", type=int, default=100)
   parser.add_argument(
+    "--spatial-relation",
+    default=None,
+    help="Optional spatial relation forwarded to live detections (e.g. left, nearest).",
+  )
+  parser.add_argument(
+    "--spatial-ordinal",
+    type=int,
+    default=None,
+    help="Optional 1-based ordinal used with --spatial-relation.",
+  )
+  parser.add_argument(
     "--reset-home",
     action=argparse.BooleanOptionalAction,
     default=True,
@@ -170,11 +187,29 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _plan_only_config(config):
-  """Force the robot backend to fake so the same demo can be dry-run safely."""
+  """Force fake robot and mock detection so the demo can be dry-run safely.
+
+  Dry runs have no Gazebo, so live frame capture would fail at the first node.
+  """
 
   robot = dict(config.integrations.robot)
   robot["backend"] = "fake"
-  return replace(config, integrations=replace(config.integrations, robot=robot))
+  vision = dict(config.integrations.vision)
+  vision["recovery_live_detect"] = False
+  return replace(
+    config,
+    integrations=replace(config.integrations, robot=robot, vision=vision),
+  )
+
+
+def _live_detect_enabled(config: Any) -> bool:
+  return bool(config.integrations.vision.get("recovery_live_detect", False))
+
+
+def _detect_tool_name(config: Any) -> str:
+  """Name of the detection tool the recovery tree actually calls."""
+
+  return "vision.open_vocab_detect" if _live_detect_enabled(config) else "vision.config_detect"
 
 
 def _replace_tool(bundle, name: str, tool: Tool) -> None:
@@ -631,6 +666,9 @@ class _WrongBinRecoveryPickPlanTool:
 
 def _inject_failure(bundle, args: argparse.Namespace, config: Any) -> dict:
   state: dict[str, Any] = {"failure": args.failure}
+  live_detect = _live_detect_enabled(config)
+  state["live_detect"] = live_detect
+  state["detect_tool"] = _detect_tool_name(config)
   if args.failure == "none":
     return state
   if args.failure == "wrong-bin":
@@ -652,6 +690,10 @@ def _inject_failure(bundle, args: argparse.Namespace, config: Any) -> dict:
         state=state,
       ),
     )
+    # With recovery_live_detect the tree captures a frame and re-detects the
+    # object itself, so WRONG_BIN comes from a real observation. This wrapper
+    # then only serves the recovery pick_only_actionlist, which still resolves
+    # poses through vision.config_detect.
     _replace_tool(
       bundle,
       "vision.config_detect",
@@ -794,6 +836,11 @@ def main() -> int:
     "target": args.target,
     "max_decision_nodes": args.max_decision_nodes,
   }
+  if args.spatial_relation:
+    request_input["spatial_constraint"] = {
+      "relation": args.spatial_relation,
+      "ordinal": args.spatial_ordinal or 1,
+    }
   _print_section(
     "recovery demo input",
     {
@@ -802,6 +849,9 @@ def main() -> int:
       "failure": args.failure,
       "object_query": args.object_query,
       "target": args.target,
+      "live_detect": injection_state.get("live_detect"),
+      "detect_tool": injection_state.get("detect_tool"),
+      "spatial_constraint": request_input.get("spatial_constraint"),
       "wrong_target": (
         args.wrong_target
         if args.failure == "wrong-bin"

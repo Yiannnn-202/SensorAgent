@@ -32,6 +32,11 @@ from sensoragent.workflows.actionlists.industrial import (
 
 def build_industrial_recovery_pick_place_tree(
   joint_poses: Mapping[str, Any] | None = None,
+  *,
+  detect_tool: str = "vision.config_detect",
+  capture_tool: str | None = None,
+  live_verify: bool = False,
+  spatial_constraint_input: bool = False,
 ) -> DecisionTree:
   """Build an industrial pick/place tree with typed failure recovery.
 
@@ -39,43 +44,120 @@ def build_industrial_recovery_pick_place_tree(
   through recovery.classify_failure -> recovery.plan -> typed branches. Recovery
   actions are intentionally bounded: each recovery branch performs one local
   repair and then rejoins the main workflow or terminates.
+
+  Args:
+    detect_tool: Tool used for object detection. Defaults to the deterministic
+      config catalog; pass ``vision.open_vocab_detect`` for real perception.
+    capture_tool: When set (e.g. ``vision.capture_frame``), a fresh RGB-D frame
+      is captured before every detection so the detector sees current world
+      state instead of a caller-supplied frame.
+    live_verify: When True, post-place verification re-detects the object in a
+      newly captured frame instead of echoing the commanded release pose.
+    spatial_constraint_input: When True, detections forward the request's
+      ``spatial_constraint`` input to the detector.
   """
   observe = observe_joints(joint_poses)
   pick_staging = pick_staging_joints(joint_poses)
   carry = carry_joints(joint_poses)
   place_staging = place_staging_joints(joint_poses)
-  start = "observe_before_detect" if observe is not None else "detect_object"
   after_plan_pick = "pick_staging_joints" if pick_staging is not None else "pick"
   after_verify_grasp = "carry_joints" if carry is not None else "resolve_place_target"
   after_place_retreat = "observe_after_place" if observe is not None else "verify_place"
-  after_plan_place = "place_pre_approach_joints" if place_staging is not None else "place_move_place"
-  after_place_lift = "place_retreat" if place_staging is not None else after_place_retreat
-  recover_redetect_target = (
-    "recover_observe_before_redetect" if observe is not None else "recover_redetect"
+  after_plan_place = (
+    "place_pre_approach_joints"
+    if place_staging is not None
+    else "place_move_place"
   )
+  after_place_lift = (
+    "place_retreat"
+    if place_staging is not None
+    else after_place_retreat
+  )
+  detect_nodes = _detect_sequence(
+    detect_tool=detect_tool,
+    capture_tool=capture_tool,
+    spatial_constraint_input=spatial_constraint_input,
+    capture_node="capture_initial",
+    detect_node="detect_object",
+    frame_key="initial_frame",
+    save_as="object",
+    out_dir="logs/vision/recovery/initial",
+    max_retries=1,
+    on_success="plan_pick",
+    on_failure="classify_failure",
+  )
+  redetect_nodes = _detect_sequence(
+    detect_tool=detect_tool,
+    capture_tool=capture_tool,
+    spatial_constraint_input=spatial_constraint_input,
+    capture_node="capture_redetect",
+    detect_node="recover_redetect",
+    frame_key="redetect_frame",
+    save_as="object",
+    out_dir="logs/vision/recovery/redetect",
+    max_retries=1,
+    on_success="plan_pick",
+    on_failure="failure",
+  )
+  start = "observe_before_detect" if observe is not None else detect_nodes[0].name
+  recover_redetect_target = (
+    "recover_observe_before_redetect" if observe is not None else redetect_nodes[0].name
+  )
+  verify_nodes = _verify_in_bin_sequence(
+    detect_tool=detect_tool,
+    capture_tool=capture_tool,
+    live_verify=live_verify,
+    spatial_constraint_input=spatial_constraint_input,
+    capture_node="recapture_post_place",
+    redetect_node="redetect_post_place",
+    verify_node="verify_object_in_bin",
+    frame_key="post_place_frame",
+    observed_key="observed_object",
+    out_dir="logs/vision/recovery/post_place",
+    commanded_pose="{{ place_target.place_pose.position }}",
+    save_as="bin_check",
+    on_success="success",
+    on_failure="classify_failure",
+  )
+  recovered_verify_nodes = _verify_in_bin_sequence(
+    detect_tool=detect_tool,
+    capture_tool=capture_tool,
+    live_verify=live_verify,
+    spatial_constraint_input=spatial_constraint_input,
+    capture_node="recapture_recovered_place",
+    redetect_node="redetect_recovered_place",
+    verify_node="verify_recovered_object_in_bin",
+    frame_key="recovered_place_frame",
+    observed_key="observed_recovered_object",
+    out_dir="logs/vision/recovery/recovered_post_place",
+    commanded_pose="{{ recovered_place.place_target.place_pose.position }}",
+    save_as="bin_check",
+    on_success="success",
+    on_failure="failure",
+  )
+
+  inputs = {
+    "object_query": "string",
+    "target": "string",
+    "max_recovery_attempts": "integer",
+  }
+  if spatial_constraint_input:
+    inputs["spatial_constraint"] = "object"
 
   return DecisionTree(
     name="industrial.recovery_pick_place_tree",
     description="Industrial pick-place DecisionTree with classified local recovery branches.",
-    inputs={
-      "object_query": "string",
-      "target": "string",
-      "max_recovery_attempts": "integer",
-    },
+    inputs=inputs,
     tags=("industrial", "pick-place", "recovery", "decision-tree"),
     start=start,
     nodes=[
-      *_move_joints_node("observe_before_detect", observe, PICK_SPEED, "detect_object"),
-      DecisionNode(
-        name="detect_object",
-        kind=DecisionNodeKind.TOOL,
-        target="vision.config_detect",
-        input={"query": "{{ object_query }}"},
-        save_as="object",
-        max_retries=1,
-        on_success="plan_pick",
-        on_failure="classify_failure",
+      *_move_joints_node(
+        "observe_before_detect",
+        observe,
+        PICK_SPEED,
+        detect_nodes[0].name,
       ),
+      *detect_nodes,
       DecisionNode(
         name="plan_pick",
         kind=DecisionNodeKind.TOOL,
@@ -183,23 +265,10 @@ def build_industrial_recovery_pick_place_tree(
         target="robot.verify_place",
         input={},
         save_as="place_check",
-        on_success="verify_object_in_bin",
+        on_success=verify_nodes[0].name,
         on_failure="classify_failure",
       ),
-      DecisionNode(
-        name="verify_object_in_bin",
-        kind=DecisionNodeKind.TOOL,
-        target="vision.verify_object_in_bin",
-        input={
-          "target": "{{ target }}",
-          # Until a post-place detector updates world state, use the commanded
-          # release pose as the expected observation in deterministic tests.
-          "pose_3d": "{{ place_target.place_pose.position }}",
-        },
-        save_as="bin_check",
-        on_success="success",
-        on_failure="classify_failure",
-      ),
+      *verify_nodes,
       DecisionNode(
         name="classify_failure",
         kind=DecisionNodeKind.TOOL,
@@ -246,19 +315,10 @@ def build_industrial_recovery_pick_place_tree(
         "recover_observe_before_redetect",
         observe,
         PICK_SPEED,
-        "recover_redetect",
+        redetect_nodes[0].name,
         on_failure="failure",
       ),
-      DecisionNode(
-        name="recover_redetect",
-        kind=DecisionNodeKind.TOOL,
-        target="vision.config_detect",
-        input={"query": "{{ object_query }}"},
-        save_as="object",
-        max_retries=1,
-        on_success="plan_pick",
-        on_failure="failure",
-      ),
+      *redetect_nodes,
       DecisionNode(
         name="recover_pick",
         kind=DecisionNodeKind.ACTIONLIST,
@@ -276,21 +336,10 @@ def build_industrial_recovery_pick_place_tree(
         input={"target": "{{ target }}"},
         save_as="recovered_place",
         max_retries=1,
-        on_success="verify_recovered_object_in_bin",
+        on_success=recovered_verify_nodes[0].name,
         on_failure="failure",
       ),
-      DecisionNode(
-        name="verify_recovered_object_in_bin",
-        kind=DecisionNodeKind.TOOL,
-        target="vision.verify_object_in_bin",
-        input={
-          "target": "{{ target }}",
-          "pose_3d": "{{ recovered_place.place_target.place_pose.position }}",
-        },
-        save_as="bin_check",
-        on_success="success",
-        on_failure="failure",
-      ),
+      *recovered_verify_nodes,
       DecisionNode(
         name="recover_release",
         kind=DecisionNodeKind.TOOL,
@@ -309,13 +358,167 @@ def build_industrial_recovery_pick_place_tree(
         target="robot.stop",
         input={},
         max_retries=1,
-        on_success="recover_redetect",
+        on_success=redetect_nodes[0].name,
         on_failure="failure",
       ),
       DecisionNode(name="success", kind=DecisionNodeKind.TERMINAL, terminal_success=True),
       DecisionNode(name="failure", kind=DecisionNodeKind.TERMINAL, terminal_success=False),
     ],
   )
+
+
+def _detect_sequence(
+  *,
+  detect_tool: str,
+  capture_tool: str | None,
+  spatial_constraint_input: bool,
+  capture_node: str,
+  detect_node: str,
+  frame_key: str,
+  save_as: str,
+  out_dir: str,
+  max_retries: int,
+  on_success: str,
+  on_failure: str,
+) -> list[DecisionNode]:
+  """Build [capture?, detect] for one detection point in the tree."""
+
+  nodes: list[DecisionNode] = []
+  if capture_tool:
+    nodes.append(
+      DecisionNode(
+        name=capture_node,
+        kind=DecisionNodeKind.TOOL,
+        target=capture_tool,
+        input={"out_dir": out_dir},
+        save_as=frame_key,
+        max_retries=max_retries,
+        on_success=detect_node,
+        on_failure=on_failure,
+      )
+    )
+  nodes.append(
+    DecisionNode(
+      name=detect_node,
+      kind=DecisionNodeKind.TOOL,
+      target=detect_tool,
+      input=_detect_input(
+        detect_tool=detect_tool,
+        frame_key=frame_key if capture_tool else None,
+        spatial_constraint_input=spatial_constraint_input,
+      ),
+      save_as=save_as,
+      max_retries=max_retries,
+      on_success=on_success,
+      on_failure=on_failure,
+    )
+  )
+  return nodes
+
+
+def _detect_input(
+  *,
+  detect_tool: str,
+  frame_key: str | None,
+  spatial_constraint_input: bool,
+) -> dict:
+  detect_input: dict = {"query": "{{ object_query }}"}
+  if frame_key:
+    detect_input.update(
+      {
+        "image_path": f"{{{{ {frame_key}.image_path }}}}",
+        "depth_path": f"{{{{ {frame_key}.depth_path }}}}",
+        "camera_info_path": f"{{{{ {frame_key}.camera_info_path }}}}",
+        "T_base_camera": f"{{{{ {frame_key}.T_base_camera }}}}",
+        "T_world_camera": f"{{{{ {frame_key}.T_world_camera }}}}",
+      }
+    )
+  if spatial_constraint_input:
+    detect_input["spatial_constraint"] = "{{ spatial_constraint }}"
+  return detect_input
+
+
+def _verify_in_bin_sequence(
+  *,
+  detect_tool: str,
+  capture_tool: str | None,
+  live_verify: bool,
+  spatial_constraint_input: bool,
+  capture_node: str,
+  redetect_node: str,
+  verify_node: str,
+  frame_key: str,
+  observed_key: str,
+  out_dir: str,
+  commanded_pose: str,
+  save_as: str,
+  on_success: str,
+  on_failure: str,
+) -> list[DecisionNode]:
+  """Build post-place verification nodes.
+
+  Without ``live_verify`` the verification echoes the commanded release pose,
+  which keeps deterministic runs green but cannot observe a wrong bin. With
+  ``live_verify`` a fresh frame is captured and the object re-detected, so the
+  verified position is a real observation.
+  """
+
+  if not (live_verify and capture_tool):
+    return [
+      DecisionNode(
+        name=verify_node,
+        kind=DecisionNodeKind.TOOL,
+        target="vision.verify_object_in_bin",
+        input={
+          "target": "{{ target }}",
+          # Until a post-place detector updates world state, use the commanded
+          # release pose as the expected observation in deterministic tests.
+          "pose_3d": commanded_pose,
+        },
+        save_as=save_as,
+        on_success=on_success,
+        on_failure=on_failure,
+      )
+    ]
+
+  return [
+    DecisionNode(
+      name=capture_node,
+      kind=DecisionNodeKind.TOOL,
+      target=capture_tool,
+      input={"out_dir": out_dir},
+      save_as=frame_key,
+      max_retries=1,
+      on_success=redetect_node,
+      on_failure=on_failure,
+    ),
+    DecisionNode(
+      name=redetect_node,
+      kind=DecisionNodeKind.TOOL,
+      target=detect_tool,
+      input=_detect_input(
+        detect_tool=detect_tool,
+        frame_key=frame_key,
+        spatial_constraint_input=spatial_constraint_input,
+      ),
+      save_as=observed_key,
+      max_retries=1,
+      on_success=verify_node,
+      on_failure=on_failure,
+    ),
+    DecisionNode(
+      name=verify_node,
+      kind=DecisionNodeKind.TOOL,
+      target="vision.verify_object_in_bin",
+      input={
+        "target": "{{ target }}",
+        "object_pose": f"{{{{ {observed_key} }}}}",
+      },
+      save_as=save_as,
+      on_success=on_success,
+      on_failure=on_failure,
+    ),
+  ]
 
 
 def _move_joints_node(

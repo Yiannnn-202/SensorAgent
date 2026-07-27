@@ -121,6 +121,36 @@ Key SensorAgent documents:
 - [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
 - [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
 
+## Vision Model Evaluation
+
+The open-vocabulary model path uses `vision.open_vocab_detect` for both the
+temporary YOLOE baseline and the Grounding DINO + SAM 2 teacher model. Validate a
+portable dataset manifest before running a long evaluation:
+
+```powershell
+python scripts\vision_eval.py validate `
+  --manifest configs\vision_dataset.example.jsonl `
+  --allow-missing-files
+```
+
+Run a labeled local dataset with one persistent model instance:
+
+```powershell
+python scripts\vision_eval.py run `
+  --manifest data\vision\competition_test.jsonl `
+  --config configs\vision_grounding_dino.yaml `
+  --output-dir runs\vision\competition_test `
+  --device 0 `
+  --require-masks `
+  --save-overlays
+```
+
+The runner saves per-sample JSONL, aggregate metrics, Tool logs, and optional
+overlays. Dataset images, model weights, caches, and `runs/` outputs remain local.
+See the [Chinese open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
+for the manifest contract, data-source plan, evaluation metrics, and teacher to
+student optimization route.
+
 ## RM65-B and Robotiq Simulation
 
 The tracked `sensoragent_rm65_b_bringup` package combines:
