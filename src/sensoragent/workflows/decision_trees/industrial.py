@@ -31,8 +31,8 @@ from sensoragent.workflows.actionlists.industrial import (
 
 
 def build_industrial_recovery_pick_place_tree(
-  *,
   joint_poses: Mapping[str, Any] | None = None,
+  *,
   detect_tool: str = "vision.config_detect",
   capture_tool: str | None = None,
   live_verify: bool = False,
