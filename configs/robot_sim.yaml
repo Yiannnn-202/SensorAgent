@@ -37,7 +37,7 @@ integrations:
     endpoint: http://127.0.0.1:8765
     timeout_seconds: 120.0
   vision:
-    backend: yoloe
+    backend: grounding_dino
     model_path: models/vision/yoloe.pt
     depth_window: 7
     # Fixed Gazebo transform from ROS optical camera coordinates to base_link,

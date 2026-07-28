@@ -543,8 +543,6 @@ class GroundingDinoBackend:
     path = Path(image_path)
     if not path.is_file():
       raise ValueError(f"image_path does not exist: {path}")
-    if path.suffix.casefold() == ".npy":
-      raise ValueError("Grounding DINO requires a standard RGB image, not .npy")
     prompt = _grounding_prompt(query)
     if not prompt:
       raise ValueError("query must be a non-empty string")
@@ -560,7 +558,12 @@ class GroundingDinoBackend:
     if selected_device is None:
       selected_device = "cuda:0" if torch.cuda.is_available() else "cpu"
     model = model.to(selected_device)
-    image = Image.open(path).convert("RGB")
+    # The capture tool writes RGB as .npy, so accept the array form directly
+    # rather than requiring callers to pass the preview image alongside it.
+    if path.suffix.casefold() == ".npy":
+      image = Image.fromarray(np.load(path)).convert("RGB")
+    else:
+      image = Image.open(path).convert("RGB")
     inputs = processor(images=image, text=[prompt], return_tensors="pt")
     inputs = {
       key: value.to(selected_device) if hasattr(value, "to") else value
