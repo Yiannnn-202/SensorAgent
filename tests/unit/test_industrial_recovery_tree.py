@@ -208,6 +208,122 @@ class IndustrialRecoveryTreeTest(TestCase):
     self.assertEqual(result.output["classification"]["failure_type"], "WRONG_BIN")
     self.assertGreaterEqual([call[0] for call in tool_runtime.calls].count("vision.verify_object_in_bin"), 2)
 
+  def test_object_not_found_recovers_by_redetect(self) -> None:
+    # The detect node has one internal retry (max_retries=1), so it must fail
+    # twice before the tree classifies the failure. Recovery re-observes and
+    # re-detects, then the nominal pick-place flow completes.
+    runtime, tool_runtime, _ = _make_runtime(
+      config_detect_sequence=[
+        _StubResult(False, {"found": False, "confidence": 0.0}, "OBJECT_NOT_FOUND: no match for roller"),
+        _StubResult(False, {"found": False, "confidence": 0.0}, "OBJECT_NOT_FOUND: no match for roller"),
+        _StubResult(True, _config_detection()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("recover_redetect", node_names)
+    self.assertEqual(result.output["classification"]["failure_type"], "OBJECT_NOT_FOUND")
+    # detect_object is retried internally (2 calls) then recover_redetect runs
+    # once more, for 3 detect calls in total.
+    self.assertEqual(
+      [call[0] for call in tool_runtime.calls].count("vision.config_detect"), 3
+    )
+
+  def test_low_confidence_recovers_by_redetect(self) -> None:
+    # The detector surfaces a low-confidence detection as a failed detect node;
+    # recovery re-observes and re-detects with relaxed vision sampling.
+    runtime, tool_runtime, _ = _make_runtime(
+      config_detect_sequence=[
+        _StubResult(False, {"found": True, "confidence": 0.10}, "LOW_CONFIDENCE: 0.010 below 0.350"),
+        _StubResult(False, {"found": True, "confidence": 0.10}, "LOW_CONFIDENCE: 0.010 below 0.350"),
+        _StubResult(True, _config_detection()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn("recover_redetect", [node.node for node in result.nodes])
+    self.assertEqual(result.output["classification"]["failure_type"], "LOW_CONFIDENCE")
+
+  def test_pose_invalid_recovers_by_redetect(self) -> None:
+    # A non-finite depth-derived position makes the pose unusable; the detect
+    # node fails through its internal retry, then recovery re-detects to
+    # refresh RGB-D evidence.
+    runtime, tool_runtime, _ = _make_runtime(
+      config_detect_sequence=[
+        _StubResult(False, {"found": True, "confidence": 0.9}, "VISION_DEPTH_ERROR: non-finite pose_3d"),
+        _StubResult(False, {"found": True, "confidence": 0.9}, "VISION_DEPTH_ERROR: non-finite pose_3d"),
+        _StubResult(True, _config_detection()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn("recover_redetect", [node.node for node in result.nodes])
+    self.assertEqual(result.output["classification"]["failure_type"], "POSE_INVALID")
+
+  def test_pick_plan_failure_recovers_by_re_pick(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn("recover_pick", [node.node for node in result.nodes])
+    self.assertEqual(result.output["classification"]["failure_type"], "PICK_PLAN_FAILED")
+    self.assertGreaterEqual(
+      [call[0] for call in tool_runtime.calls].count("robot.plan_top_down_pick"), 2
+    )
+
+  def test_release_failure_recovers_by_reopening_gripper(self) -> None:
+    # The gripper does not confirm release on the first place; recovery re-opens
+    # it and then rejoins the lift-clearance step rather than re-placing.
+    runtime, tool_runtime, _ = _make_runtime(
+      verify_place_sequence=[
+        _StubResult(False, {"released": False, "opening": 0.03}, "PLACE NOT CONFIRMED: gripper still closed"),
+        _StubResult(True, {"released": True, "opening": 0.0848}),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("recover_release", node_names)
+    # After re-opening the gripper the tree rejoins the lift-clearance node,
+    # not the start of place, so the place motion is not repeated.
+    self.assertIn("place_lift_clearance", node_names)
+    self.assertEqual(result.output["classification"]["failure_type"], "RELEASE_FAILED")
+
 
 class LiveDetectRecoveryTreeTest(TestCase):
   """The perception-driven variant must observe placement, not assume it."""
@@ -434,6 +550,9 @@ def _make_runtime(
   plan_place_sequence: list[_StubResult] | None = None,
   verify_bin_sequence: list[_StubResult] | None = None,
   open_vocab_sequence: list[_StubResult] | None = None,
+  config_detect_sequence: list[_StubResult] | None = None,
+  plan_pick_sequence: list[_StubResult] | None = None,
+  verify_place_sequence: list[_StubResult] | None = None,
   real_verify_in_bin: bool = False,
   real_verify_lifted: bool = False,
 ):
@@ -443,6 +562,15 @@ def _make_runtime(
   plan_place_results = _sequence(plan_place_sequence or [_StubResult(True, _place_plan())])
   verify_bin_results = _sequence(verify_bin_sequence or [_StubResult(True, _bin_check(True))])
   open_vocab_results = _sequence(open_vocab_sequence or [_StubResult(True, _detection())])
+  config_detect_results = _sequence(
+    config_detect_sequence or [_StubResult(True, _config_detection())]
+  )
+  plan_pick_results = _sequence(
+    plan_pick_sequence or [_StubResult(True, _pick_plan())]
+  )
+  verify_place_results = _sequence(
+    verify_place_sequence or [_StubResult(True, {"released": True, "opening": 0.0848})]
+  )
 
   classify_tool = RecoveryClassifyFailureTool()
   plan_tool = RecoveryPlanTool()
@@ -469,13 +597,7 @@ def _make_runtime(
     return _from_tool_result(result)
 
   tool_runtime = _StubRuntime({
-    "vision.config_detect": lambda _i: {
-      "found": True,
-      "label": "roller",
-      "confidence": 1.0,
-      "object_id": "roller",
-      "pose_3d": [0.24, 0.23, 0.142, 0.0, 0.0, 0.0],
-    },
+    "vision.config_detect": lambda _i: next(config_detect_results),
     "vision.capture_frame": lambda input_data: {
       "image_path": f"{input_data.get('out_dir', 'logs/frame')}/rgb.npy",
       "depth_path": f"{input_data.get('out_dir', 'logs/frame')}/depth.npy",
@@ -484,9 +606,7 @@ def _make_runtime(
       "T_world_camera": None,
     },
     "vision.open_vocab_detect": lambda _i: next(open_vocab_results),
-    "robot.plan_top_down_pick": lambda _i: {
-      "plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}
-    },
+    "robot.plan_top_down_pick": lambda _i: next(plan_pick_results),
     "robot.resolve_place_target": lambda input_data: {
       "target": input_data["target"],
       "place_pose": {
@@ -513,7 +633,7 @@ def _make_runtime(
   skill_runtime = _StubRuntime({
     "robot.pick": lambda _i: {"picked": True},
     "robot.verify_grasp": lambda _i: next(verify_grasp_results),
-    "robot.verify_place": lambda _i: {"released": True, "opening": 0.0848},
+    "robot.verify_place": lambda _i: next(verify_place_results),
   })
   actionlists = {
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
@@ -549,6 +669,21 @@ def _place_plan() -> dict:
         "frame_id": "base_link",
       },
     }
+  }
+
+
+def _pick_plan() -> dict:
+  return {"plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}}
+
+
+def _config_detection(position: list[float] | None = None) -> dict:
+  pose = list(position or [0.24, 0.23, 0.142])
+  return {
+    "found": True,
+    "label": "roller",
+    "confidence": 1.0,
+    "object_id": "roller",
+    "pose_3d": [*pose[:3], 0.0, 0.0, 0.0],
   }
 
 
