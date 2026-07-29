@@ -15,7 +15,8 @@ if str(SRC) not in sys.path:
 
 from sensoragent.agent import build_agent_from_config
 from sensoragent.integrations import FakeAudioClient, FakeMicrophoneRecorder, LocalAudioClient
-from sensoragent.integrations.audio import _write_wav
+from sensoragent.integrations.audio import AudioError, _write_wav
+from sensoragent.integrations.microphone import MicrophoneError
 from sensoragent.integrations.vad import SoundDeviceVadRecorder
 from sensoragent.schemas import ToolCall, TraceContext
 from sensoragent.tools.audio import AudioSpeakTool, AudioTranscribeTool
@@ -275,3 +276,145 @@ class AudioIntegrationTest(TestCase):
 
     self.assertIn("audio.transcribe", bundle.tool_registry.names())
     self.assertIn("audio.speak", bundle.tool_registry.names())
+
+
+class _FailingAudioClient(FakeAudioClient):
+  """Fake client whose transcribe/speak raise a configured AudioError."""
+
+  def __init__(self, *, transcribe_error: str | None = None, speak_error: str | None = None) -> None:
+    super().__init__()
+    self._transcribe_error = transcribe_error
+    self._speak_error = speak_error
+
+  def transcribe_file(self, audio_path: str, language: str = "zh") -> dict:
+    if self._transcribe_error is not None:
+      raise AudioError(self._transcribe_error)
+    return super().transcribe_file(audio_path, language)
+
+  def speak_text(self, text: str, output_path: str | None = None, voice: str = "default", play: bool = False) -> dict:
+    if self._speak_error is not None:
+      raise AudioError(self._speak_error)
+    return super().speak_text(text, output_path, voice, play)
+
+
+class _FailingMicrophoneRecorder:
+  """Recorder that always raises MicrophoneError."""
+
+  def record_once(self, duration_seconds: float, output_path: str, sample_rate: int = 16000) -> dict:
+    raise MicrophoneError("No microphone device available")
+
+
+class AudioFailurePathTest(TestCase):
+  """Tools must swallow integration errors and return a failed ToolResult."""
+
+  def test_transcribe_returns_failure_when_audio_path_missing(self) -> None:
+    tool = AudioTranscribeTool(FakeAudioClient())
+
+    result = tool.run(ToolCall(tool="audio.transcribe", input={}, trace=TraceContext()))
+
+    self.assertFalse(result.success)
+    self.assertIn("audio_path", result.error)
+
+  def test_transcribe_returns_failure_on_audio_error(self) -> None:
+    tool = AudioTranscribeTool(
+      _FailingAudioClient(transcribe_error="ASR service timed out")
+    )
+
+    result = tool.run(
+      ToolCall(
+        tool="audio.transcribe",
+        input={"audio_path": "tests/fixtures/audio/command.wav", "language": "zh"},
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("ASR service timed out", result.error)
+
+  def test_speak_returns_failure_when_text_missing(self) -> None:
+    tool = AudioSpeakTool(FakeAudioClient())
+
+    result = tool.run(ToolCall(tool="audio.speak", input={}, trace=TraceContext()))
+
+    self.assertFalse(result.success)
+    self.assertIn("text", result.error)
+
+  def test_speak_returns_failure_on_audio_error(self) -> None:
+    tool = AudioSpeakTool(_FailingAudioClient(speak_error="TTS model not loaded"))
+
+    result = tool.run(
+      ToolCall(
+        tool="audio.speak",
+        input={"text": "任务完成", "output_path": "logs/audio/x.wav", "play": False},
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("TTS model not loaded", result.error)
+
+  def test_listen_transcribe_returns_failure_on_microphone_error(self) -> None:
+    tool = AudioListenTranscribeTool(_FailingMicrophoneRecorder(), FakeAudioClient())
+
+    result = tool.run(
+      ToolCall(
+        tool="audio.listen_transcribe",
+        input={"duration_seconds": 1, "language": "zh"},
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("No microphone device", result.error)
+
+  def test_listen_transcribe_returns_failure_on_transcribe_error(self) -> None:
+    # Recording succeeds but the downstream ASR call fails.
+    tool = AudioListenTranscribeTool(
+      FakeMicrophoneRecorder(),
+      _FailingAudioClient(transcribe_error="ASR connection refused"),
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+      result = tool.run(
+        ToolCall(
+          tool="audio.listen_transcribe",
+          input={"duration_seconds": 1, "language": "zh", "output_path": str(Path(temp_dir) / "l.wav")},
+          trace=TraceContext(),
+        )
+      )
+
+    self.assertFalse(result.success)
+    self.assertIn("ASR connection refused", result.error)
+
+  def test_listen_vad_transcribe_returns_failure_on_microphone_error(self) -> None:
+    tool = AudioListenVadTranscribeTool(
+      _FailingMicrophoneRecorder(), FakeAudioClient(), None
+    )
+
+    result = tool.run(
+      ToolCall(
+        tool="audio.listen_vad_transcribe",
+        input={"duration_seconds": 1, "language": "zh"},
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("No microphone device", result.error)
+
+  def test_listen_vad_transcribe_returns_failure_on_invalid_vad_config(self) -> None:
+    # A non-object vad value must be rejected before any recording happens.
+    tool = AudioListenVadTranscribeTool(
+      FakeMicrophoneRecorder(), FakeAudioClient(), None
+    )
+
+    result = tool.run(
+      ToolCall(
+        tool="audio.listen_vad_transcribe",
+        input={"duration_seconds": 1, "language": "zh", "vad": "not-an-object"},
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("vad", result.error)
