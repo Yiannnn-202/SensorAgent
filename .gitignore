@@ -1,5 +1,9 @@
 # Runtime logs
 logs/
+/runs/vision/
+
+# Local vision datasets and annotations
+/data/vision/
 
 # Local model weights and runtime assets. Keep directory structure and docs.
 /models/**/*

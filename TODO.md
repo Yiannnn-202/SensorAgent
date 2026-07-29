@@ -304,6 +304,9 @@ scope agreed in the 2026-07-26 vision discussion.
 
 ### Stage 3 - Industrial fine-tuning and lightweight student model
 
+- [x] Add a YOLO11n-seg baseline runner with class-map, polygon-label, and
+  train/validation/test leakage preflight. The runner does not replace the need
+  for reviewed competition data or a same-split acceptance result.
 - [ ] Use the Stage 2 teacher to draft boxes and masks, then manually review every
   training annotation.
 - [ ] Split complete capture scenes/sessions before augmentation to prevent nearby

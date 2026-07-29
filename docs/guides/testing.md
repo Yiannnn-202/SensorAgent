@@ -23,7 +23,7 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The suite currently collects 215 tests covering config loading, planner
+The suite currently collects 233 tests covering config loading, planner
 validation, tool/skill runtimes, ActionLists, DecisionTrees, audio fakes,
 contract validation, robot planning/control adapters, open-vocabulary vision
 error handling, and the vision evaluation harness. It also covers failure
@@ -105,6 +105,18 @@ python scripts\vision_eval.py run --manifest data\vision\competition_test.jsonl 
 ```
 
 Manifests, images, weights, and `runs/` outputs stay local and untracked.
+
+The fixed-class segmentation training preflight checks the class map, required
+splits, split leakage, class IDs, normalized coordinates, and polygon labels. It
+does not import Ultralytics or start training when `--dry-run` is used:
+
+```powershell
+python scripts\vision_train.py --data data\vision\competition\dataset.yaml --dry-run
+pytest -q tests\unit\test_vision_train.py
+```
+
+Use `--no-amp` only to isolate a CUDA AMP preflight stall. Record whether AMP
+was enabled in every result used for a model comparison.
 
 ## Failure detection and recovery tests
 

@@ -54,6 +54,18 @@ current local file before reproducing it.
 
 ## Stage 3 - Industrial student model
 
+The non-innovative training baseline initializes from:
+
+```text
+models/vision/yolo11n-seg.pt
+```
+
+The local 2026-07-30 copy is the official COCO 80-class segmentation checkpoint,
+not a competition-trained model. Its size is 6,182,636 bytes and its SHA-256 is
+`55ed65c56c91713d23e8402371c6c49a6fd84f257f7dce452e8d70e41dcbe152`.
+Use `scripts/vision_train.py` to fine-tune it only after the competition class
+map and reviewed polygon labels are ready.
+
 Use this local convention after the class map and export format are approved:
 
 ```text
