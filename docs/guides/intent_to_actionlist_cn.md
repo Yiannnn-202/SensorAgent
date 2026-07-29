@@ -147,12 +147,12 @@ verify_place 通过的场景返回 `success=True`。
 
 ## 4. 关键 sim 参数（`robot_sim.yaml` scene）
 
-### 4.1 Objects catalog（world 坐标 → base_link，减去 mount_z=0.18）
+### 4.1 Objects catalog（world 坐标 → base_link，mount yaw=180°，减去 mount_z=0.18）
 
 | 名称 | pose_3d（base_link） | 说明 |
 |------|---------------------|------|
-| block / cube / red_block / 方块 | `[0.24, 0.18, 0.140]` | 当前默认，可达且不滚动 |
-| roller / silver_roller / 滚柱 | `[0.24, 0.18, 0.140]` | 临时别名，当前也指向方块位姿 |
+| block / cube / red_block / 方块 | `[-0.24, -0.18, 0.140]` | 当前默认，可达且不滚动 |
+| roller / silver_roller / 滚柱 | `[-0.24, -0.18, 0.140]` | 临时别名，当前也指向方块位姿 |
 
 ### 4.2 Place targets（TCP 释放位姿）
 
@@ -161,10 +161,10 @@ verify_place 通过的场景返回 `success=True`。
 
 | 名称 | position | 可达性 |
 |------|----------|--------|
-| target_area_1 | `[0.24, -0.10, 0.24]` | 2x2 grid 前左 |
-| target_area_2 | `[0.40, -0.10, 0.24]` | 2x2 grid 前右 |
-| target_area_3 | `[0.24, 0.04, 0.24]` | 当前推荐目标 |
-| target_area_4 | `[0.40, 0.04, 0.24]` | 2x2 grid 后右 |
+| target_area_1 | `[-0.24, 0.10, 0.24]` | 2x2 grid 前左 |
+| target_area_2 | `[-0.40, 0.10, 0.24]` | 2x2 grid 前右 |
+| target_area_3 | `[-0.24, -0.04, 0.24]` | 当前推荐目标 |
+| target_area_4 | `[-0.40, -0.04, 0.24]` | 2x2 grid 后右 |
 | bin_cell_1..4 | 同上 | 向后兼容别名 |
 
 ## 5. Sim 实测结果

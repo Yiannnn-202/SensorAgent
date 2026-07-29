@@ -55,6 +55,16 @@ def _float_quad(values: list[float], field: str) -> list[float]:
   return [float(value) / norm for value in values]
 
 
+def _world_to_base_position(world_position: list[float], mount_z: float) -> list[float]:
+  """Convert Gazebo world XYZ to base_link XYZ for the 180-degree robot mount."""
+
+  return [
+    -world_position[0],
+    -world_position[1],
+    world_position[2] - mount_z,
+  ]
+
+
 def _json_dump(value: Any) -> str:
   return json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
 
@@ -171,12 +181,8 @@ def _base_position(args: argparse.Namespace) -> list[float]:
   if base_position is not None:
     return base_position
   if world_position is not None:
-    return [
-      world_position[0],
-      world_position[1],
-      world_position[2] - args.robot_mount_z,
-    ]
-  return [0.42, -0.13, 0.10]
+    return _world_to_base_position(world_position, args.robot_mount_z)
+  return _world_to_base_position([0.42, -0.13, 0.28], args.robot_mount_z)
 
 
 def _distance(left: list[float], right: list[float]) -> float:
@@ -297,8 +303,9 @@ def _build_parser() -> argparse.ArgumentParser:
     nargs=3,
     metavar=("X", "Y", "Z"),
     help=(
-      "Object/grasp XYZ in Gazebo/world metres. The script subtracts "
-      "--robot-mount-z from Z to produce base_link coordinates."
+      "Object/grasp XYZ in Gazebo/world metres. The script applies the "
+      "180-degree robot mount yaw and subtracts --robot-mount-z from Z to "
+      "produce base_link coordinates."
     ),
   )
   parser.add_argument(

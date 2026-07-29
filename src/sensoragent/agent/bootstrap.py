@@ -165,6 +165,7 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       out_dir=str(capture_config.get("out_dir", "logs/vision/latest")),
       timeout_seconds=float(capture_config.get("timeout_seconds", 10.0)),
       fallback_t_base_camera=vision_config.get("T_base_camera"),
+      fallback_t_world_camera=vision_config.get("T_world_camera"),
     )
   if tool_name == "robot.resolve_place_target":
     targets = config.scene.place_targets or default_place_target_registry()

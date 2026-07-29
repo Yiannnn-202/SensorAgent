@@ -5,9 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import shutil
-import subprocess
 import sys
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -27,6 +24,7 @@ from test_gazebo_pick_pipeline import _check_bridge, _load_agent_config, _print_
 from sensoragent.agent import build_agent  # noqa: E402
 from sensoragent.schemas import ToolCall, ToolResult, TraceContext  # noqa: E402
 from sensoragent.tools.base import Tool  # noqa: E402
+from sensoragent.tools.vision import VisionCaptureFrameTool  # noqa: E402
 
 
 ACTIONLIST_NAME = "industrial.vision_pick_place_actionlist"
@@ -165,74 +163,17 @@ def _build_parser() -> argparse.ArgumentParser:
   return parser
 
 
-def _python_can_capture(executable: Path) -> bool:
-  completed = subprocess.run(
-    [
-      str(executable),
-      "-c",
-      "import numpy, rclpy; from sensor_msgs.msg import CameraInfo, Image",
-    ],
-    text=True,
-    capture_output=True,
-  )
-  return completed.returncode == 0
-
-
-def _capture_python() -> str:
-  candidates: list[Path] = []
-  for env_name in ("SENSORAGENT_ROS_PYTHON", "ROS_PYTHON"):
-    value = os.environ.get(env_name)
-    if value:
-      candidates.append(Path(value))
-  if shutil.which("python3"):
-    candidates.append(Path(shutil.which("python3") or "python3"))
-  candidates.append(
-    Path.home()
-    / "snap"
-    / "copilot-cli"
-    / "common"
-    / "micromamba"
-    / "envs"
-    / "sensoragent-ros-humble"
-    / "bin"
-    / "python"
-  )
-
-  seen: set[str] = set()
-  for candidate in candidates:
-    key = str(candidate)
-    if key in seen:
-      continue
-    seen.add(key)
-    if candidate.exists() and _python_can_capture(candidate):
-      return str(candidate)
-  raise RuntimeError(
-    "No Python interpreter with numpy, rclpy, and sensor_msgs was found. "
-    "Set SENSORAGENT_ROS_PYTHON to the ROS environment Python, for example "
-    "~/snap/copilot-cli/common/micromamba/envs/sensoragent-ros-humble/bin/python."
-  )
-
-
 def _capture_frame(frame_dir: Path) -> dict:
   script = ROOT / "scripts" / "linux" / "capture_gazebo_rgbd_frame.py"
-  capture_python = _capture_python()
-  completed = subprocess.run(
-    [capture_python, str(script), "--out-dir", str(frame_dir)],
-    text=True,
-    capture_output=True,
+  result = VisionCaptureFrameTool(
+    script=str(script),
+    out_dir=str(frame_dir),
+  ).run(
+    ToolCall(tool="vision.capture_frame", input={}, trace=TraceContext())
   )
-  if completed.returncode != 0:
-    raise RuntimeError(
-      "RGB-D frame capture failed.\n"
-      f"python: {capture_python}\n"
-      f"stdout:\n{completed.stdout}\n"
-      f"stderr:\n{completed.stderr}"
-    )
-  try:
-    return json.loads(completed.stdout)
-  except json.JSONDecodeError:
-    manifest_path = frame_dir / "manifest.json"
-    return json.loads(manifest_path.read_text(encoding="utf-8"))
+  if result.success and result.output:
+    return result.output
+  raise RuntimeError(result.error or "RGB-D frame capture failed.")
 
 
 def _frame_manifest(frame_dir: Path) -> dict:
@@ -242,12 +183,13 @@ def _frame_manifest(frame_dir: Path) -> dict:
   return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
-def _gazebo_world_camera_fallback(t_base_camera: list | None) -> list | None:
-  if not isinstance(t_base_camera, list) or len(t_base_camera) != 4:
-    return None
-  matrix = [[float(value) for value in row] for row in t_base_camera]
-  matrix[2][3] += 0.18
-  return matrix
+def _gazebo_world_camera_fallback() -> list[list[float]]:
+  return [
+    [0.0, -1.0, 0.0, 0.34],
+    [-1.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, -1.0, 1.06],
+    [0.0, 0.0, 0.0, 1.0],
+  ]
 
 
 def main() -> int:
@@ -288,9 +230,7 @@ def main() -> int:
     "T_base_camera": manifest.get("T_base_camera")
     or config.integrations.vision.get("T_base_camera"),
     "T_world_camera": manifest.get("T_world_camera")
-    or _gazebo_world_camera_fallback(
-      manifest.get("T_base_camera") or config.integrations.vision.get("T_base_camera")
-    ),
+    or _gazebo_world_camera_fallback(),
     "spatial_constraint": (
       {"relation": args.spatial_relation, "ordinal": args.spatial_ordinal}
       if args.spatial_relation

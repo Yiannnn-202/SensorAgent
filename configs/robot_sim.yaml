@@ -39,18 +39,29 @@ integrations:
   vision:
     backend: yoloe
     model_path: models/vision/yoloe.pt
+    # The Gazebo validation scene uses a single red block. This deterministic
+    # fallback keeps "red ..." commands from depending on YOLOE text matching.
+    red_color_shortcut: true
     depth_window: 7
     # Fixed Gazebo transform from ROS optical camera coordinates to base_link,
+    # with the RM65-B mount yawed 180 degrees relative to world:
     # derived from sensoragent_rgbd_rig/model.sdf:
     #   camera origin in world: (0.34, 0.0, 1.06)
     #   base_link origin in world: (0.0, 0.0, 0.18)
-    #   optical +X image-right -> base -Y
-    #   optical +Y image-down  -> base -X
+    #   optical +X image-right -> base +Y
+    #   optical +Y image-down  -> base +X
     #   optical +Z depth       -> base -Z
     T_base_camera:
+      - [0.0, 1.0, 0.0, -0.34]
+      - [1.0, 0.0, 0.0, 0.0]
+      - [0.0, 0.0, -1.0, 0.88]
+      - [0.0, 0.0, 0.0, 1.0]
+    # Same fixed camera pose in Gazebo/world coordinates. Used when TF lookup
+    # misses the static world <- camera transform during RGB-D capture.
+    T_world_camera:
       - [0.0, -1.0, 0.0, 0.34]
       - [-1.0, 0.0, 0.0, 0.0]
-      - [0.0, 0.0, -1.0, 0.88]
+      - [0.0, 0.0, -1.0, 1.06]
       - [0.0, 0.0, 0.0, 1.0]
     # Drive the recovery DecisionTree with real perception: capture a fresh
     # RGB-D frame before each detection and re-detect after placing, so a wrong
@@ -74,26 +85,26 @@ scene:
     # Values are radians in robot_joint_order. Current Gazebo workflows keep
     # only observe_joints active: pick -> place -> observe -> visual check.
     home_joints: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    observe_joints: [0.005147, 0.979996, -1.261626, 0.018753, -1.205676, -0.006029]
+    observe_joints: [-0.000033, -1.039069, 1.044687, 0.000004, 1.575183, -0.000097]
     pick_staging_joints: null
     carry_joints: null
     place_staging_joints: null
 
   # Object catalog for vision.config_detect. Positions are in base_link metres.
   # Derived from ros2_ws/.../worlds/industrial_pgs.sdf spawn poses using
-  # base_link z = world z - robot_mount_z (0.18).
+  # base_link yaw = world yaw + pi and z = world z - robot_mount_z (0.18).
   # Workbench top at base_link z ≈ 0.12; object centres sit slightly above it.
   objects:
-    block: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
-    cube: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
-    red_block: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
-    方块: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
+    block: [-0.24, -0.18, 0.140, 0.0, 0.0, 0.0]
+    cube: [-0.24, -0.18, 0.140, 0.0, 0.0, 0.0]
+    red_block: [-0.24, -0.18, 0.140, 0.0, 0.0, 0.0]
+    方块: [-0.24, -0.18, 0.140, 0.0, 0.0, 0.0]
     # Temporary aliases keep older commands usable while the default Gazebo
     # object is a stable block. Remove or repoint these when returning to the
     # roller for visual-pipeline validation.
-    roller: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
-    silver_roller: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
-    滚柱: [0.24, 0.18, 0.140, 0.0, 0.0, 0.0]
+    roller: [-0.24, -0.18, 0.140, 0.0, 0.0, 0.0]
+    silver_roller: [-0.24, -0.18, 0.140, 0.0, 0.0, 0.0]
+    滚柱: [-0.24, -0.18, 0.140, 0.0, 0.0, 0.0]
 
   # Reachable workspace envelope in base_link metres. Vision candidates whose
   # back-projected base XY falls outside this box are filtered out before
@@ -101,7 +112,7 @@ scene:
   # depth-free pixel -> base back-projection (camera looks down at the table).
   workspace:
     frame: base_link
-    x: [0.09, 0.59]
+    x: [-0.59, -0.09]
     y: [-0.375, 0.375]
     z: [0.10, 0.30]
     table_z: 0.12
@@ -112,36 +123,36 @@ scene:
   # z=0.22 keeps the gripper about 0.10 m above the tabletop.
   place_targets:
     target_area_1:
-      position: [0.24, -0.10, 0.24]
+      position: [-0.24, 0.10, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     target_area_2:
-      position: [0.40, -0.10, 0.24]
+      position: [-0.40, 0.10, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     target_area_3:
-      position: [0.24, 0.04, 0.24]
+      position: [-0.24, -0.04, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     target_area_4:
-      position: [0.40, 0.04, 0.24]
+      position: [-0.40, -0.04, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     # Backward-compatible aliases for existing scripts and prompts.
     bin_cell_1:
-      position: [0.24, -0.10, 0.24]
+      position: [-0.24, 0.10, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     bin_cell_2:
-      position: [0.40, -0.10, 0.24]
+      position: [-0.40, 0.10, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     bin_cell_3:
-      position: [0.24, 0.04, 0.24]
+      position: [-0.24, -0.04, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
     bin_cell_4:
-      position: [0.40, 0.04, 0.24]
+      position: [-0.40, -0.04, 0.24]
       orientation: [0.9962, -0.0872, 0.0, 0.0]
       frame_id: base_link
 

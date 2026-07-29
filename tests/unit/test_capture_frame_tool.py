@@ -28,6 +28,12 @@ _T_BASE_CAMERA = [
   [0.0, 0.0, -1.0, 0.88],
   [0.0, 0.0, 0.0, 1.0],
 ]
+_T_WORLD_CAMERA = [
+  [0.0, -1.0, 0.0, 0.34],
+  [-1.0, 0.0, 0.0, 0.0],
+  [0.0, 0.0, -1.0, 1.06],
+  [0.0, 0.0, 0.0, 1.0],
+]
 
 
 @dataclass
@@ -37,14 +43,18 @@ class _Completed:
   stderr: str = ""
 
 
-def _manifest(out_dir: Path, t_base_camera=_T_BASE_CAMERA) -> dict:
+def _manifest(
+  out_dir: Path,
+  t_base_camera=_T_BASE_CAMERA,
+  t_world_camera=None,
+) -> dict:
   return {
     "image_path": str(out_dir / "rgb.npy"),
     "depth_path": str(out_dir / "depth.npy"),
     "camera_info_path": str(out_dir / "camera_info.json"),
     "camera_frame": "camera_color_optical_frame",
     "T_base_camera": t_base_camera,
-    "T_world_camera": None,
+    "T_world_camera": t_world_camera,
   }
 
 
@@ -136,10 +146,15 @@ class VisionCaptureFrameToolTest(TestCase):
     self.assertTrue(result.output["image_path"].startswith(str(override)))
 
   def test_missing_transform_falls_back_to_configured_matrix(self) -> None:
-    tool = self._tool(fallback_t_base_camera=_T_BASE_CAMERA)
+    tool = self._tool(
+      fallback_t_base_camera=_T_BASE_CAMERA,
+      fallback_t_world_camera=_T_WORLD_CAMERA,
+    )
 
     def fake_run(argv, **_kwargs):
-      self._write_manifest(_manifest(self.out_dir, t_base_camera=None))
+      self._write_manifest(
+        _manifest(self.out_dir, t_base_camera=None, t_world_camera=None)
+      )
       return _Completed()
 
     with mock.patch("subprocess.run", side_effect=fake_run):
@@ -147,6 +162,7 @@ class VisionCaptureFrameToolTest(TestCase):
 
     self.assertTrue(result.success, msg=result.error)
     self.assertEqual(result.output["T_base_camera"], _T_BASE_CAMERA)
+    self.assertEqual(result.output["T_world_camera"], _T_WORLD_CAMERA)
 
   def test_non_zero_exit_reports_stderr(self) -> None:
     tool = self._tool()

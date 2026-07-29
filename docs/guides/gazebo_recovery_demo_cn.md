@@ -10,14 +10,14 @@
 平面目标区：`target_area_1` 到 `target_area_4`。彩色区域是视觉标记，白色边界线是
 低矮实体碰撞条（约 6-8 mm 厚）。桌面碰撞面使用高摩擦系数。
 
-工作台尺寸为 `0.5 x 0.75 m`，桌面大约覆盖 base_link
-`x=[0.09,0.59]`、`y=[-0.375,0.375]`。演示用的 block 和 2x2 目标区放在靠近机械臂的
+工作台尺寸为 `0.5 x 0.75 m`。由于机械臂 mount yaw 为 180°，桌面大约覆盖 base_link
+`x=[-0.59,-0.09]`、`y=[-0.375,0.375]`。演示用的 block 和 2x2 目标区放在靠近机械臂的
 可达中心区域内，用于降低恢复抓取难度。
 
 四个目标区放在这个可达桌面范围内，中心点为：
-`target_area_1=[0.24,-0.10]`、`target_area_2=[0.40,-0.10]`、
-`target_area_3=[0.24,0.04]`、`target_area_4=[0.40,0.04]`（单位 m，base_link）。
-`wrong-table` 故障会把物体放到靠近起始方块位置的中性桌面区域 `[0.28,0.22]` 附近，
+`target_area_1=[-0.24,0.10]`、`target_area_2=[-0.40,0.10]`、
+`target_area_3=[-0.24,-0.04]`、`target_area_4=[-0.40,-0.04]`（单位 m，base_link）。
+`wrong-table` 故障会把物体放到靠近起始方块位置的中性桌面区域 `[-0.28,-0.22]` 附近，
 并用适中的释放高度做“轻放”，避免夹爪压桌；默认目标为
 `target_area_3`。
 
@@ -71,6 +71,18 @@ gripper_cmd
 均为 `true`。
 
 ## 3. 推荐录制命令：放到桌面错误位置后恢复
+
+`wrong-table` 会重新采集 Gazebo RGB-D 图像；运行前必须让子进程能找到
+ROS 2 Python 的 `rclpy`：
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/SensorAgent/ros2_ws/install/setup.bash
+# 如果普通 python3 仍然没有 rclpy，显式指定 ROS Python：
+# export SENSORAGENT_ROS_PYTHON=/usr/bin/python3
+```
+
+推荐命令如下：
 
 ```bash
 cd ~/SensorAgent
