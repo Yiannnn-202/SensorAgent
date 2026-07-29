@@ -56,7 +56,11 @@ from test_gazebo_pick_pipeline import (  # noqa: E402
   _wait_for_bridge,
   _wait_for_ready,
 )
-from run_gazebo_vision_actionlist_sim import _capture_frame, _frame_manifest  # noqa: E402
+from run_gazebo_vision_actionlist_sim import (  # noqa: E402
+  _VisionQueryRetryTool,
+  _capture_frame,
+  _frame_manifest,
+)
 
 from sensoragent.agent import build_agent  # noqa: E402
 from sensoragent.schemas import ToolCall, ToolResult, TraceContext  # noqa: E402
@@ -70,11 +74,11 @@ from sensoragent.tools.robot.joint_poses import (  # noqa: E402
 TREE_NAME = "industrial.recovery_pick_place_tree"
 ARM_MOTION_SPEED = 1.2
 TABLETOP_PLACE_POSE = {
-  "position": [0.28, 0.22, 0.20],
+  "position": [-0.28, -0.22, 0.20],
   "orientation": [0.9962, -0.0872, 0.0, 0.0],
   "frame_id": "base_link",
 }
-TABLETOP_OBJECT_POSE_3D = [0.28, 0.22, 0.142, 0.0, 0.0, 0.0]
+TABLETOP_OBJECT_POSE_3D = [-0.28, -0.22, 0.142, 0.0, 0.0, 0.0]
 
 
 def _json_dump(value: Any) -> str:
@@ -821,6 +825,12 @@ def main() -> int:
     active_config = _plan_only_config(config)
 
   bundle = build_agent(active_config)
+  if _live_detect_enabled(active_config):
+    _replace_tool(
+      bundle,
+      "vision.open_vocab_detect",
+      _VisionQueryRetryTool(bundle.tool_registry.get("vision.open_vocab_detect")),
+    )
   injection_state = _inject_failure(bundle, args, active_config)
   trace = TraceContext()
   if args.execute and args.reset_home:
@@ -836,6 +846,8 @@ def main() -> int:
     "target": args.target,
     "max_decision_nodes": args.max_decision_nodes,
   }
+  if injection_state.get("live_detect"):
+    request_input["spatial_constraint"] = {}
   if args.spatial_relation:
     request_input["spatial_constraint"] = {
       "relation": args.spatial_relation,

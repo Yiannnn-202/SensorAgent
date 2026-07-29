@@ -8,6 +8,8 @@ script and reads back its manifest.
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Sequence
@@ -16,7 +18,7 @@ from sensoragent.schemas import ToolCall, ToolResult, ToolSpec
 
 DEFAULT_SCRIPT = "scripts/linux/capture_gazebo_rgbd_frame.py"
 DEFAULT_OUT_DIR = "logs/vision/latest"
-_ROS_PROBE = "import rclpy"
+_ROS_PROBE = "import numpy, rclpy; from sensor_msgs.msg import CameraInfo, Image"
 
 
 class VisionCaptureFrameTool:
@@ -46,6 +48,7 @@ class VisionCaptureFrameTool:
     out_dir: str = DEFAULT_OUT_DIR,
     timeout_seconds: float = 10.0,
     fallback_t_base_camera: Any = None,
+    fallback_t_world_camera: Any = None,
   ) -> None:
     self._script = str(script)
     self._ros_python = str(ros_python) if ros_python else None
@@ -57,16 +60,27 @@ class VisionCaptureFrameTool:
     self._out_dir = str(out_dir)
     self._timeout_seconds = float(timeout_seconds)
     self._fallback_t_base_camera = fallback_t_base_camera
+    self._fallback_t_world_camera = fallback_t_world_camera
 
-  def _python_executable(self) -> str:
+  def _python_executable(self) -> tuple[str, dict[str, str] | None]:
     if self._ros_python:
-      return self._ros_python
+      if _python_can_capture(self._ros_python):
+        return self._ros_python, None
+      ros_env = _sourced_ros_environment()
+      if ros_env is not None and _python_can_capture(self._ros_python, env=ros_env):
+        return self._ros_python, ros_env
+      return self._ros_python, None
     return _discover_ros_python()
 
-  def _argv(self, out_dir: Path, call: ToolCall) -> list[str]:
+  def _argv_and_env(
+    self,
+    out_dir: Path,
+    call: ToolCall,
+  ) -> tuple[list[str], dict[str, str] | None]:
     timeout = float(call.input.get("timeout_seconds", self._timeout_seconds))
+    python_executable, env = self._python_executable()
     return [
-      self._python_executable(),
+      python_executable,
       self._script,
       "--out-dir",
       str(out_dir),
@@ -82,7 +96,7 @@ class VisionCaptureFrameTool:
       str(call.input.get("world_frame", self._world_frame)),
       "--timeout",
       str(timeout),
-    ]
+    ], env
 
   def run(self, call: ToolCall) -> ToolResult:
     out_dir = Path(str(call.input.get("out_dir", self._out_dir)))
@@ -95,7 +109,14 @@ class VisionCaptureFrameTool:
         error=f"CAPTURE_FAILED: cannot create out_dir {out_dir}: {exc}",
       )
 
-    argv = self._argv(out_dir, call)
+    try:
+      argv, env = self._argv_and_env(out_dir, call)
+    except RuntimeError as exc:
+      return ToolResult(
+        tool=self.spec.name,
+        success=False,
+        error=f"CAPTURE_FAILED: {exc}",
+      )
     process_timeout = float(call.input.get("timeout_seconds", self._timeout_seconds)) + 30.0
     try:
       completed = subprocess.run(
@@ -103,6 +124,7 @@ class VisionCaptureFrameTool:
         capture_output=True,
         text=True,
         timeout=process_timeout,
+        env=env,
       )
     except FileNotFoundError as exc:
       return ToolResult(
@@ -138,36 +160,123 @@ class VisionCaptureFrameTool:
 
     if manifest.get("T_base_camera") is None and self._fallback_t_base_camera is not None:
       manifest["T_base_camera"] = self._fallback_t_base_camera
+    if manifest.get("T_world_camera") is None and self._fallback_t_world_camera is not None:
+      manifest["T_world_camera"] = self._fallback_t_world_camera
     manifest["manifest_path"] = str(manifest_path)
     manifest["out_dir"] = str(out_dir)
     return ToolResult(tool=self.spec.name, success=True, output=manifest)
 
 
-def _discover_ros_python() -> str:
-  import os
-  import shutil
-
+def _candidate_python_executables() -> list[str]:
   candidates: Sequence[str | None] = (
     os.environ.get("SENSORAGENT_ROS_PYTHON"),
     os.environ.get("ROS_PYTHON"),
+    "/usr/bin/python3",
     "python3",
+    str(
+      Path.home()
+      / "micromamba"
+      / "envs"
+      / "sensoragent-ros-humble"
+      / "bin"
+      / "python"
+    ),
+    str(
+      Path("/home")
+      / os.environ.get("USER", "")
+      / "snap"
+      / "copilot-cli"
+      / "common"
+      / "micromamba"
+      / "envs"
+      / "sensoragent-ros-humble"
+      / "bin"
+      / "python"
+    ),
   )
+  result: list[str] = []
+  seen: set[str] = set()
   for candidate in candidates:
     if not candidate:
       continue
     executable = shutil.which(candidate) or candidate
-    try:
-      probe = subprocess.run(
-        [executable, "-c", _ROS_PROBE],
-        capture_output=True,
-        text=True,
-        timeout=30.0,
-      )
-    except (OSError, subprocess.SubprocessError):
+    if executable in seen:
       continue
-    if probe.returncode == 0:
-      return executable
-  return "python3"
+    seen.add(executable)
+    result.append(executable)
+  return result
+
+
+def _python_can_capture(executable: str, env: dict[str, str] | None = None) -> bool:
+  try:
+    probe = subprocess.run(
+      [executable, "-c", _ROS_PROBE],
+      capture_output=True,
+      text=True,
+      timeout=30.0,
+      env=env,
+    )
+  except (OSError, subprocess.SubprocessError):
+    return False
+  return probe.returncode == 0
+
+
+def _sourced_ros_environment() -> dict[str, str] | None:
+  ros_distro = os.environ.get("ROS_DISTRO", "humble")
+  ros_setup = Path(f"/opt/ros/{ros_distro}/setup.bash")
+  if not ros_setup.is_file():
+    return None
+
+  setup_commands = [f"source {sh_quote(str(ros_setup))}"]
+  workspace_setup = Path("ros2_ws/install/setup.bash")
+  if workspace_setup.is_file():
+    setup_commands.append(f"source {sh_quote(str(workspace_setup))}")
+  command = "set -e; " + "; ".join(setup_commands) + "; env -0"
+  try:
+    completed = subprocess.run(
+      ["bash", "-lc", command],
+      capture_output=True,
+      timeout=30.0,
+    )
+  except (OSError, subprocess.SubprocessError):
+    return None
+  if completed.returncode != 0:
+    return None
+  env = dict(os.environ)
+  for entry in completed.stdout.split(b"\0"):
+    if not entry or b"=" not in entry:
+      continue
+    key, value = entry.split(b"=", 1)
+    env[key.decode("utf-8", "surrogateescape")] = value.decode(
+      "utf-8",
+      "surrogateescape",
+    )
+  return env
+
+
+def sh_quote(value: str) -> str:
+  return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def _discover_ros_python() -> tuple[str, dict[str, str] | None]:
+  candidates = _candidate_python_executables()
+  for executable in candidates:
+    if _python_can_capture(executable):
+      return executable, None
+
+  ros_env = _sourced_ros_environment()
+  if ros_env is not None:
+    for executable in candidates:
+      if _python_can_capture(executable, env=ros_env):
+        return executable, ros_env
+
+  checked = ", ".join(candidates)
+  raise RuntimeError(
+    "No Python interpreter with numpy, rclpy, and sensor_msgs was found, even "
+    "after sourcing ROS/workspace setup files. Set SENSORAGENT_ROS_PYTHON to a "
+    "ROS-capable Python or set configs/robot_sim.yaml "
+    f"integrations.vision.capture.ros_python. Checked: {checked}"
+  )
 
 
 def _load_manifest(manifest_path: Path, stdout: str) -> dict[str, Any] | None:

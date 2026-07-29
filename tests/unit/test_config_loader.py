@@ -50,5 +50,5 @@ class ConfigLoaderTest(TestCase):
     self.assertIsNone(config.scene.joint_poses["pick_staging_joints"])
     self.assertIsNone(config.scene.joint_poses["carry_joints"])
     self.assertIsNone(config.scene.joint_poses["place_staging_joints"])
-    self.assertEqual(config.scene.objects["block"][:3], [0.24, 0.18, 0.14])
+    self.assertEqual(config.scene.objects["block"][:3], [-0.24, -0.18, 0.14])
     self.assertEqual(config.scene.objects["cube"], config.scene.objects["block"])

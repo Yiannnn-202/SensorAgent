@@ -250,6 +250,24 @@ class LiveDetectRecoveryTreeTest(TestCase):
     self.assertEqual(detect_input["T_base_camera"], _T_BASE_CAMERA)
     self.assertEqual(detect_input["spatial_constraint"], {"relation": "left", "ordinal": 1})
 
+  def test_live_detection_defaults_missing_spatial_constraint(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    request = {"object_query": "roller", "target": "bin_cell_3"}
+    result = runtime.run(_live_tree(), request, TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    detect_input = next(
+      input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
+    )
+    self.assertEqual(detect_input["spatial_constraint"], {})
+
   def test_wrong_bin_is_observed_from_re_detection_not_commanded_pose(self) -> None:
     # The object is detected away from bin_cell_3 after the first place, so the
     # real verify tool must report WRONG_BIN. A commanded-pose check could not.

@@ -25,6 +25,7 @@ from test_gazebo_pick_pipeline import (  # noqa: E402
   _verify_final_pose,
   _wait_for_bridge,
   _wait_for_ready,
+  _world_to_base_position,
 )
 
 from sensoragent.agent import build_agent  # noqa: E402
@@ -40,7 +41,7 @@ def _position_from_args(values: list[float] | None, world_values: list[float] | 
   if base_position is not None:
     return base_position
   if world_position is not None:
-    return [world_position[0], world_position[1], world_position[2] - mount_z]
+    return _world_to_base_position(world_position, mount_z)
   return None
 
 
@@ -274,12 +275,12 @@ def main() -> int:
     args.pick_position,
     args.pick_world_position,
     args.robot_mount_z,
-  ) or [0.24, 0.23, 0.322 - args.robot_mount_z]
+  ) or _world_to_base_position([0.24, 0.23, 0.322], args.robot_mount_z)
   requested_place_position = _position_from_args(
     args.place_position,
     args.place_world_position,
     args.robot_mount_z,
-  ) or [0.50, 0.10, 0.32 - args.robot_mount_z]
+  ) or _world_to_base_position([0.50, 0.10, 0.32], args.robot_mount_z)
   place_position = (
     _add(pick_position, [float(value) for value in args.near_pick_place_offset])
     if args.place_mode == "near_pick"

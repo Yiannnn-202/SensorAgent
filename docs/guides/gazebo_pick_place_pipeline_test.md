@@ -120,8 +120,9 @@ Use world coordinates from Gazebo. In `test_gazebo_pick_place_pipeline.py`,
 --place-world-position X Y Z
 ```
 
-The scripts subtract `--robot-mount-z` from Z to convert world coordinates to
-`base_link` coordinates. The default mount height is `0.18 m`.
+The scripts apply the 180-degree robot mount yaw and subtract `--robot-mount-z`
+from Z to convert world coordinates to `base_link` coordinates. The default
+mount height is `0.18 m`.
 
 Use `base_link` coordinates directly:
 

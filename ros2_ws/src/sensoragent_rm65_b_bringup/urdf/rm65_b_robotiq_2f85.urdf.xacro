@@ -5,7 +5,7 @@
   <xacro:arg name="gripper_tcp_xyz" default="0 0 0.10"/>
   <xacro:arg name="gripper_tcp_rpy" default="0 0 0"/>
   <xacro:arg name="robot_mount_xyz" default="0 0 0.18"/>
-  <xacro:arg name="robot_mount_rpy" default="0 0 0"/>
+  <xacro:arg name="robot_mount_rpy" default="0 0 3.141592653589793"/>
 
   <link name="world"/>
   <joint name="world_to_rm65_b" type="fixed">

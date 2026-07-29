@@ -640,7 +640,7 @@ class VisionOpenVocabularyToolTest(TestCase):
 
     workspace = load_config(ROOT / "configs" / "robot_sim.yaml").scene.workspace
     self.assertEqual(workspace.get("frame"), "base_link")
-    self.assertEqual(workspace.get("x"), [0.09, 0.59])
+    self.assertEqual(workspace.get("x"), [-0.59, -0.09])
     self.assertEqual(workspace.get("y"), [-0.375, 0.375])
     self.assertEqual(workspace.get("table_z"), 0.12)
 

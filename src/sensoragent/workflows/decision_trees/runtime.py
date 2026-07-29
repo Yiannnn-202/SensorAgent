@@ -123,6 +123,8 @@ class DecisionTreeRuntime:
       )
 
     context: dict[str, Any] = dict(input_data)
+    if "spatial_constraint" in tree.inputs and "spatial_constraint" not in context:
+      context["spatial_constraint"] = {}
     results: list[DecisionNodeResult] = []
     current_name: str | None = tree.start
     self._logger.log("decision_tree_started", trace, {"decision_tree": tree.name})

@@ -54,7 +54,8 @@ The industrial camera topics should be available:
 
 Current scene layout:
 
-- one stable `block` only, spawned near base_link `[0.24, 0.18, 0.140]`;
+- one stable `block` only, spawned near base_link `[-0.24, -0.18, 0.140]`
+  after the 180-degree robot mount yaw;
 - a flat 2x2 target grid instead of a walled bin; colored areas are visual-only,
   while white boundaries are low-profile physical strips;
 - target names are `target_area_1` to `target_area_4`;
