@@ -1,7 +1,20 @@
 # Testing Guide
 
 The default suite uses mocks and fixtures; it does not require ROS 2, a robot,
-microphone access, or local model weights.
+microphone access, or local model weights. Two known exceptions are listed under
+[Known issues](#known-issues).
+
+## Dependencies
+
+```powershell
+python -m pip install -r requirements.txt
+python -m pip install pytest
+```
+
+`pytest` is not declared in `requirements.txt` or `pyproject.toml`, but
+`tests/unit/test_vision_evaluation.py` imports it, so `unittest discover` reports
+a collection error without it. Tests that need `onnxruntime`, model weights, or a
+microphone skip themselves when those assets are missing.
 
 ## Run the suite
 
@@ -10,11 +23,21 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-The suite includes unit and end-to-end tests for config loading, planner
+The suite currently collects 215 tests covering config loading, planner
 validation, tool/skill runtimes, ActionLists, DecisionTrees, audio fakes,
-contract validation, robot planning/control adapters, and open-vocabulary vision
-error handling. It also covers failure classification and recovery planning
-tools. It does not start ROS 2 or Gazebo.
+contract validation, robot planning/control adapters, open-vocabulary vision
+error handling, and the vision evaluation harness. It also covers failure
+classification and recovery planning tools. It does not start ROS 2 or Gazebo.
+
+## Known issues
+
+| Test | Symptom | Cause |
+| --- | --- | --- |
+| `tests/unit/test_vision_evaluation.py` | Import error during discovery | `pytest` is not installed or not declared as a dependency |
+| `tests/unit/test_gazebo_recovery_demo_script.py::GazeboRecoveryDemoScriptTest::test_wrong_table_demo_runs_without_gazebo` | `ROBOT_BRIDGE_UNAVAILABLE` on `127.0.0.1:8765` | The case runs the demo with `--execute`, so it uses the `http` robot backend from `configs/robot_sim.yaml` and needs a live bridge despite its name |
+
+Both are tracked in `TODO.md`. Treat a run with only these two failures as a
+clean offline baseline until they are fixed.
 
 ## Mock task pipeline
 
@@ -63,6 +86,25 @@ pytest -q tests\unit\test_vision_open_vocab.py
 Real Grounding DINO and SAM 2 inference is a separate environment acceptance
 step. Follow `docs/guides/vision_open_vocab_cn.md`; do not treat the mock unit
 tests as evidence of model accuracy or robot-coordinate correctness.
+
+## Single-image and dataset vision checks
+
+With `requirements-vision.txt` installed and local weights present, one image can
+be checked through the same Tool the workflows use:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m sensoragent.services.cli.main vision-detect --config configs\vision_grounding_dino.yaml --image data\vision\sample.png --query "red block"
+```
+
+Dataset-level evaluation uses the offline harness:
+
+```powershell
+python scripts\vision_eval.py validate --manifest configs\vision_dataset.example.jsonl --allow-missing-files
+python scripts\vision_eval.py run --manifest data\vision\competition_test.jsonl --config configs\vision_grounding_dino.yaml --output-dir runs\vision\competition_test
+```
+
+Manifests, images, weights, and `runs/` outputs stay local and untracked.
 
 ## Failure detection and recovery tests
 

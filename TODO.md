@@ -186,8 +186,8 @@ Completed:
 
 Remaining:
 
-- [ ] Add audio tool failure-path tests.
-- [ ] Add local-only tests that skip when model assets are unavailable.
+- [x] Add audio tool failure-path tests.
+- [x] Add local-only tests that skip when model assets are unavailable.
 - [ ] Decide whether TTS playback belongs in SensorAgent or the interaction frontend.
 - [ ] Add optional spoken task responses only after ownership is decided.
 - [ ] Remove unused Radish-derived code and confirm no ROS 2 audio dependency remains.
@@ -237,7 +237,7 @@ Goal: implement competition-specific task logic after the generic framework is s
   attributes, target bin cell, constraints, allowed skills, and retry policy.
 - [ ] Define the world-state schema needed by task decomposition: object instances,
   confidence, 3D pose, bin cells, robot state, gripper state, and task state.
-- [ ] Add the L1 fixed industrial pick-and-place ActionList workflow as the
+- [x] Add the L1 fixed industrial pick-and-place ActionList workflow as the
   deterministic baseline.
 - [x] Add the L2 industrial DecisionTree workflow with detect, plan-pick, pick,
   verify-grasp, plan-place, place, verify-place, success, and failure nodes.
@@ -247,11 +247,11 @@ Goal: implement competition-specific task logic after the generic framework is s
   pick failure, dropped object, wrong-bin placement, and pose abnormality.
 - [x] Add typed failure classification and deterministic recovery-plan tools.
 - [x] Add visual postcondition verification tools for lifted-object and target-bin checks.
-- [ ] Add a constrained planner prompt/schema that can only select approved
+- [x] Add a constrained planner prompt/schema that can only select approved
   workflows, skills, and failure-recovery policies.
 - [ ] Add fixture-based planner tests for standard commands, synonymous commands,
   ambiguous commands, missing target information, and invalid object categories.
-- [ ] Add fixture-based DecisionTree e2e tests for every required failure type.
+- [x] Add fixture-based DecisionTree e2e tests for every required failure type.
 - [ ] Add task log export for report tables and replay, including parsed intent,
   selected plan, node results, failure type, recovery attempts, and final status.
 - [ ] Add evaluation metrics logging for parse accuracy, sequence validity,
@@ -357,6 +357,24 @@ reinforcement-learning tasks.
 - [ ] Add industrial worlds, objects, and repeatable grasp scenarios.
 - [ ] Define the Gymnasium observation, action, reward, and termination contract.
 - [ ] Implement the first RL environment and scripted baseline.
+
+## Known issues
+
+Observed on 2026-07-29 with `python -m unittest discover -s tests -p 'test_*.py'`
+(215 tests collected, 2 errors) on a Windows machine without ROS 2:
+
+- [ ] `tests/unit/test_vision_evaluation.py` imports `pytest`, which is not declared
+  in `requirements.txt` or `pyproject.toml`. Either declare a test dependency set
+  or port the module to `unittest`.
+- [ ] `test_gazebo_recovery_demo_script.GazeboRecoveryDemoScriptTest.test_wrong_table_demo_runs_without_gazebo`
+  runs the demo with `--execute`, so it keeps the `http` robot backend from
+  `configs/robot_sim.yaml` and fails with `ROBOT_BRIDGE_UNAVAILABLE` unless the
+  bridge is running. The case needs a fake robot backend and a stateful fake
+  detector to match its name, or it should be moved out of the default suite.
+- [ ] `vision.capture_frame` and the `robot.plan_*` planning tools have no files
+  under `contracts/tools/`.
+- [ ] `src/sensoragent/services/api/` is still an empty placeholder while the
+  README and architecture describe API/MCP entry points as future work.
 
 ## Notes
 

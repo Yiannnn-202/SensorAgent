@@ -8,8 +8,18 @@ operation guides, and a small number of project planning records.
 - [Architecture](architecture.md) — the single source for repository design,
   ownership boundaries, runtime structure, configuration, logging, audio, and
   robotics simulation.
+- [Layered technical-report view](../architecture.md) — the derived
+  perception / decision / execution presentation of the same system, kept for
+  the competition report. `docs/architecture.md` wins on any disagreement.
 - [Development backlog](../TODO.md) — the single source for planned and incomplete
   work.
+- [Root README](../README.md) — entry point, quick start, CLI surface, and
+  common commands.
+
+## Package and interface documents
+
+- [Python package layout and registered targets](../src/sensoragent/README.md)
+- [Cross-module contracts](../contracts/README.md)
 
 ## Team documents
 
@@ -52,3 +62,15 @@ operation guides, and a small number of project planning records.
 Do not add another architecture or TODO document. Add a guide only for durable
 setup, operation, or verification instructions that do not belong in the root
 README.
+
+## Keeping documents current
+
+When code changes, update the affected documents in the same change:
+
+| Change | Documents to update |
+| --- | --- |
+| New or renamed Tool, Skill, ActionList, or DecisionTree | `src/sensoragent/README.md`, `docs/architecture.md`, and the matching contract in `contracts/` |
+| New CLI command or script runner | root `README.md` and `docs/guides/testing.md` |
+| New configuration key | the relevant `configs/*.yaml` comment and `docs/architecture.md` |
+| New dependency | `requirements*.txt` or `pyproject.toml` plus the guide that installs it |
+| Completed or newly discovered work | `TODO.md` |

@@ -169,7 +169,10 @@ public code comments.
 
 **Architecture** — keep repository-wide design and ownership boundaries in the
 single `docs/architecture.md` file. Do not create competing module architecture
-documents.
+documents. The root `architecture.md` is the one allowed derived view: it
+presents the same system in perception / decision / execution layers for the
+competition technical report and must be updated whenever
+`docs/architecture.md` changes.
 
 **Operational guides** — add a file under `docs/guides/` only when contributors
 need durable setup, operation, or verification instructions. Prefer updating an

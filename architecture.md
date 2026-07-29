@@ -1,5 +1,10 @@
 # SensorAgent Technical Architecture
 
+> Scope note: this document is the layered (perception / decision / execution)
+> view used for the competition technical report. The single repository
+> architecture source is [`docs/architecture.md`](docs/architecture.md); if the
+> two disagree, that file wins.
+
 SensorAgent is an embodied-agent orchestration repository for an RM65-B robotic
 arm system with local speech input, open-vocabulary perception, task planning,
 workflow execution, and ROS 2 simulation integration. The system is organized as
@@ -108,6 +113,19 @@ For deterministic simulation and tests, `vision.config_detect` reads object
 poses directly from `scene.objects` in the runtime configuration. This provides a
 stable baseline when perception model weights or camera capture are not needed.
 
+In Gazebo, `vision.capture_frame` produces the RGB-D input for the model path.
+It runs `scripts/linux/capture_gazebo_rgbd_frame.py` in the ROS 2 Python
+interpreter (probed through `SENSORAGENT_ROS_PYTHON`, `ROS_PYTHON`, then
+`python3`), subscribes to the industrial camera topics, resolves the camera
+transform through TF with a configured fallback, and writes an image, depth,
+camera-info, and transform manifest under `logs/vision/`.
+
+Model quality is measured offline instead of by single-image confidence.
+`src/sensoragent/evaluation/` and `scripts/vision_eval.py` validate a portable
+JSONL dataset manifest, run the same `vision.open_vocab_detect` Tool over the
+dataset with one persistent model instance, and write per-sample results,
+aggregate metrics, Tool logs, and optional overlays.
+
 ### Visual verification
 
 Postcondition checks are split from detection. `vision.verify_object_lifted` and
@@ -157,7 +175,10 @@ and place-only workflows. They are defined in
 DecisionTrees add conditional branches, retries, and recovery. The current
 industrial recovery tree classifies failures from perception, pick, place,
 release, wrong-bin verification, or bridge calls, then rejoins the main flow
-through bounded local recovery branches.
+through bounded local recovery branches. With
+`integrations.vision.recovery_live_detect: true` the tree is rebuilt around live
+RGB-D capture and open-vocabulary re-detection, so a wrong bin is observed
+rather than inferred from the commanded release pose.
 
 ### Failure handling
 
@@ -253,6 +274,7 @@ Implemented in the repository:
 - Local Silero VAD, SenseVoice ASR, and file-based TTS integration.
 - Open-vocabulary vision tool abstraction with RGB-D geometry, spatial
   selection, and Grounding DINO/SAM2 configuration hooks.
+- Gazebo RGB-D capture tool and an offline dataset evaluation harness.
 - Config-based deterministic object detection for simulation baselines.
 - Robot tools, pick/place skills, named place target resolution, and verification
   tools.

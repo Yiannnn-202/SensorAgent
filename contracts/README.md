@@ -59,6 +59,22 @@ errors
 
 `input_schema` and `output_schema` use JSON Schema-style objects. During development, tests validate mock tool inputs and outputs against these contracts.
 
+## Current coverage
+
+Contracts exist for the mock, audio, vision, recovery, arm, and gripper tools
+listed above. Three implemented tools intentionally have no contract file yet
+because their interface is still repository-internal:
+
+```text
+vision.capture_frame        Gazebo RGB-D capture helper tied to local ROS 2 topics
+robot.plan_top_down_pick    Deterministic planning helper over RobotPose/PickPlan
+robot.plan_oriented_pick    Deterministic planning helper over RobotPose/PickPlan
+robot.plan_place            Deterministic planning helper over RobotPose/PlacePlan
+```
+
+Add a contract for any of them before another module or language calls it
+directly.
+
 ## Usage
 
 Contracts are used to:

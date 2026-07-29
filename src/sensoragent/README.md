@@ -10,9 +10,11 @@ src/sensoragent/
 ├── agent/          runtime assembly, task lifecycle, static/LLM planning
 ├── config/         YAML and environment configuration
 ├── contracts/      JSON contract validation helpers
+├── evaluation/     offline vision dataset evaluation
 ├── integrations/   local audio, microphone, VAD, LLM, and robot HTTP clients
 ├── logger/         structured JSONL task logging
 ├── mcp/            current mock MCP-shaped endpoint
+├── recovery/       failure evidence, classification, and recovery planning
 ├── schemas/        Agent, Tool, Skill, workflow, and plan data models
 ├── services/       CLI entry point and future API package
 ├── skills/         Skill registry/runtime, mock/audio/robot skills
@@ -28,6 +30,7 @@ Tools:
 ```text
 vision.mock_detect
 vision.config_detect
+vision.capture_frame
 vision.open_vocab_detect
 robot.mock_pick
 robot.mock_place
@@ -53,6 +56,12 @@ audio.listen_vad_transcribe
 audio.transcribe
 audio.speak
 ```
+
+Tools are registered from the `tools.enabled` list in the active config.
+`vision.config_detect`, `vision.open_vocab_detect`, `vision.capture_frame`,
+`vision.verify_object_in_bin`, and `robot.resolve_place_target` are built from
+`scene` and `integrations.vision` settings; the robot and gripper tools share the
+`RobotControlClient` selected by `integrations.robot.backend` (`fake` or `http`).
 
 Skills:
 
@@ -86,7 +95,16 @@ industrial.recovery_pick_place_tree
 
 It classifies failed nodes through `recovery.classify_failure`, plans bounded
 local recovery through `recovery.plan`, and branches into re-detect, re-pick,
-re-place, gripper release, or bridge reset paths.
+re-place, gripper release, or bridge reset paths. With
+`integrations.vision.recovery_live_detect: true` it is rebuilt around
+`vision.open_vocab_detect`, optional `vision.capture_frame` steps, and live
+post-place re-detection.
+
+## CLI entry point
+
+`services/cli/main.py` exposes `mock-pick-place`, `run-task`, `listen-task`, and
+`vision-detect`. `services/api/` is reserved for the future HTTP/WebSocket/MCP
+service and contains no implementation yet.
 
 ## Audio path
 

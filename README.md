@@ -52,7 +52,10 @@ SensorAgent is not responsible for:
 | SensorAgent-to-Gazebo/MoveIt HTTP bridge | Implemented and used by Gazebo test scripts; automated ROS acceptance is not in the default suite |
 | Industrial config-detect pick/place ActionLists | Implemented for the current tabletop world |
 | Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
-| Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow; Gazebo acceptance pending |
+| Gazebo RGB-D frame capture Tool (`vision.capture_frame`) | Implemented; requires a ROS 2 Python interpreter on Ubuntu |
+| Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
+| Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
+| HTTP/WebSocket/MCP service entry points | Not implemented; only the CLI exists |
 | Physical robot connection | Not connected |
 | Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
 | Gymnasium RL environment | Not implemented |
@@ -66,38 +69,87 @@ place targets, optional open-vocabulary vision, visual verification, recovery
 classification tools, and `industrial.recovery_pick_place_tree`. The physical
 robot is not connected.
 
+## Quick Start
+
+Python 3.12 is required for the Agent package.
+
+```powershell
+python -m pip install -r requirements.txt          # core runtime + local audio
+python -m pip install -r requirements-vision.txt   # only for the vision model path
+python -m pip install onnxruntime pytest           # Silero VAD and the pytest-based tests
+```
+
+Runtime configuration is resolved in this order: an explicit `--config` path,
+`SENSORAGENT_CONFIG`, `SENSORAGENT_ENV` mapped to `configs/<env>.yaml`, then
+`configs/mock.yaml`. Copy `.env.example` to an ignored `.env` for LLM
+credentials and logging overrides. Other recognized variables are
+`SENSORAGENT_ROS_PYTHON` (ROS 2 interpreter used by RGB-D capture),
+`SENSORAGENT_GROUNDING_DINO_MODEL`, and `SENSORAGENT_SAM2_WEIGHTS`.
+
+Run the default offline test suite:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+See the [testing guide](docs/guides/testing.md) for the suite's scope and its
+current known issues.
+
 ## Repository Layout
 
 ```text
 sensoragent/
 ├── configs/                 # Project-level configuration files
+├── contracts/               # Language-neutral cross-module JSON contracts
 ├── docs/                    # Architecture, team documents, and guides
-├── scripts/                 # Project-level startup and maintenance scripts
+├── logs/                    # Ignored task logs, traces, audio, and captures
+├── models/                  # Ignored local ASR, TTS, and vision weights
+├── scripts/                 # Windows mock runner, vision evaluation, Linux Gazebo runners
 ├── ros2_ws/                 # Local ROS 2 simulation workspace
 │   └── src/
 │       ├── rm_description/                  # Locally imported RM65-B model
 │       ├── rm_gazebo/                       # Locally imported arm-only Gazebo stack
 │       ├── rm_65_config/                    # Locally imported arm-only MoveIt config
 │       ├── robotiq_description/             # Vendored Robotiq 2F-85 model
-│       ├── sensoragent_rm65_b_bringup/      # Combined arm/gripper stack
-│       └── sensoragent_robot_bridge/         # HTTP-to-ROS 2 simulation bridge
-├── simulation/              # Gazebo worlds, models, and scenarios
+│       ├── sensoragent_rm65_b_bringup/      # Combined arm/gripper stack, worlds, models
+│       ├── sensoragent_robot_bridge/        # HTTP-to-ROS 2 simulation bridge
+│       └── sensoragent_rm65_b_{description,gazebo,moveit_config}/  # Reserved, empty
+├── simulation/              # Reserved Gazebo worlds, models, and scenarios
 ├── reinforcement_learning/  # Future RL environments and policies
 ├── src/
 │   └── sensoragent/
 │       ├── agent/           # Agent loop, planning, orchestration
-│       ├── mcp/             # MCP-style contracts and helpers
-│       ├── skills/          # High-level reusable capabilities
-│       ├── tools/           # Atomic tool adapters
-│       ├── workflows/       # ActionList and DecisionTree workflows
-│       ├── logger/          # Structured agent logging
-│       ├── state/           # Agent state and task context
-│       ├── integrations/    # External service adapters
-│       ├── schemas/         # Shared schemas
 │       ├── config/          # Configuration loading code
-│       └── services/        # API and CLI entry points
+│       ├── contracts/       # JSON contract validation helpers
+│       ├── evaluation/      # Offline vision dataset evaluation
+│       ├── integrations/    # External and local service adapters
+│       ├── logger/          # Structured agent logging
+│       ├── mcp/             # MCP-style contracts and helpers
+│       ├── recovery/        # Failure evidence, classification, recovery planning
+│       ├── schemas/         # Shared schemas
+│       ├── services/        # CLI entry point and reserved API package
+│       ├── skills/          # High-level reusable capabilities
+│       ├── state/           # Agent state and task context
+│       ├── tools/           # Atomic tool adapters
+│       └── workflows/       # ActionList and DecisionTree workflows
 └── tests/                   # Unit and integration tests
 ```
+
+## Command-line Surface
+
+`python -m sensoragent.services.cli.main` (or the installed `sensoragent`
+script) currently exposes:
+
+| Command | Purpose |
+| --- | --- |
+| `mock-pick-place` | Run the mock skill chain end to end |
+| `run-task` | Run a natural-language task through the static or LLM planner |
+| `listen-task` | Record one utterance, transcribe it, and plan from the transcript |
+| `vision-detect` | Run open-vocabulary detection on one RGB(-D) image and print the Tool result |
+
+Gazebo workflows are driven by `scripts/linux/` runners instead of CLI
+subcommands. See the [testing guide](docs/guides/testing.md) for the full list.
 
 ## Documentation
 
@@ -107,7 +159,8 @@ Start from the documentation index:
 
 Key SensorAgent documents:
 
-- [Architecture](docs/architecture.md)
+- [Architecture (single source)](docs/architecture.md)
+- [Layered technical-report view](architecture.md)
 - [Competition technical plan](COMPETITION_TECHNICAL_PLAN_CN.md)
 - [Development backlog](TODO.md)
 - [Testing guide](docs/guides/testing.md)
@@ -115,11 +168,14 @@ Key SensorAgent documents:
 - [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
 - [RM65-B named joint pose tuning](docs/guides/rm65_b_named_joint_poses.md)
 - [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
+- [Industrial tabletop Gazebo environment](docs/guides/industrial_gazebo_environment_cn.md)
 - [Industrial intent to ActionList guide](docs/guides/intent_to_actionlist_cn.md)
 - [Failure detection and recovery guide](docs/guides/failure_recovery_cn.md)
 - [Gazebo failure recovery demo](docs/guides/gazebo_recovery_demo_cn.md)
 - [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
+- [Gazebo vision VM setup](docs/guides/gazebo_vision_vm_setup.md)
 - [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
+- [Team conventions](docs/team/convention.md)
 
 ## Vision Model Evaluation
 

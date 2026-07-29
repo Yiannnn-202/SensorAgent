@@ -48,13 +48,43 @@ The LLM planner uses an OpenAI-compatible endpoint and returns a validated
 the runtime's allowed ActionList whitelist and does not directly execute low-level
 tools.
 
+### Layered view
+
+The same runtime can be read as three layers. Perception turns human commands
+and scene observations into structured inputs, decision turns those inputs into
+an executable plan, and execution drives simulation or future hardware:
+
+```mermaid
+flowchart TB
+  mic["Microphone"] --> vad["Silero VAD"]
+  vad --> asr["SenseVoice ASR"]
+  asr --> text["Command text"]
+  rgbd["RGB-D frame (vision.capture_frame)"] --> det["vision.open_vocab_detect"]
+  det --> pose["Object pose in base_link"]
+  scene["scene.objects (vision.config_detect)"] --> pose
+  text --> plan["AgentRuntime + planner"]
+  pose --> plan
+  plan --> flow["ActionList / DecisionTree"]
+  flow --> tools["Skills and Tools"]
+  tools --> bridge["HTTP robot bridge"]
+  bridge --> sim["MoveIt 2 / ros2_control / Gazebo"]
+  bridge -.-> hw["Future hardware adapter"]
+```
+
 ### Tools, skills, and workflows
 
 - **Tools** are atomic typed capabilities such as `audio.transcribe`,
-  `vision.open_vocab_detect`, `robot.move_pose`, or `gripper.open`.
+  `vision.capture_frame`, `vision.open_vocab_detect`, `robot.move_pose`, or
+  `gripper.open`.
 - **Skills** compose reusable tool behavior.
 - **ActionLists** execute ordered steps.
 - **DecisionTrees** add conditions, retries, and recovery branches.
+
+Tools that need runtime data from the configuration file (scene catalogs, place
+targets, camera and capture settings) are built by `sensoragent.agent.bootstrap`
+from `SensorAgentConfig`. The current scene-driven tools are
+`vision.config_detect`, `vision.open_vocab_detect`, `vision.capture_frame`,
+`vision.verify_object_in_bin`, and `robot.resolve_place_target`.
 
 Tool execution includes contract validation, timeout handling, retry policy, typed
 errors, and structured logging.
@@ -84,6 +114,14 @@ Registered durable DecisionTrees currently include:
 | DecisionTree | Purpose |
 | --- | --- |
 | `industrial.recovery_pick_place_tree` | Industrial pick/place with classified recovery for perception, pick, place, release, wrong-bin, and bridge failures |
+
+The recovery tree is built in one of two modes. By default it reuses the
+deterministic `vision.config_detect` baseline. When
+`integrations.vision.recovery_live_detect` is true, as in `configs/robot_sim.yaml`,
+it is rebuilt around `vision.open_vocab_detect`, an optional `vision.capture_frame`
+step before each detection, live re-detection after placing, and
+spatial-constraint inputs. Live mode observes a wrong bin instead of inferring it
+from the commanded release pose.
 
 The initial robot control surface is backend-neutral:
 
@@ -201,6 +239,13 @@ Humble:
 | `robotiq_description` | Vendored | Robotiq 2F-85 Xacro and meshes |
 | `sensoragent_rm65_b_bringup` | Project-owned | Combined Gazebo, ros2_control, and MoveIt integration |
 | `sensoragent_robot_bridge` | Project-owned | HTTP-to-MoveIt/GripperCommand simulation adapter |
+| `sensoragent_rm65_b_description` | Reserved | Placeholder for a future project-owned description split |
+| `sensoragent_rm65_b_gazebo` | Reserved | Placeholder for a future project-owned Gazebo split |
+| `sensoragent_rm65_b_moveit_config` | Reserved | Placeholder for a future project-owned MoveIt split |
+
+The three reserved packages currently contain only a `.gitkeep` file. The
+combined bringup package still owns the description, Gazebo, and MoveIt
+configuration used by the working stack.
 
 Upstream files are imported locally by
 `scripts/linux/fetch_rm65_b_upstream.sh` because redistribution permission is
@@ -274,15 +319,21 @@ automated ROS 2 acceptance is still outside the default Python suite.
 
 ## Industrial workflow and vision path
 
-The current tabletop competition path has two perception options:
+The current tabletop competition path has three perception building blocks:
 
 ```text
 vision.config_detect
   reads named object poses from configs/robot_sim.yaml scene.objects
 
+vision.capture_frame
+  runs scripts/linux/capture_gazebo_rgbd_frame.py in the ROS 2 Python
+  interpreter and writes one RGB, depth, camera-info, and TF manifest set
+
 vision.open_vocab_detect
-  reads RGB-D frame files, uses a YOLOE/Ultralytics backend when weights are
-  installed, and projects bbox-center depth into base_link coordinates
+  reads RGB-D frame files, uses a YOLOE/Ultralytics or Grounding DINO + SAM 2
+  backend when weights are installed, filters candidates against
+  scene.workspace, applies spatial constraints, and projects the detection into
+  base_link coordinates
 ```
 
 `industrial.pick_place_actionlist` uses `vision.config_detect` for deterministic
@@ -298,6 +349,43 @@ Postcondition verification is split into robot-state and vision-state checks.
 object poses against expected lift and target-cell conditions. These verification
 tools produce reportable failures such as `DROPPED_OBJECT` and `WRONG_BIN`,
 which feed the recovery planner.
+
+### Vision evaluation harness
+
+`src/sensoragent/evaluation/` and `scripts/vision_eval.py` provide offline model
+evaluation that reuses the same `vision.open_vocab_detect` Tool instead of a
+parallel inference path:
+
+```text
+JSONL dataset manifest
+→ scripts/vision_eval.py validate   (schema, leakage, and license checks)
+→ scripts/vision_eval.py run        (one persistent model instance)
+→ per-sample JSONL, aggregate metrics, Tool logs, optional overlays
+```
+
+Datasets, weights, caches, and `runs/` outputs stay local and are not tracked.
+The manifest contract, metrics, and teacher-to-student plan live in
+`docs/guides/vision_open_vocab_cn.md`.
+
+## Command-line surface
+
+`src/sensoragent/services/cli/main.py` is the only implemented service entry
+point. The HTTP/WebSocket/MCP service layer under `src/sensoragent/services/api/`
+is still an empty placeholder.
+
+| Command | Purpose |
+| --- | --- |
+| `mock-pick-place` | Run the mock skill chain end to end |
+| `run-task` | Run a natural-language task through the static or LLM planner |
+| `listen-task` | Record one utterance, transcribe it, and plan from the transcript |
+| `vision-detect` | Run open-vocabulary detection on one RGB(-D) image and print the Tool result |
+
+Linux Gazebo workflows are driven by `scripts/linux/` runners rather than CLI
+subcommands: `run_industrial_actionlist_sim.py`,
+`run_gazebo_vision_actionlist_sim.py`, `run_gazebo_recovery_demo.py`,
+`test_gazebo_pick_pipeline.py`, `test_gazebo_place_pipeline.py`,
+`test_gazebo_pick_place_pipeline.py`, `capture_gazebo_rgbd_frame.py`, and
+`record_rm65_joint_pose.py`.
 
 ## Runtime compatibility boundary
 
@@ -339,18 +427,45 @@ SensorAgent/
 │   ├── architecture.md      single repository architecture source
 │   ├── guides/              operational setup and test guides
 │   └── team/                team-wide conventions and context
+├── logs/                    ignored runtime logs, task traces, and captures
+├── models/                  ignored local ASR, TTS, and vision weights
 ├── reinforcement_learning/ future RL structure
 ├── ros2_ws/                 local RM65-B ROS 2 simulation workspace
-├── simulation/              Gazebo worlds, models, and scenarios
+├── scripts/                 Windows mock runner, vision evaluation, Linux Gazebo runners
+├── simulation/              reserved Gazebo worlds, models, and scenarios
 ├── src/sensoragent/         Python agent runtime
 ├── tests/                   unit, end-to-end, ROS, simulation, and RL tests
+├── architecture.md          layered technical-report view of this document
 ├── README.md                entry point and common commands
 └── TODO.md                  authoritative development backlog
 ```
 
+The Python package layout is:
+
+```text
+src/sensoragent/
+├── agent/          runtime assembly, task lifecycle, static/LLM planning
+├── config/         YAML and environment configuration
+├── contracts/      JSON contract validation helpers
+├── evaluation/     offline vision dataset evaluation
+├── integrations/   audio, microphone, VAD, LLM, and robot clients
+├── logger/         structured JSONL task logging
+├── mcp/            mock MCP-shaped endpoint
+├── recovery/       failure evidence, classification, and recovery planning
+├── schemas/        Agent, Tool, Skill, workflow, and plan data models
+├── services/       CLI entry point and reserved API package
+├── skills/         Skill registry/runtime and mock/audio/robot skills
+├── state/          in-memory task store and event stream
+├── tools/          Tool registry/runtime and mock/audio/vision/robot tools
+└── workflows/      ActionList and DecisionTree runtimes and definitions
+```
+
 ## Documentation policy
 
-This file is the only repository architecture document. `TODO.md` is the only
+This file is the only repository architecture document. The root
+`architecture.md` is a derived layered (perception / decision / execution) view
+kept for the competition technical report; when the two disagree, this file
+wins and the root view must be updated to match. `TODO.md` is the only
 development backlog. Team-wide material stays under `docs/team/`; operational
 instructions stay under `docs/guides/`. Superseded documents are deleted and remain
 available through Git history rather than being copied into an archive folder.
