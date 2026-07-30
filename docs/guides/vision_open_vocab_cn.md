@@ -17,42 +17,43 @@ vision.open_vocab_detect
 评测工具和单图叠加结果，但**没有已经用比赛数据训练完成的模型**。之前的扳手、螺丝刀、
 滚筒和齿轮测试属于正样本冒烟测试，只能证明真实模型推理和掩码输出已经跑通。
 
-近期需要的非创新基础版确定为 `YOLO11n-seg` 固定类别实例分割模型。它负责常规快速
-推理，Grounding DINO + SAM 2 用来生成标注草稿、检查困难样本，并保留为低置信度回退
-候选。两者不是互相替代关系：前者解决稳定和速度，后者解决开放类别和辅助标注。
+当前“训练”明确指**直接微调 Grounding DINO 本体**。第一轮先让模型学习比赛类别文本
+与目标框之间的对应关系，SAM 2 继续负责由框细化掩码。YOLO11n-seg 不再作为近期主训练
+对象，只保留为后续可选轻量学生模型：只有 Grounding DINO 微调结果跑出来后，确实达不到
+机械臂侧的延迟、显存或模型大小预算，才有必要再训练学生模型做同测试集比较。
 
 仓库已提供开训前检查和训练入口：
 
 ```powershell
 # 只检查数据，不加载模型、不占用 GPU
-python scripts\vision_train.py `
-  --data data\vision\competition\dataset.yaml `
+python scripts\vision_train_grounding_dino.py `
+  --config configs\vision_train_grounding_dino.example.yaml `
+  --manifest data\vision\competition_train.jsonl `
   --dry-run
 
-# 数据检查通过后训练基础版
-python scripts\vision_train.py `
-  --data data\vision\competition\dataset.yaml `
-  --model models\vision\yolo11n-seg.pt `
-  --epochs 100 `
-  --imgsz 640 `
-  --batch 8 `
-  --device 0
+# 数据检查通过后直接微调 Grounding DINO
+python scripts\vision_train_grounding_dino.py `
+  --config configs\vision_train_grounding_dino.example.yaml `
+  --manifest data\vision\competition_train.jsonl `
+  --device cuda:0
 ```
 
-如果 CUDA 张量测试正常，但 Ultralytics 首次训练长时间停在 AMP 兼容检查，可先追加
-`--no-amp` 验证完整训练链路；这会关闭混合精度，正式训练前再解决 AMP 初始化或额外权重
-下载问题。不要在同一输出目录同时启动多个训练进程。
+训练配置模板在 `configs/vision_train_grounding_dino.example.yaml`，数据格式模板在
+`configs/vision_train_grounding_dino.example.jsonl`。配置里的 `classes` 是实际输入模型
+的候选文本顺序，目标框的 `class_labels` 按这个顺序映射，不能在同一轮训练中途改顺序。
+例如工程对象标识 `hex_nut` 对应文本提示 `hex nut`。训练框使用原图绝对坐标
+`bbox_xyxy=[x_min,y_min,x_max,y_max]`，脚本再交给官方处理器转换成模型需要的归一化
+中心点格式。
 
-数据格式模板在 `configs/vision_train.example.yaml`。检查器会拒绝类别编号不连续、
-检测框格式冒充分割多边形、坐标超出 `0..1`、空训练集，以及同一图片同时出现在
-train/val/test 的情况。训练结束后会在本地运行目录写出最佳权重路径、SHA-256、类别表
-和关键参数。权重、图片、标签和 `runs/` 仍不进入 Git。
+当前已验证配置固定 `batch_size: 1`，通过 `gradient_accumulation_steps` 调整有效批量，
+用于规避当前 Transformers 版本在更大 batch 下的标签图偏移风险。训练结束后，本地目录
+会保存 `checkpoint-best`、`checkpoint-last`、数据/清单哈希、checkpoint SHA-256、软件
+版本、参数、每轮损失和耗时。权重、图片、标签、缓存和 `runs/` 都不进入 Git。
 
-真正的开训条件只有三个：最终类别表冻结；第一批图片完成分割标注并人工复核；完整采集
-会话先按 train/val/test 分开。条件齐全当天即可启动训练，RTX 4060 上几百张图片的
-YOLO11n-seg 首轮训练通常按小时计；影响交付时间的主要因素是数据采集、标注和失败样本
-补拍，而不是模型下载。没有固定验证集和真实工位困难样本时，不能把一次训练结果称为
-“稳定版本”。
+真正开训前需要冻结类别文本顺序；每张图完成检测框标注并人工复核；完整采集会话先按
+train/val/test 分开。SAM 2 掩码可以同时保留，供掩码复核、后续分割训练和消融使用，
+但不能写成 Grounding DINO 本身的训练目标。没有冻结验证集和真实工位困难样本时，不能
+把一次微调结果称为“稳定版本”。
 
 ## 1. 处理流程
 
@@ -309,8 +310,43 @@ scene:
 
 ## 8. 数据清单与防泄漏检查
 
-训练集和测试集统一使用 JSONL 清单。每一行是一张图，示例在
-`configs/vision_dataset.example.jsonl`。核心字段如下：
+仓库使用两类 JSONL 清单：`configs/vision_dataset.example.jsonl` 用于推理评测，
+`configs/vision_train_grounding_dino.example.jsonl` 用于 Grounding DINO 微调。两者都按
+一行一张图记录相对路径、来源和 `scene_id`，但训练清单允许一张图包含多个目标框。
+
+训练清单核心字段如下：
+
+```json
+{
+  "sample_id": "sim_train_gear_001",
+  "scene_id": "sim_train_gear_a",
+  "split": "train",
+  "image": "images/train/gear_001.png",
+  "objects": [
+    {
+      "class_name": "gear",
+      "bbox_xyxy": [120, 90, 360, 330],
+      "mask": "masks/train/gear_001.png"
+    }
+  ],
+  "source": {
+    "kind": "simulation",
+    "capture_session": "sim_train_gear_a"
+  }
+}
+```
+
+`objects: []` 表示负样本。`class_name` 必须与训练 YAML 中的文本提示完全一致；`mask`
+可选，只保留作 SAM 2/分割复核，不会传给 Grounding DINO 损失。训练预检命令：
+
+```powershell
+python scripts\vision_train_grounding_dino.py `
+  --config configs\vision_train_grounding_dino.example.yaml `
+  --manifest data\vision\competition_train.jsonl `
+  --dry-run
+```
+
+下面是推理评测清单示例：
 
 ```json
 {
@@ -336,7 +372,7 @@ scene:
 `source.url` 和已核对的 `source.license`。同一连续拍摄场景的邻近帧使用同一个
 `scene_id`，整个场景只能进入一个 split，不能把相邻帧分别放进训练集和测试集。
 
-仅检查模板结构：
+仅检查推理评测模板结构：
 
 ```powershell
 python scripts\vision_eval.py validate `
@@ -390,8 +426,10 @@ python scripts\vision_eval.py run `
 
 语义训练优先级：
 
-1. 比赛 Gazebo 精确类别：`roller`、`gear`、`hex_nut`、`short_bolt`、
-   `stepped_shaft`、`flange`；自动生成多视角、遮挡和光照变化后人工抽检标注。
+1. 比赛 Gazebo 精确对象标识：`roller`、`gear`、`hex_nut`、`short_bolt`、
+   `stepped_shaft`、`flange`；Grounding DINO 文本提示分别使用 `roller`、`gear`、
+   `hex nut`、`short bolt`、`stepped shaft`、`flange`。自动生成多视角、遮挡和光照
+   变化后人工复核检测框。
 2. 团队自采真实工位数据：使用最终相机、背景、摆放方式和干扰物，记录完整采集会话。
 3. Open Images V7：可补充 `Wrench`、`Screwdriver`、`Drill (Tool)`、`Tool`，但没有
    覆盖全部比赛零件，下载前还要核对图片级许可证。
@@ -405,34 +443,32 @@ python scripts\vision_eval.py run `
 
 任何公开数据进入训练前都要记录下载页、许可证、原始类别、映射后的比赛类别和处理
 脚本。比赛现场图片是否允许上传公共仓库由团队确认；未确认前只提交清单模板和脚本，
-不提交原图。
+不提交原图。公开数据集的详细筛选、下载入口、许可证和 COCO 转换命令见[视觉公开数据集选择与使用](vision_public_datasets_cn.md)。
 
-## 11. 教师模型、学生模型与消融
+## 11. 当前主模型、掩码模块与后续学生模型
 
-第三阶段采用教师/学生方案：
+当前阶段先直接微调主模型：
 
 ```mermaid
 flowchart LR
-  data["Gazebo + 真实工业图"] --> teacher["Grounding DINO + SAM 2 教师"]
-  teacher --> draft["框和掩码草稿"]
-  draft --> review["人工逐张复核"]
-  review --> student["固定类别轻量学生模型"]
-  student --> route["常规快速推理"]
-  route -->|"低置信度或困难样本"| teacher
+  data["Gazebo + 真实工业图"] --> review["人工复核文本类别和检测框"]
+  review --> dino["直接微调 Grounding DINO"]
+  dino --> box["文本对应检测框"]
+  box --> sam["SAM 2 细化掩码"]
+  dino --> assess["固定测试集评测"]
+  assess -->|"部署预算不满足时"| student["可选 YOLO11n-seg 学生模型"]
 ```
 
-学生模型候选可以是 YOLOE 或固定类别实例分割模型，但必须在同一个测试 split 上比较后
-再决定。至少保留以下消融：是否使用工业微调数据、是否使用 SAM 2 掩码、不同模型尺寸、
-不同输入分辨率、是否启用教师回退。每次同时记录精度、延迟、显存、模型文件大小，不能
-只报“更快”或“更准”。
+第一轮只训练 Grounding DINO，避免同时比较过多架构。建议每类先准备 20～30 张不同
+场景图片完成 V0，再累计到至少 50 张，并加入负样本、多实例、遮挡、反光和相似干扰物。
+这只是尽快得到可测内部模型的起点，不是工业稳定性的充分条件。结果出来后根据冻结验证集
+的漏检和误检定向补数据。
 
-当前基础版先固定为 YOLO11n-seg，避免在第一轮同时比较过多架构。建议首轮每类至少准备
-50 张经过复核的图片，并补充负样本、多实例、遮挡、反光和相似干扰物；这个数量只用于
-尽快得到可测的内部基线，不是工业稳定性的充分条件。首轮结果出来后，根据固定验证集的
-漏检和误检定向补数据，再决定是否扩大到 YOLO11s-seg、YOLOE 或教师/学生混合路由。
-
-教师输出只能作为标注草稿。细长工具、反光金属、齿轮孔洞、互相遮挡的同类零件都容易
-产生错误掩码，未经人工复核的伪标签不能直接当真值。
+如果直接微调后的 Grounding DINO 确实不满足部署预算，再把它的预测和人工真值用于
+YOLO11n-seg 等轻量学生模型。学生模型必须与主模型在完全相同的 test split 上比较。
+至少记录是否微调、是否使用 SAM 2、模型尺寸、输入分辨率、精度、延迟、显存和文件大小，
+不能只报“更快”或“更准”。预训练 Grounding DINO 和 SAM 2 的输出都只能作为标注草稿，
+细长工具、反光金属、齿轮孔洞和互相遮挡的同类零件必须人工复核。
 
 ## 12. 当前证据与待补项
 

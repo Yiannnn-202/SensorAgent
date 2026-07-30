@@ -106,17 +106,23 @@ python scripts\vision_eval.py run --manifest data\vision\competition_test.jsonl 
 
 Manifests, images, weights, and `runs/` outputs stay local and untracked.
 
-The fixed-class segmentation training preflight checks the class map, required
-splits, split leakage, class IDs, normalized coordinates, and polygon labels. It
-does not import Ultralytics or start training when `--dry-run` is used:
+The primary Grounding DINO training preflight checks the ordered text classes,
+required splits, scene leakage, absolute `bbox_xyxy` targets, image paths, and
+data provenance. It does not import or download the model when `--dry-run` is
+used:
 
 ```powershell
-python scripts\vision_train.py --data data\vision\competition\dataset.yaml --dry-run
-pytest -q tests\unit\test_vision_train.py
+python scripts\vision_train_grounding_dino.py --config configs\vision_train_grounding_dino.example.yaml --manifest data\vision\competition_train.jsonl --dry-run
+pytest -q tests\unit\test_vision_train_grounding_dino.py
 ```
 
-Use `--no-amp` only to isolate a CUDA AMP preflight stall. Record whether AMP
-was enabled in every result used for a model comparison.
+The verified training path uses `batch_size: 1` and gradient accumulation so
+each target class index maps to the exact candidate-label prompt order. Record
+AMP state, effective batch size, model ID, checkpoint hash, manifest hash, and
+dataset hash in every comparison. The older `scripts/vision_train.py` suite is
+retained for the optional YOLO11n-seg student baseline. If a network blocks
+Hugging Face, pass a local `from_pretrained` snapshot directory with `--model`;
+do not hard-code a personal cache path in a committed config.
 
 ## Failure detection and recovery tests
 

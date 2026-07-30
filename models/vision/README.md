@@ -52,9 +52,27 @@ for Grounding DINO Tiny model data and
 for `sam2_t.pt`. These hashes record that specific acceptance only; re-check the
 current local file before reproducing it.
 
-## Stage 3 - Industrial student model
+## Stage 3 - Grounding DINO competition fine-tuning
 
-The non-innovative training baseline initializes from:
+The current primary training task fine-tunes Grounding DINO directly from the
+pretrained reference above. Use:
+
+```text
+scripts/vision_train_grounding_dino.py
+configs/vision_train_grounding_dino.example.yaml
+```
+
+The JSONL data stores ordered text classes and absolute detection boxes. SAM 2
+masks may be retained beside the boxes for review and later segmentation work,
+but they are not Grounding DINO loss targets. Fine-tuned model directories are
+written under `runs/vision/train/` and must remain outside Git. Publish the
+approved download location, source model ID, prompt order, configuration,
+dataset hash, and checkpoint SHA-256 only after same-split evaluation.
+
+## Optional later student model
+
+If the directly fine-tuned Grounding DINO model misses the final latency, VRAM,
+or artifact-size budget, an optional lightweight student can initialize from:
 
 ```text
 models/vision/yolo11n-seg.pt
@@ -63,8 +81,9 @@ models/vision/yolo11n-seg.pt
 The local 2026-07-30 copy is the official COCO 80-class segmentation checkpoint,
 not a competition-trained model. Its size is 6,182,636 bytes and its SHA-256 is
 `55ed65c56c91713d23e8402371c6c49a6fd84f257f7dce452e8d70e41dcbe152`.
-Use `scripts/vision_train.py` to fine-tune it only after the competition class
-map and reviewed polygon labels are ready.
+Use `scripts/vision_train.py` only after the team explicitly starts this later
+student comparison and reviewed polygon labels are ready. YOLO11n-seg is not the
+current primary training target.
 
 Use this local convention after the class map and export format are approved:
 

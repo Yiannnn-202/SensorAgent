@@ -304,15 +304,23 @@ scope agreed in the 2026-07-26 vision discussion.
 
 ### Stage 3 - Industrial fine-tuning and lightweight student model
 
+- [x] Add direct Grounding DINO fine-tuning with ordered text prompts, COCO-style
+  detection targets, scene-level leakage checks, provenance validation, and
+  reproducible checkpoint summaries.
 - [x] Add a YOLO11n-seg baseline runner with class-map, polygon-label, and
-  train/validation/test leakage preflight. The runner does not replace the need
-  for reviewed competition data or a same-split acceptance result.
-- [ ] Use the Stage 2 teacher to draft boxes and masks, then manually review every
-  training annotation.
+  train/validation/test leakage preflight. It is retained as an optional later
+  student baseline, not the current first training target.
+- [ ] Review every Grounding DINO training box and preserve optional SAM 2 masks
+  for segmentation analysis or later student training.
+- [ ] Inspect Mechanical Parts Dataset 2022 and any selected BOP/MVTec subset;
+  record version, license, category mapping, duplicate policy, and source split
+  before adding it to a local training manifest.
 - [ ] Split complete capture scenes/sessions before augmentation to prevent nearby
   frames from leaking across train, validation, and test sets.
+- [ ] Fine-tune Grounding DINO on the frozen competition prompt order and report
+  same-split detection metrics, latency, VRAM, model identity, and data identity.
 - [ ] Fine-tune a fixed-class YOLOE/segmentation student for the final industrial
-  categories; keep the teacher as a low-confidence or hard-sample fallback.
+  categories only if deployment constraints justify a smaller later model.
 - [ ] Compare teacher, student, and hybrid routing on the exact same test split.
 - [ ] Run ablations for fine-tuning data, mask refinement, model size, input size,
   and fallback threshold. Report accuracy, latency, VRAM, and model size together.

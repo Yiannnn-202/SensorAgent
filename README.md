@@ -173,6 +173,7 @@ Key SensorAgent documents:
 - [Failure detection and recovery guide](docs/guides/failure_recovery_cn.md)
 - [Gazebo failure recovery demo](docs/guides/gazebo_recovery_demo_cn.md)
 - [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
+- [Public vision datasets and licenses](docs/guides/vision_public_datasets_cn.md)
 - [Gazebo vision VM setup](docs/guides/gazebo_vision_vm_setup.md)
 - [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
 - [Team conventions](docs/team/convention.md)
@@ -204,27 +205,37 @@ python scripts\vision_eval.py run `
 The runner saves per-sample JSONL, aggregate metrics, Tool logs, and optional
 overlays. Dataset images, model weights, caches, and `runs/` outputs remain local.
 
-The first fixed-class baseline uses YOLO11n-seg. Validate its Ultralytics dataset
-before allocating GPU time:
+The current first training target is Grounding DINO itself. Its JSONL manifest
+keeps text class names, absolute `bbox_xyxy` targets, provenance, and scene-level
+splits. Validate the complete dataset before allocating GPU time:
 
 ```powershell
-python scripts\vision_train.py `
-  --data data\vision\competition\dataset.yaml `
+python scripts\vision_train_grounding_dino.py `
+  --config configs\vision_train_grounding_dino.example.yaml `
+  --manifest data\vision\competition_train.jsonl `
   --dry-run
 ```
 
-After the class map, scene-level splits, and polygon labels are reviewed, train
-the reproducible baseline with:
+After the prompt order, scene-level splits, and detection boxes are reviewed,
+start direct full-parameter fine-tuning with:
 
 ```powershell
-python scripts\vision_train.py `
-  --data data\vision\competition\dataset.yaml `
-  --model models\vision\yolo11n-seg.pt `
-  --device 0
+python scripts\vision_train_grounding_dino.py `
+  --config configs\vision_train_grounding_dino.example.yaml `
+  --manifest data\vision\competition_train.jsonl `
+  --device cuda:0
 ```
 
-`configs/vision_train.example.yaml` records the proposed competition class map.
-It is a template, not a checked-in dataset or evidence that a model has trained.
+`configs/vision_train_grounding_dino.example.yaml` records the proposed prompt
+order and reproducible training parameters. `class_labels` are indexes into
+that exact text list; they are not an independent YOLO class map. SAM 2 masks
+remain useful annotations, but Grounding DINO is optimized on text-grounded
+boxes. YOLO11n-seg and `scripts/vision_train.py` remain optional later student
+baselines, not the current primary training task.
+
+The templates are not checked-in training data or evidence that a model has
+trained. Grounding DINO checkpoints, datasets, caches, and run outputs stay
+outside Git.
 See the [Chinese open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
 for the manifest contract, data-source plan, evaluation metrics, and teacher to
 student optimization route.
