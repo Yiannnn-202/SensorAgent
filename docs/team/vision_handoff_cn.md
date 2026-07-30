@@ -5,13 +5,14 @@
 这份文档是我对目前视觉模块的集中交接。代码怎么运行、接口收什么和返回什么、我已经
 验证到哪一步、其他模块还需要给我什么，都统一写在这里。具体安装和命令细节仍以
 [开放词汇视觉接入说明](../guides/vision_open_vocab_cn.md)为准，这里不重复维护另一套
-操作手册。
+操作手册。公开数据集的筛选、许可证和转换命令见[视觉公开数据集选择与使用](../guides/vision_public_datasets_cn.md)。
 
 ## 1. 先说结论
 
 我已经把开放词汇检测、实例分割、可选 RGB-D 定位、批量评测和基础训练入口接进
-SensorAgent。现在仓库里有一条能实际运行的 Grounding DINO + SAM 2 教师模型链路，
-也有一条准备使用 YOLO11n-seg 做比赛固定类别微调的基础路线。
+SensorAgent。现在仓库里有一条能实际运行的 Grounding DINO + SAM 2 预训练开放词汇链路，
+这次第一轮训练直接微调 Grounding DINO 本体。SAM 2 继续根据检测框生成掩码，
+YOLO11n-seg 只保留为以后可能需要的轻量学生模型，不作为目前的主训练任务。
 
 目前还不能说“比赛视觉模型已经训练完成”。现阶段跑通的是预训练模型推理和训练工程
 链路，正式比赛模型还缺最终类别确认、足量仿真/真实图片、人工复核标注和冻结测试集。
@@ -27,41 +28,45 @@ SensorAgent。现在仓库里有一条能实际运行的 Grounding DINO + SAM 2 
 | [#3](https://github.com/Yiannnn-202/SensorAgent/pull/3) | Grounding DINO + SAM 2 后端、RGB-D 定位和统一 Tool 接口 | 已合入 `main` |
 | [#5](https://github.com/Yiannnn-202/SensorAgent/pull/5) | 检测框、掩码、中心点和置信度叠加图 | 已合入 `main` |
 | [#8](https://github.com/Yiannnn-202/SensorAgent/pull/8) | 数据清单检查、批量评测、指标和验收阈值 | 已合入 `main` |
+| [#14](https://github.com/Yiannnn-202/SensorAgent/pull/14) | YOLO11n-seg 可选学生模型训练入口、数据预检和测试 | 已合入 `main` |
 
-基础训练相关工作在：
+这次 Grounding DINO 训练纠正工作在：
 
-| PR | 内容 | 状态 |
+| 分支/PR | 内容 | 状态 |
 | --- | --- | --- |
-| [#14](https://github.com/Yiannnn-202/SensorAgent/pull/14) | YOLO11n-seg 训练入口、数据预检、固定类别查询适配和测试 | 已提交，等待审查合入 |
+| `feat/grounding-dino-finetune` | Grounding DINO 直接微调、JSONL 训练数据预检、配置模板、结果追踪和文档纠正 | 待审查合入 |
 
-PR #14 没合入前，`main` 里还没有 `scripts/vision_train.py`。使用训练命令时需要确认自己
-当前在 PR #14 分支，或者确认该 PR 已经合并。
+PR #14 已经合入，里面的 `scripts/vision_train.py` 仍可用于以后训练 YOLO11n-seg
+学生模型，但不是 7 月 31 日第一轮训练的入口。当前主训练入口是
+`scripts/vision_train_grounding_dino.py`。
 
 ## 3. 我现在采用的模型分工
 
-我没有把所有需求都压到一个模型上，而是先按教师/学生方式推进：
+我现在先直接微调开放词汇主模型，再根据部署结果决定是否需要学生模型：
 
 ```mermaid
 flowchart LR
-  data["仿真图和真实工位图"] --> teacher["Grounding DINO + SAM 2"]
-  teacher --> draft["框和掩码草稿"]
-  draft --> review["人工复核"]
-  review --> student["YOLO11n-seg 基础模型"]
-  student --> normal["常规快速推理"]
-  normal -->|"低置信度或困难样本"| teacher
+  data["仿真图和真实工位图"] --> review["复核文本类别和检测框"]
+  review --> dino["直接微调 Grounding DINO"]
+  dino --> box["输出文本对应检测框"]
+  box --> sam["SAM 2 细化掩码"]
+  dino --> test["固定测试集评测"]
+  test -->|"部署预算不满足时"| student["可选 YOLO11n-seg 学生模型"]
 ```
 
 具体分工如下：
 
-- **Grounding DINO**：根据中英文目标词生成开放词汇检测框。
-- **SAM 2**：根据检测框细化实例掩码，也用于训练数据的预标注。
-- **YOLO11n-seg**：作为近期非创新基础版，使用比赛固定类别训练，目标是更快、更稳定。
+- **Grounding DINO**：当前直接微调的主模型，学习比赛类别文本和检测框的对应关系。
+- **SAM 2**：根据 Grounding DINO 检测框细化实例掩码；掩码不是 Grounding DINO 的
+  训练损失，只作为分割输出、标注复核和后续消融数据保留。
+- **YOLO11n-seg**：后续可选轻量学生模型。只有主模型确实不满足延迟、显存或模型大小
+  预算时，再在同一测试集上训练和比较。
 - **YOLOE**：仓库现有 Gazebo 配置仍保留这个后端，避免实验模型影响已有仿真流程；它的
   权重不随 Git 分发，需要使用者单独准备。
 
-Grounding DINO + SAM 2 是下载的预训练模型。它们能识别部分对象不等于我已经用比赛
-数据训练过。YOLO11n-seg 当前本机权重也是官方 COCO 初始化权重，只有完成比赛数据
-微调后才能叫比赛基础模型。
+现在本机跑通的 Grounding DINO + SAM 2 仍是下载的预训练模型。它们能识别部分对象不
+等于我已经用比赛数据训练过。只有第一批训练数据到位、完成直接微调并在冻结验证集上
+评测后，才能称为比赛数据微调模型。
 
 ## 4. 我对外提供的接口
 
@@ -188,31 +193,38 @@ box fallback：0/4
 这只能证明真实模型链路和掩码输出可用。四张图全是正样本，没有完整人工框/掩码真值，
 也不是最终相机和真实工位，所以我不会把它写成“准确率 100%”或“工业精度已达标”。
 
-## 7. 基础训练链路验证
+## 7. Grounding DINO 训练链路
 
-PR #14 增加了 `scripts/vision_train.py`。它会在训练前检查：
+本次新增的 `scripts/vision_train_grounding_dino.py` 会在训练前检查：
 
-- 类别编号是否从 `0` 连续开始；
-- train/val/test 是否有图片重复；
-- 标签是否为分割多边形，而不是把检测框误当成掩码；
-- 坐标是否归一化到 `0..1`；
-- 多边形是否退化为零面积；
-- 每个必要 split 是否至少有可训练实例。
+- 训练 YAML 中的文本类别是否非空、唯一并保持固定顺序；
+- 每个 `class_name` 是否能映射到同一份候选文本列表；
+- 检测框是否为有效的原图绝对坐标 `bbox_xyxy`；
+- train/val/test 是否有图片重复或同一 `scene_id` 跨集合泄漏；
+- train 和 val 是否覆盖所有已配置类别；
+- 公开数据是否记录 URL 和许可证；
+- 数据清单和图片内容是否能生成可追踪哈希。
 
-我已经用极小的合成数据分别完成 CPU 和 RTX 4060 的一轮训练冒烟，均成功保存
-`best.pt` 和训练摘要。GPU 默认 AMP 兼容检查在本机首次启动时会卡住，使用
-`--no-amp` 后完整训练链路可以通过。这个测试只证明训练代码、显卡调用和权重保存能
-工作，不代表模型有比赛识别能力。
+训练时每张图片都输入同一个固定候选文本顺序，标注中的 `class_labels` 就是这个列表的
+下标。脚本使用 Hugging Face 官方 Grounding DINO 处理器把绝对框转成模型需要的
+归一化中心点框，直接计算 Grounding DINO 检测损失并更新本体参数。当前验证配置固定
+`batch_size: 1`，通过梯度累积扩大有效批量，避免当前 Transformers 版本的大 batch
+类别标签图偏移风险。
+
+正式训练后，本地会保存最佳和最后 checkpoint、模型来源、类别提示顺序、训练参数、
+数据清单哈希、图片内容哈希、checkpoint SHA-256、每轮损失和耗时。现在只完成了数据
+预检和代码级测试，还没有拿比赛数据跑第一轮，所以不能写成“Grounding DINO 已完成
+训练”。
 
 当前分支测试结果：
 
 ```text
-视觉训练和查询专项测试：35 passed
-完整测试：231 passed, 2 failed
+Grounding DINO 训练与 COCO 转换专项测试：13 passed
+完整仓库测试：241 passed, 2 failed
 ```
 
-两个完整测试失败都不是本次视觉改动造成的：一个缺少本地
-`models/asr/vad/silero_vad.onnx`，另一个 Gazebo 恢复测试实际尝试连接未启动的
+完整测试中的两个失败与本次视觉改动无关：一个是本机缺少
+`models/asr/vad/silero_vad.onnx`，另一个是 recovery 测试需要未启动的
 `127.0.0.1:8765` robot bridge。
 
 ## 8. 第一轮训练数据
@@ -222,14 +234,15 @@ PR #14 增加了 `scripts/vision_train.py`。它会在训练前检查：
 ```text
 roller
 gear
-hex_nut
-short_bolt
-stepped_shaft
+hex_nut -> hex nut
+short_bolt -> short bolt
+stepped_shaft -> stepped shaft
 flange
 ```
 
-扳手和螺丝刀目前只是模型冒烟对象。如果它们也是正式比赛类别，需要在第一轮标注前加进
-类别表，不能训练到一半再改类别编号。
+左侧是仿真/工程对象标识，右侧是有下划线对象对应的 Grounding DINO 英文提示。扳手和
+螺丝刀目前只是模型冒烟对象。如果它们也是正式比赛类别，需要在第一轮标注前加进提示
+列表，不能训练到一半再改类别顺序。
 
 每类两张仿真图可以先验证模型是否能识别、数据能否读入，但不能支撑稳定微调。我把数据
 分为两批：
@@ -242,9 +255,10 @@ flange
 同一段仿真或视频的连续帧使用相同 `scene_id`。我会先按完整场景划分 train/val/test，
 再做增强，避免相邻帧同时进入训练集和测试集导致结果虚高。
 
-第一批只给原始 RGB 也能开工。我会先用 Grounding DINO + SAM 2 生成框和掩码草稿，
-然后人工复核。仿真能直接导出实例掩码、depth、相机参数和真实位姿时，请一起保留，这些
-信息后面做分割和三维定位验收会直接用到。
+第一批至少需要原始 RGB、每张图的文本类别和检测框。如果仿真侧能直接导出准确框，就
+优先使用仿真真值并人工抽检；如果只有 RGB，我会先用预训练 Grounding DINO 生成框草稿
+再人工复核。实例掩码、depth、相机参数和真实位姿也请一起保留，这些信息后面做 SAM 2
+分割和三维定位验收会直接用到。
 
 仿真数据适合跑通格式、补充多角度和已知几何真值，但最终仍要用比赛相机、真实背景、
 真实材质和实际光照采集一批数据。只在 Gazebo 上表现稳定，不能直接代表比赛现场稳定。
@@ -257,7 +271,7 @@ flange
 
 - 最终类别表以及中英文标准名称；
 - 原始 RGB 图片和 `scene_id`；
-- 每张图包含的类别；
+- 每张图包含的文本类别和 `bbox_xyxy` 检测框，或者能从真实位姿/实例 ID 生成框的信息；
 - 能导出时提供实例掩码、depth、相机参数和物体真实位姿；
 - 生成场景、相机位姿、光照和随机化方式的简要说明。
 
@@ -290,12 +304,12 @@ flange
 核对类别和文件数量
   -> 检查损坏、重复和 scene_id
   -> 按完整场景划分 train/val/test
-  -> 教师模型生成标注草稿
-  -> 人工复核框和掩码
-  -> 转换为 YOLO11n-seg 数据格式
-  -> 运行训练预检
-  -> 训练 V0 基础版
-  -> 输出每类指标、耗时、叠加图和失败样本
+  -> 导出仿真真值框或生成框草稿
+  -> 人工复核文本类别和检测框
+  -> 生成 Grounding DINO JSONL 清单
+  -> 运行 Grounding DINO 训练预检
+  -> 直接微调 Grounding DINO V0
+  -> 在冻结测试集输出每类指标、耗时、叠加图和失败样本
 ```
 
 如果第一批数据在 7 月 31 日到位且格式可用，我当天开始预标注和训练，首轮结果预计当天
@@ -306,10 +320,10 @@ flange
 
 每一轮正式模型比较，我会统一给出：
 
-- 模型名称、权重 SHA-256、类别表和训练参数；
+- 初始模型 ID、微调 checkpoint SHA-256、文本提示顺序和训练参数；
 - 数据版本、scene 级 train/val/test 划分和样本数量；
 - 每类及总体 precision、recall、F1；
-- 有真值时的 box IoU、mask IoU 和中心误差；
+- Grounding DINO 的 box IoU 和中心误差；启用 SAM 2 且有掩码真值时另报 mask IoU；
 - 热启动 P50/P95、显存、模型大小和运行设备；
 - 检测框/掩码叠加图和典型失败样本；
 - 是否启用 SAM 2、教师回退或 AMP；
@@ -327,7 +341,7 @@ flange
 .venv-vision
 训练图片、标签和比赛数据
 runs/ 与 logs/ 下的本机结果
-训练后的 best.pt、ONNX 和 TensorRT engine
+训练后的 checkpoint、best.pt、ONNX 和 TensorRT engine
 没有授权的公开图片或比赛现场原图
 ```
 
@@ -340,13 +354,13 @@ runs/ 与 logs/ 下的本机结果
 
 - 最终比赛类别表还没有正式冻结；
 - 正式 competition train/val/test 数据集还没有交付；
-- YOLO11n-seg 还没有用比赛数据完成第一轮微调；
+- Grounding DINO 还没有用比赛数据完成第一轮直接微调；
 - 没有正式负样本和人工框/掩码真值，因此没有比赛 precision/recall/mAP；
 - 没有最终相机的完整 RGB-D、内参和手眼标定验收；
 - 没有真实工位遮挡、金属反光、多实例和干扰物测试；
-- PR #14 仍在等待合入；
-- AMP 首次初始化问题还需要在正式长训练前处理。
+- 本次 Grounding DINO 微调纠正 PR 仍在等待审查合入；
+- 正式训练显存占用、AMP 稳定性和完整 checkpoint 保存仍需要用第一批数据实测。
 
-我接下来的重点不是继续换更多模型，而是先把第一批数据、固定测试集和 YOLO11n-seg
-基础版做出来。基础版有了统一指标后，再比较 YOLOE、不同模型尺寸和教师回退，讨论创新
-才有可复现的基准。
+我接下来的重点不是继续换更多模型，而是先把第一批数据、固定测试集和 Grounding DINO
+微调 V0 做出来。有统一指标后，再判断是否需要 YOLO11n-seg 学生模型、不同模型尺寸或
+低置信度回退，后面的创新比较才有可复现基准。

@@ -40,6 +40,7 @@ operation guides, and a small number of project planning records.
 - [Failure detection and recovery planning](guides/failure_recovery_cn.md)
 - [Gazebo failure recovery demo](guides/gazebo_recovery_demo_cn.md)
 - [Open-vocabulary vision Tool](guides/vision_open_vocab_cn.md)
+- [Public vision datasets and licenses](guides/vision_public_datasets_cn.md)
 - [Gazebo vision VM setup](guides/gazebo_vision_vm_setup.md)
 - [Gazebo RGB-D vision ActionList test](guides/gazebo_vision_actionlist_test.md)
 - [Gazebo pick pipeline test script](guides/gazebo_pick_pipeline_test.md)

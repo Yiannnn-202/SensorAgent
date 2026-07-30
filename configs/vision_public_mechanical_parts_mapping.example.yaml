@@ -1,0 +1,14 @@
+# Map source labels only after inspecting the original annotations.
+classes:
+  - roller
+  - gear
+  - hex nut
+  - short bolt
+  - stepped shaft
+  - flange
+
+category_map:
+  bearing: null
+  bolt: short bolt
+  gear: gear
+  nut: hex nut
