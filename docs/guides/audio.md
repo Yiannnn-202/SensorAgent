@@ -15,8 +15,15 @@ microphone
 → Agent task
 ```
 
-The recognized task currently executes an approved mock workflow. It does not
+The default local audio config executes an approved mock workflow and does not
 control the RM65-B simulation.
+
+For the Gazebo/ROS 2 bridge path, use `configs/audio_robot_sim.yaml`. That
+configuration combines local microphone VAD/ASR with the HTTP robot bridge,
+open-vocabulary RGB-D capture, and the recovery DecisionTree's post-place
+`vision.verify_object_in_bin` check. See
+[Voice to Gazebo Pick/Place with Vision Verification](audio_robot_sim_voice_pipeline.md)
+for the full operating guide.
 
 ## Python dependencies
 

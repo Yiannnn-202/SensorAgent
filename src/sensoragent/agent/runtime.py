@@ -14,8 +14,33 @@ from sensoragent.agent.planner import Planner, StaticPlanner
 from sensoragent.agent.selector import IdentityWorkflowSelector, WorkflowSelector
 from sensoragent.skills import SkillRuntime
 from sensoragent.state import InMemoryEventStream, InMemoryTaskStore, TaskState, TaskStatus
+from sensoragent.schemas import AgentPlan
 from sensoragent.workflows import ActionListRuntime
 from sensoragent.workflows.decision_trees import DecisionTreeRuntime
+
+
+def _validate_required_workflow_inputs(plan: AgentPlan, merged_input: dict) -> str | None:
+  """Return a validation error when a selected workflow is missing critical input."""
+
+  requirements = {
+    "industrial.pick_place_actionlist": ("object_query", "target"),
+    "industrial.vision_pick_place_actionlist": ("object_query", "target"),
+    "industrial.recovery_pick_place_tree": ("object_query", "target"),
+    "industrial.pick_only_actionlist": ("object_query",),
+    "industrial.place_only_actionlist": ("target",),
+    "mock.pick_place_actionlist": ("object_query", "target"),
+  }
+  missing = [
+    key
+    for key in requirements.get(plan.target, ())
+    if not str(merged_input.get(key, "")).strip()
+  ]
+  if not missing:
+    return None
+  return (
+    f"Planner selected {plan.target} but missing required input(s): "
+    f"{', '.join(missing)}"
+  )
 
 
 class AgentRuntime:
@@ -206,9 +231,15 @@ class AgentRuntime:
     self._event_stream.publish("task_planned", task.trace, {"plan": plan.to_dict()})
 
     # Merge caller-provided task inputs with the planner's extracted inputs.
-    # plan.input (LLM-extracted object_query/target/spatial_constraint) wins on
-    # conflict; task.input supplies scene defaults like image_path/depth_path.
+    # Planner output wins on conflict so incomplete ASR/LLM extraction fails
+    # explicitly instead of silently executing with fallback object/target data.
     merged_input = {**task.input, **plan.input}
+    validation_error = _validate_required_workflow_inputs(plan, merged_input)
+    if validation_error is not None:
+      task.mark(TaskStatus.FAILED, error=validation_error)
+      self._event_stream.publish("task_failed", task.trace, {"error": task.error})
+      self._task_store.save(task)
+      return task
     if plan.target_kind == PlanTargetKind.SKILL:
       request = AgentRequest(skill=plan.target, input=merged_input, trace=task.trace)
     elif plan.target_kind == PlanTargetKind.ACTIONLIST:

@@ -123,7 +123,10 @@ class DecisionTreeRuntime:
       )
 
     context: dict[str, Any] = dict(input_data)
-    if "spatial_constraint" in tree.inputs and "spatial_constraint" not in context:
+    if "spatial_constraint" in tree.inputs and not isinstance(
+      context.get("spatial_constraint"),
+      dict,
+    ):
       context["spatial_constraint"] = {}
     results: list[DecisionNodeResult] = []
     current_name: str | None = tree.start
@@ -193,7 +196,7 @@ class DecisionTreeRuntime:
       results.append(result)
       if node.save_as and result.success:
         context[node.save_as] = result.output
-      if not result.success:
+      if not result.success and node.kind != DecisionNodeKind.TERMINAL:
         context["last_failure"] = {
           "node": node.name,
           "failed_step": node.name,

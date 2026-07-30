@@ -78,6 +78,11 @@ class ActionListRuntime:
     """Run an ActionList from first step to last step."""
 
     context: dict[str, Any] = dict(input_data)
+    if "spatial_constraint" in actionlist.inputs and not isinstance(
+      context.get("spatial_constraint"),
+      dict,
+    ):
+      context["spatial_constraint"] = {}
     step_results: list[ActionStepResult] = []
     self._logger.log(
       "actionlist_started",
