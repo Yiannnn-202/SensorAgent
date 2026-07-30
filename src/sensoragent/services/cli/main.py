@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Sequence
@@ -132,6 +133,12 @@ def _build_parser() -> argparse.ArgumentParser:
     type=float,
     default=None,
     help="Optional VAD minimum RMS energy gate for listen-task.",
+  )
+  listen_task.add_argument(
+    "--vad-pre-roll-ms",
+    type=int,
+    default=None,
+    help="Optional VAD pre-speech audio buffer override in milliseconds.",
   )
   listen_task.add_argument(
     "--vad-post-roll-ms",
@@ -294,6 +301,8 @@ def _run_listen_task(args: argparse.Namespace) -> int:
     vad_input["threshold"] = args.vad_threshold
   if args.vad_min_rms is not None:
     vad_input["min_rms"] = args.vad_min_rms
+  if args.vad_pre_roll_ms is not None:
+    vad_input["pre_roll_ms"] = args.vad_pre_roll_ms
   if args.vad_post_roll_ms is not None:
     vad_input["post_roll_ms"] = args.vad_post_roll_ms
   if args.vad_tail_padding_ms is not None:
@@ -310,6 +319,14 @@ def _run_listen_task(args: argparse.Namespace) -> int:
     },
   )
 
+  print(
+    (
+      "Listening now. Speak one complete command after this line "
+      f"(max {duration_seconds:g}s, silence tail {vad_input['post_roll_ms']} ms)."
+    ),
+    file=sys.stderr,
+    flush=True,
+  )
   transcript = bundle.tool_runtime.invoke(
     "audio.listen_vad_transcribe",
     listen_input,

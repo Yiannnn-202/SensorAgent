@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from unittest import TestCase
 
@@ -383,6 +383,47 @@ class LiveDetectRecoveryTreeTest(TestCase):
       input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
     )
     self.assertEqual(detect_input["spatial_constraint"], {})
+
+  def test_live_detection_normalizes_null_spatial_constraint(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    request = {
+      "object_query": "roller",
+      "target": "bin_cell_3",
+      "spatial_constraint": None,
+    }
+    result = runtime.run(_live_tree(), request, TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    detect_input = next(
+      input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
+    )
+    self.assertEqual(detect_input["spatial_constraint"], {})
+
+  def test_terminal_failure_result_serializes_without_recursion(self) -> None:
+    runtime, _tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(False, error="DETECT_FAILED"),
+        _StubResult(False, error="DETECT_FAILED"),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    self.assertFalse(result.success)
+    serialized = asdict(result)
+    self.assertEqual(serialized["nodes"][-1]["node"], "failure")
+    self.assertNotEqual(
+      serialized["output"].get("last_failure", {}).get("node"),
+      "failure",
+    )
 
   def test_wrong_bin_is_observed_from_re_detection_not_commanded_pose(self) -> None:
     # The object is detected away from bin_cell_3 after the first place, so the

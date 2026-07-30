@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 from unittest import TestCase
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -73,6 +74,17 @@ class RegistryLoggerTest(TestCase):
     self.assertEqual(record.task_id, "task_test")
     self.assertEqual(record.trace_id, "trace_test")
     self.assertEqual(record.payload, {"value": 1})
+
+  def test_task_logger_prints_console_progress_to_stderr(self) -> None:
+    logger = TaskLogger(console=True)
+    trace = TraceContext(task_id="task_test", trace_id="trace_test")
+
+    with patch("sys.stderr") as stderr:
+      logger.log("tool_call_started", trace, {"tool": "vision.open_vocab_detect"})
+
+    stderr.write.assert_called()
+    output = "".join(call.args[0] for call in stderr.write.call_args_list)
+    self.assertIn("[tool] start vision.open_vocab_detect", output)
 
   def test_tool_runtime_wraps_unexpected_tool_failure(self) -> None:
     class BrokenTool:

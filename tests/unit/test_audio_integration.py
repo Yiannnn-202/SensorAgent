@@ -18,6 +18,7 @@ from sensoragent.integrations import FakeAudioClient, FakeMicrophoneRecorder, Lo
 from sensoragent.integrations.audio import AudioError, _write_wav
 from sensoragent.integrations.microphone import MicrophoneError
 from sensoragent.integrations.vad import SoundDeviceVadRecorder
+from sensoragent.integrations.vad import _extract_speech_probability
 from sensoragent.schemas import ToolCall, TraceContext
 from sensoragent.tools.audio import AudioSpeakTool, AudioTranscribeTool
 from sensoragent.tools.audio import AudioListenTranscribeTool
@@ -32,6 +33,11 @@ except Exception:
 
 
 class AudioIntegrationTest(TestCase):
+  def test_silero_two_class_output_uses_speech_probability(self) -> None:
+    self.assertEqual(_extract_speech_probability([0.9, 0.1]), 0.1)
+    self.assertEqual(_extract_speech_probability([0.1, 0.9]), 0.9)
+    self.assertEqual(_extract_speech_probability([0.7]), 0.7)
+
   def test_fake_audio_client_transcribes_and_speaks(self) -> None:
     client = FakeAudioClient()
 

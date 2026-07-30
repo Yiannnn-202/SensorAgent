@@ -54,6 +54,19 @@ def _write_mono_16k_wav(path: Path, samples) -> None:
     wav.writeframes(samples_int16.tobytes())
 
 
+def _extract_speech_probability(output) -> float:
+  """Extract speech probability from Silero ONNX output variants."""
+
+  import numpy as np
+
+  scores = np.asarray(output).reshape(-1)
+  if scores.size == 0:
+    return 0.0
+  # Some Silero ONNX exports return [non_speech, speech]; older exports return
+  # just speech probability.
+  return float(scores[1] if scores.size >= 2 else scores[0])
+
+
 class SileroVadSegmenter:
   """Segment one speech utterance using a local Silero VAD ONNX model."""
 
@@ -163,7 +176,7 @@ class SileroVadSegmenter:
       ort_inputs["state"] = self._state
 
     outputs = self._session.run(None, ort_inputs)
-    prob = float(np.asarray(outputs[0]).reshape(-1)[0]) if outputs else 0.0
+    prob = _extract_speech_probability(outputs[0]) if outputs else 0.0
     if (self._use_split_state or self._use_short_split_state) and len(outputs) >= 3:
       self._h = np.asarray(outputs[1], dtype=np.float32)
       self._c = np.asarray(outputs[2], dtype=np.float32)

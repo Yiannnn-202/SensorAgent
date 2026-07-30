@@ -323,7 +323,7 @@ def build_agent(
 ) -> AgentBundle:
   """Build SensorAgent runtime objects from a loaded config."""
 
-  logger = TaskLogger(log_path)
+  logger = TaskLogger(log_path, console=config.logging.console)
 
   tool_registry = ToolRegistry()
   robot_client = None

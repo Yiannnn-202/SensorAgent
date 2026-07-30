@@ -32,6 +32,7 @@ operation guides, and a small number of project planning records.
 
 - [Testing](guides/testing.md)
 - [Audio](guides/audio.md)
+- [Voice to Gazebo pick/place with vision verification](guides/audio_robot_sim_voice_pipeline.md)
 - [RM65-B + Robotiq 2F-85 Gazebo quickstart](guides/rm65_b_gazebo_quickstart_cn.md)
 - [RM65-B named joint pose tuning](guides/rm65_b_named_joint_poses.md)
 - [SensorAgent simulation robot HTTP bridge](guides/robot_sim_bridge_cn.md)
@@ -45,6 +46,7 @@ operation guides, and a small number of project planning records.
 - [Gazebo RGB-D vision ActionList test](guides/gazebo_vision_actionlist_test.md)
 - [Gazebo pick pipeline test script](guides/gazebo_pick_pipeline_test.md)
 - [Gazebo pick and place pipeline test scripts](guides/gazebo_pick_place_pipeline_test.md)
+- [Terminal progress logging](guides/terminal_progress_logging.md)
 - [Create a Gazebo grasping block](guides/create_grasp_block.md)
 
 ## Project planning and records
