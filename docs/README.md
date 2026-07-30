@@ -26,6 +26,7 @@ operation guides, and a small number of project planning records.
 - [Conventions](team/convention.md)
 - [中文约定](team/convention_cn.md)
 - [团队总览](team/general_cn.md)
+- [视觉模块阶段交接](team/vision_handoff_cn.md)
 
 ## Operational guides
 
