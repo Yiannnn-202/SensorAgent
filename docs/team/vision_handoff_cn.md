@@ -34,7 +34,7 @@ YOLO11n-seg 只保留为以后可能需要的轻量学生模型，不作为目�
 
 | 分支/PR | 内容 | 状态 |
 | --- | --- | --- |
-| `feat/grounding-dino-finetune` | Grounding DINO 直接微调、JSONL 训练数据预检、配置模板、结果追踪和文档纠正 | 待审查合入 |
+| [`#16`](https://github.com/Yiannnn-202/SensorAgent/pull/16) / `feat/grounding-dino-finetune` | Grounding DINO 直接微调、JSONL 训练数据预检、配置模板、结果追踪和文档纠正 | 等待审查合入 |
 
 PR #14 已经合入，里面的 `scripts/vision_train.py` 仍可用于以后训练 YOLO11n-seg
 学生模型，但不是 7 月 31 日第一轮训练的入口。当前主训练入口是
@@ -358,7 +358,7 @@ runs/ 与 logs/ 下的本机结果
 - 没有正式负样本和人工框/掩码真值，因此没有比赛 precision/recall/mAP；
 - 没有最终相机的完整 RGB-D、内参和手眼标定验收；
 - 没有真实工位遮挡、金属反光、多实例和干扰物测试；
-- 本次 Grounding DINO 微调纠正 PR 仍在等待审查合入；
+- 本次 Grounding DINO 微调纠正 PR [#16](https://github.com/Yiannnn-202/SensorAgent/pull/16) 仍在等待审查合入；
 - 正式训练显存占用、AMP 稳定性和完整 checkpoint 保存仍需要用第一批数据实测。
 
 我接下来的重点不是继续换更多模型，而是先把第一批数据、固定测试集和 Grounding DINO
