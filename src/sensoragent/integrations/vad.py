@@ -258,6 +258,7 @@ class SoundDeviceVadRecorder:
     self,
     model_path: str = "models/asr/vad/silero_vad.onnx",
     threshold: float = 0.35,
+    min_rms: float = 0.025,
     min_speech_windows: int = 2,
     pre_roll_ms: int = 120,
     post_roll_ms: int = 1800,
@@ -273,6 +274,7 @@ class SoundDeviceVadRecorder:
       max_utterance_sec=max_utterance_sec,
     )
     self._threshold = float(threshold)
+    self._min_rms = max(0.0, float(min_rms))
     self._min_speech_windows = max(1, int(min_speech_windows))
     self._pre_roll_ms = int(pre_roll_ms)
     self._post_roll_ms = int(post_roll_ms)
@@ -293,6 +295,7 @@ class SoundDeviceVadRecorder:
     return SoundDeviceVadRecorder(
       model_path=str(self._segmenter._model_path),
       threshold=float(overrides.get("threshold", self._threshold)),
+      min_rms=float(overrides.get("min_rms", self._min_rms)),
       min_speech_windows=int(
         overrides.get("min_speech_windows", self._min_speech_windows)
       ),
@@ -359,8 +362,9 @@ class SoundDeviceVadRecorder:
           chunk_int16 = chunk_int16[: self._window_samples]
 
         chunk = chunk_int16.astype(np.float32) / 32768.0
+        rms = float(np.sqrt(np.mean(np.square(chunk)))) if chunk.size else 0.0
         prob = self._segmenter.speech_probability(chunk)
-        is_speech = prob >= self._threshold
+        is_speech = prob >= self._threshold and rms >= self._min_rms
         samples_seen += self._window_samples
 
         if not speech_started:

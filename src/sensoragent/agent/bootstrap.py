@@ -226,6 +226,7 @@ def _build_microphone_recorder(config: SensorAgentConfig):
     return SoundDeviceVadRecorder(
       model_path=str(audio_config.get("vad_model_path", "models/asr/vad/silero_vad.onnx")),
       threshold=float(audio_config.get("vad_threshold", 0.35)),
+      min_rms=float(audio_config.get("vad_min_rms", 0.025)),
       min_speech_windows=int(audio_config.get("vad_min_speech_windows", 2)),
       pre_roll_ms=int(audio_config.get("vad_pre_roll_ms", 120)),
       post_roll_ms=int(audio_config.get("vad_post_roll_ms", 1800)),

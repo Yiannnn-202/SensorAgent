@@ -8,7 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Sequence
 
-from sensoragent.agent import build_agent_from_env
+from sensoragent.agent import build_agent_from_config, build_agent_from_env
+from sensoragent.config import load_config, resolve_config_path
 from sensoragent.mcp import MockMcpEndpoint
 from sensoragent.schemas import TraceContext
 from sensoragent.tools.vision import SPATIAL_RELATIONS
@@ -106,13 +107,13 @@ def _build_parser() -> argparse.ArgumentParser:
   listen_task.add_argument(
     "--duration",
     type=float,
-    default=5.0,
-    help="Fixed microphone recording duration in seconds.",
+    default=None,
+    help="Maximum microphone recording duration in seconds. Defaults to config.",
   )
   listen_task.add_argument(
     "--language",
-    default="zh",
-    help="ASR language hint.",
+    default=None,
+    help="ASR language hint. Defaults to config.",
   )
   listen_task.add_argument(
     "--audio-path",
@@ -125,6 +126,12 @@ def _build_parser() -> argparse.ArgumentParser:
     type=float,
     default=None,
     help="Optional VAD speech threshold override for listen-task.",
+  )
+  listen_task.add_argument(
+    "--vad-min-rms",
+    type=float,
+    default=None,
+    help="Optional VAD minimum RMS energy gate for listen-task.",
   )
   listen_task.add_argument(
     "--vad-post-roll-ms",
@@ -250,34 +257,117 @@ def _run_task(args: argparse.Namespace) -> int:
 
 def _run_listen_task(args: argparse.Namespace) -> int:
   log_path = args.log_path or _default_task_log_path()
-  bundle = build_agent_from_env(
-    args.config,
+  config_path = resolve_config_path(args.config)
+  config = load_config(config_path)
+  audio_config = config.integrations.audio
+  duration_seconds = float(
+    args.duration
+    if args.duration is not None
+    else audio_config.get("listen_duration_seconds", 8.0)
+  )
+  language = str(
+    args.language if args.language is not None else audio_config.get("listen_language", "zh")
+  )
+  vad_input = {
+    "threshold": float(audio_config.get("vad_threshold", 0.35)),
+    "min_rms": float(audio_config.get("vad_min_rms", 0.025)),
+    "min_speech_windows": int(audio_config.get("vad_min_speech_windows", 2)),
+    "pre_roll_ms": int(audio_config.get("vad_pre_roll_ms", 120)),
+    "post_roll_ms": int(audio_config.get("vad_post_roll_ms", 1800)),
+    "tail_padding_ms": int(audio_config.get("vad_tail_padding_ms", 700)),
+    "max_utterance_sec": float(audio_config.get("vad_max_utterance_sec", 15.0)),
+  }
+  bundle = build_agent_from_config(
+    config_path,
     log_path=log_path,
     planner_mode=args.planner,
   )
+  trace = TraceContext()
   listen_input = {
-    "duration_seconds": args.duration,
-    "language": args.language,
+    "duration_seconds": duration_seconds,
+    "language": language,
+    "vad": vad_input,
   }
   if args.audio_path is not None:
     listen_input["output_path"] = str(args.audio_path)
-  vad_input = {}
   if args.vad_threshold is not None:
     vad_input["threshold"] = args.vad_threshold
+  if args.vad_min_rms is not None:
+    vad_input["min_rms"] = args.vad_min_rms
   if args.vad_post_roll_ms is not None:
     vad_input["post_roll_ms"] = args.vad_post_roll_ms
   if args.vad_tail_padding_ms is not None:
     vad_input["tail_padding_ms"] = args.vad_tail_padding_ms
-  if vad_input:
-    listen_input["vad"] = vad_input
+
+  bundle.logger.log(
+    "listen_task_started",
+    trace,
+    {
+      "stage": "listen_task",
+      "config": str(config_path),
+      "planner": args.planner,
+      "input": listen_input,
+    },
+  )
 
   transcript = bundle.tool_runtime.invoke(
     "audio.listen_vad_transcribe",
     listen_input,
-    trace=TraceContext(),
+    trace=trace,
   )
   if not transcript.success or not transcript.output:
+    bundle.logger.log(
+      "listen_task_failed",
+      trace,
+      {
+        "stage": "audio.listen_vad_transcribe",
+        "success": False,
+        "error_type": "TRANSCRIBE_FAILED",
+        "error": transcript.error,
+      },
+    )
     print(json.dumps({"success": False, "error": transcript.error}, ensure_ascii=False, indent=2))
+    print(f"Task log: {log_path}")
+    return 1
+  bundle.logger.log(
+    "listen_task_transcribed",
+    trace,
+    {
+      "stage": "audio.listen_vad_transcribe",
+      "success": True,
+      "output": {
+        "audio_path": transcript.output.get("audio_path"),
+        "duration_ms": transcript.output.get("duration_ms"),
+        "text": transcript.output.get("text"),
+        "confidence": transcript.output.get("confidence"),
+        "language": transcript.output.get("language"),
+        "vad": transcript.output.get("vad"),
+      },
+    },
+  )
+  if not str(transcript.output.get("text", "")).strip():
+    bundle.logger.log(
+      "listen_task_failed",
+      trace,
+      {
+        "stage": "asr.result_filter",
+        "success": False,
+        "error_type": "EMPTY_TRANSCRIPT",
+        "error": "EMPTY_TRANSCRIPT",
+        "output": transcript.output,
+      },
+    )
+    print(
+      json.dumps(
+        {
+          "success": False,
+          "error": "EMPTY_TRANSCRIPT",
+          "transcript": transcript.output,
+        },
+        ensure_ascii=False,
+        indent=2,
+      )
+    )
     print(f"Task log: {log_path}")
     return 1
 
@@ -287,7 +377,57 @@ def _run_listen_task(args: argparse.Namespace) -> int:
   if args.target is not None:
     initial_input["target"] = args.target
 
-  task = bundle.agent.run_task(transcript.output["text"], initial_input)
+  bundle.logger.log(
+    "listen_task_agent_started",
+    trace,
+    {
+      "stage": "agent.run_task",
+      "planner": args.planner,
+      "input": {
+        "user_input": transcript.output["text"],
+        "initial_input": initial_input,
+      },
+    },
+  )
+  try:
+    task = bundle.agent.run_task(transcript.output["text"], initial_input)
+  except Exception as exc:
+    bundle.logger.log(
+      "listen_task_failed",
+      trace,
+      {
+        "stage": "agent.run_task",
+        "success": False,
+        "error_type": type(exc).__name__,
+        "error": str(exc),
+      },
+    )
+    print(
+      json.dumps(
+        {
+          "success": False,
+          "error": str(exc),
+          "error_type": type(exc).__name__,
+          "transcript": transcript.output,
+        },
+        ensure_ascii=False,
+        indent=2,
+      )
+    )
+    print(f"Task log: {log_path}")
+    return 1
+  bundle.logger.log(
+    "listen_task_finished",
+    trace,
+    {
+      "stage": "agent.run_task",
+      "success": task.error is None,
+      "task_id": task.task_id,
+      "status": str(task.status),
+      "error": task.error,
+      "plan": task.plan.to_dict() if task.plan is not None else None,
+    },
+  )
   print(
     json.dumps(
       {
