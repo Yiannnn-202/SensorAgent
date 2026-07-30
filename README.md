@@ -177,7 +177,7 @@ Key SensorAgent documents:
 - [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
 - [Team conventions](docs/team/convention.md)
 
-## Vision Model Evaluation
+## Vision Model Training and Evaluation
 
 The open-vocabulary model path uses `vision.open_vocab_detect` for both the
 temporary YOLOE baseline and the Grounding DINO + SAM 2 teacher model. Validate a
@@ -203,6 +203,28 @@ python scripts\vision_eval.py run `
 
 The runner saves per-sample JSONL, aggregate metrics, Tool logs, and optional
 overlays. Dataset images, model weights, caches, and `runs/` outputs remain local.
+
+The first fixed-class baseline uses YOLO11n-seg. Validate its Ultralytics dataset
+before allocating GPU time:
+
+```powershell
+python scripts\vision_train.py `
+  --data data\vision\competition\dataset.yaml `
+  --dry-run
+```
+
+After the class map, scene-level splits, and polygon labels are reviewed, train
+the reproducible baseline with:
+
+```powershell
+python scripts\vision_train.py `
+  --data data\vision\competition\dataset.yaml `
+  --model models\vision\yolo11n-seg.pt `
+  --device 0
+```
+
+`configs/vision_train.example.yaml` records the proposed competition class map.
+It is a template, not a checked-in dataset or evidence that a model has trained.
 See the [Chinese open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
 for the manifest contract, data-source plan, evaluation metrics, and teacher to
 student optimization route.
