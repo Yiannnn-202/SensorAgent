@@ -79,17 +79,16 @@ This uses `FakeMicrophoneRecorder`, the committed WAV fixture, and
 PYTHONPATH=src python -m sensoragent.services.cli.main \
   listen-task \
   --config configs/audio_local.yaml \
-  --planner llm \
-  --duration 15
+  --planner llm
 ```
 
 Requirements include `sounddevice`, `numpy`, `sherpa_onnx`, SenseVoice model files,
 Silero VAD, and an LLM API key in `.env`.
 
-`--duration` is a maximum recording window. Recording ends earlier after speech
-followed by the configured silence period.
+`listen_duration_seconds` is a maximum recording window. Recording ends earlier
+after speech followed by the configured silence period.
 
-Useful VAD overrides:
+Useful VAD overrides for one-off tuning:
 
 ```bash
 PYTHONPATH=src python -m sensoragent.services.cli.main \
@@ -105,7 +104,10 @@ PYTHONPATH=src python -m sensoragent.services.cli.main \
 The defaults live in `configs/audio_local.yaml`:
 
 ```text
+listen_duration_seconds
+listen_language
 vad_threshold
+vad_min_rms
 vad_min_speech_windows
 vad_pre_roll_ms
 vad_post_roll_ms

@@ -177,15 +177,17 @@ class AudioIntegrationTest(TestCase):
     recorder = SoundDeviceVadRecorder(
       model_path=str(ROOT / "models" / "asr" / "vad" / "silero_vad.onnx"),
       threshold=0.3,
+      min_rms=0.02,
       pre_roll_ms=120,
       post_roll_ms=1800,
       tail_padding_ms=700,
     )
 
     overridden = recorder.with_overrides(
-      {"post_roll_ms": 3000, "tail_padding_ms": 500}
+      {"min_rms": 0.04, "post_roll_ms": 3000, "tail_padding_ms": 500}
     )
 
+    self.assertEqual(overridden._min_rms, 0.04)
     self.assertEqual(overridden._post_roll_ms, 3000)
     self.assertEqual(overridden._tail_padding_ms, 500)
     self.assertEqual(overridden._pre_roll_ms, 120)
