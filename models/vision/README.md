@@ -69,10 +69,11 @@ written under `runs/vision/train/` and must remain outside Git. Publish the
 approved download location, source model ID, prompt order, configuration,
 dataset hash, and checkpoint SHA-256 only after same-split evaluation.
 
-## Optional later student model
+## Historical YOLO11n-seg experiment support
 
-If the directly fine-tuned Grounding DINO model misses the final latency, VRAM,
-or artifact-size budget, an optional lightweight student can initialize from:
+YOLO11n-seg is outside the current 2026-08-10 delivery path. The repository
+retains its historical experiment runner, and an old local comparison can
+initialize from:
 
 ```text
 models/vision/yolo11n-seg.pt
@@ -81,9 +82,9 @@ models/vision/yolo11n-seg.pt
 The local 2026-07-30 copy is the official COCO 80-class segmentation checkpoint,
 not a competition-trained model. Its size is 6,182,636 bytes and its SHA-256 is
 `55ed65c56c91713d23e8402371c6c49a6fd84f257f7dce452e8d70e41dcbe152`.
-Use `scripts/vision_train.py` only after the team explicitly starts this later
-student comparison and reviewed polygon labels are ready. YOLO11n-seg is not the
-current primary training target.
+Do not allocate current simulation data or training time to `scripts/vision_train.py`.
+Only reopen this path if the team explicitly defines a later fixed-class comparison
+and reviewed polygon labels are ready.
 
 Use this local convention after the class map and export format are approved:
 
@@ -98,3 +99,10 @@ configuration, and checksum may be considered for Git. Keep `.pt`, `.pth`,
 `.onnx`, `.engine`, and training output outside version control. Do not replace
 the default runtime model until a same-split comparison passes the agreed
 acceptance thresholds.
+
+## SAM3 research candidate
+
+SAM3 is not installed or distributed from this directory. It uses a gated
+checkpoint, a separate SAM License, and a different training stack. Keep any
+future SAM3 environment and weights outside Git and follow
+`docs/guides/vision_sam3_assessment_cn.md` before adding a runtime adapter.

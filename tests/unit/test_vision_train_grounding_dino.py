@@ -114,6 +114,20 @@ def test_validate_manifest_rejects_scene_leakage(tmp_path: Path) -> None:
     raise AssertionError("one scene must not cross train and validation splits")
 
 
+def test_validate_manifest_rejects_duplicate_image_content(tmp_path: Path) -> None:
+  manifest = _write_manifest(tmp_path)
+  rows = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()]
+  duplicate_path = tmp_path / rows[-1]["image"]
+  duplicate_path.write_bytes((tmp_path / rows[0]["image"]).read_bytes())
+
+  try:
+    validate_manifest(manifest, CLASSES)
+  except GroundingDinoDatasetError as exc:
+    assert "image content is duplicated" in str(exc)
+  else:
+    raise AssertionError("renamed copies must not cross dataset splits")
+
+
 def test_validate_manifest_rejects_unknown_class(tmp_path: Path) -> None:
   rows = [
     _row("train_roller", "train", "roller"),

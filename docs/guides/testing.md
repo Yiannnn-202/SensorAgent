@@ -120,7 +120,8 @@ The verified training path uses `batch_size: 1` and gradient accumulation so
 each target class index maps to the exact candidate-label prompt order. Record
 AMP state, effective batch size, model ID, checkpoint hash, manifest hash, and
 dataset hash in every comparison. The older `scripts/vision_train.py` suite is
-retained for the optional YOLO11n-seg student baseline. If a network blocks
+retained as historical YOLO11n-seg experiment support and is not part of the
+2026-08-10 delivery path. If a network blocks
 Hugging Face, pass a local `from_pretrained` snapshot directory with `--model`;
 do not hard-code a personal cache path in a committed config.
 
