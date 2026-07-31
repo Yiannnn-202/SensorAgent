@@ -320,23 +320,35 @@ scope agreed in the 2026-07-26 vision discussion.
 - [ ] Add real RGB-D samples, camera intrinsics, and hand-eye calibration before
   claiming base-frame position accuracy.
 
-### Stage 3 - Industrial fine-tuning and lightweight student model
+### Stage 3 - Industrial fine-tuning and later model comparisons
 
 - [x] Add direct Grounding DINO fine-tuning with ordered text prompts, COCO-style
   detection targets, scene-level leakage checks, provenance validation, and
   reproducible checkpoint summaries.
 - [x] Add a YOLO11n-seg baseline runner with class-map, polygon-label, and
-  train/validation/test leakage preflight. It is retained as an optional later
-  student baseline, not the current first training target.
+  train/validation/test leakage preflight. It is retained as historical
+  experiment support and excluded from the current delivery path.
 - [ ] Review every Grounding DINO training box and preserve optional SAM 2 masks
   for segmentation analysis or later student training.
-- [ ] Inspect Mechanical Parts Dataset 2022 and any selected BOP/MVTec subset;
+- [x] Inspect Mechanical Parts Dataset 2022 and any selected BOP/MVTec subset;
   record version, license, category mapping, duplicate policy, and source split
   before adding it to a local training manifest.
 - [ ] Split complete capture scenes/sessions before augmentation to prevent nearby
   frames from leaking across train, validation, and test sets.
 - [ ] Fine-tune Grounding DINO on the frozen competition prompt order and report
   same-split detection metrics, latency, VRAM, model identity, and data identity.
+- [x] Verify the 2026-07-31 Grounding DINO fine-tuning branch was merged into
+  `main`, synchronize the local checkout, and remove only local branches already
+  contained by `origin/main`.
+- [x] Review official SAM3 code, prerequisites, training surface, checkpoint
+  access, parameter count, and license; keep it outside the 2026-08-10 delivery
+  path until a same-split local comparison exists.
+- [ ] Receive the first 10-20 simulation images with class names and `scene_id`,
+  review or generate boxes, and run the first Grounding DINO overfit/smoke
+  fine-tuning pass.
+- [ ] By 2026-08-10, deliver a repeatable simulation inference run, a directly
+  trainable local JSONL dataset layout, fixed-split evidence, and an innovation
+  draft that distinguishes implemented work from SAM3 experiments.
 - [ ] Fine-tune a fixed-class YOLOE/segmentation student for the final industrial
   categories only if deployment constraints justify a smaller later model.
 - [ ] Compare teacher, student, and hybrid routing on the exact same test split.

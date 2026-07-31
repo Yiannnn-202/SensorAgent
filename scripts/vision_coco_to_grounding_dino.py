@@ -75,6 +75,7 @@ def convert_coco(
   source_url: str,
   source_license: str,
   include_negative: bool,
+  source_dataset: str | None = None,
 ) -> dict[str, Any]:
   """Write the mapped rows and return a conversion summary."""
 
@@ -152,7 +153,7 @@ def convert_coco(
         "objects": objects,
         "source": {
           "kind": "public",
-          "dataset": annotations_path.stem,
+          "dataset": source_dataset or annotations_path.stem,
           "url": source_url,
           "license": source_license,
         },
@@ -184,6 +185,7 @@ def _parser() -> argparse.ArgumentParser:
   parser.add_argument("--scene-prefix", required=True)
   parser.add_argument("--source-url", required=True)
   parser.add_argument("--source-license", required=True)
+  parser.add_argument("--source-dataset", help="Public dataset name recorded in each JSONL row.")
   parser.add_argument(
     "--include-negative",
     action="store_true",
@@ -205,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
       source_url=args.source_url,
       source_license=args.source_license,
       include_negative=args.include_negative,
+      source_dataset=args.source_dataset,
     )
   except CocoConversionError as exc:
     print(json.dumps({"valid": False, "error": str(exc)}, ensure_ascii=False, indent=2))
