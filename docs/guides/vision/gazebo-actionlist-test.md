@@ -85,7 +85,11 @@ For a small manually varied training dataset, use the interactive collector:
 
 ```bash
 cd ~/SensorAgent
+```md
 ./.venv312/bin/python scripts/linux/collect_gazebo_dataset.py --ros-python /usr/bin/python3
+# Or:
+python3 scripts/linux/collect_gazebo_dataset.py
+```
 ```
 
 Its menu is:
