@@ -5,7 +5,7 @@
 保留最后一天处理提交问题。
 
 相关总体方案见：
-[`COMPETITION_TECHNICAL_PLAN_CN.md`](COMPETITION_TECHNICAL_PLAN_CN.md)。
+[`competition-plan.md`](competition-plan.md)。
 
 ## 1. 排期规则
 

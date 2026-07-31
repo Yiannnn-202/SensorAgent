@@ -234,7 +234,7 @@ Gazebo 演示脚本见：
 
 ```text
 scripts/linux/run_gazebo_recovery_demo.py
-docs/guides/gazebo_recovery_demo_cn.md
+docs/guides/simulation/gazebo-recovery-demo.md
 ```
 
 推荐演示命令：

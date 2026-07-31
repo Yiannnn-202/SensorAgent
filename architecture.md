@@ -1,9 +1,9 @@
 # SensorAgent Technical Architecture
 
-> Scope note: this document is the layered (perception / decision / execution)
-> view used for the competition technical report. The single repository
-> architecture source is [`docs/architecture.md`](docs/architecture.md); if the
-> two disagree, that file wins.
+This is the single source of truth for repository architecture, ownership
+boundaries, runtime structure, and deployment design. Operational procedures
+belong under `docs/guides/`; schedules and competition plans belong under
+`docs/planning/`.
 
 SensorAgent is an embodied-agent orchestration repository for an RM65-B robotic
 arm system with local speech input, open-vocabulary perception, task planning,

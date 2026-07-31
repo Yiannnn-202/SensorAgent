@@ -105,4 +105,4 @@ acceptance thresholds.
 SAM3 is not installed or distributed from this directory. It uses a gated
 checkpoint, a separate SAM License, and a different training stack. Keep any
 future SAM3 environment and weights outside Git and follow
-`docs/guides/vision_sam3_assessment_cn.md` before adding a runtime adapter.
+`docs/guides/vision/sam3-assessment.md` before adding a runtime adapter.

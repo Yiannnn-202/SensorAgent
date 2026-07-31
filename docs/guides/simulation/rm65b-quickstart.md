@@ -7,7 +7,7 @@ RM65-B、Robotiq 2F-85、Gazebo 与 MoveIt 2 仿真控制栈。
 > 已实现的 `sensoragent_robot_bridge`。HTTP Bridge 默认监听
 > `http://127.0.0.1:8765`；可通过 `/health` 和 `/ready` 检查服务与控制接口。
 > 接口和配置见
-> [SensorAgent 仿真机器人 HTTP Bridge 指引](robot_sim_bridge_cn.md)。
+> [SensorAgent 仿真机器人 HTTP Bridge 指引](robot-bridge.md)。
 
 ## 最简使用方式
 
@@ -199,7 +199,7 @@ ros2 launch sensoragent_rm65_b_bringup \
 ```
 
 工业场景的模型清单、相机话题和自定义模型导入方式见
-[`industrial_gazebo_environment_cn.md`](industrial_gazebo_environment_cn.md)。
+[`industrial-environment.md`](industrial-environment.md)。
 
 PGS 求解器用于规避 Ubuntu 22.04 自带 DART 6 Dantzig 求解器的稳定性问题。
 Gazebo 中左右夹指使用独立的限力 effort 控制，夹指内部接触部件固定为刚体，

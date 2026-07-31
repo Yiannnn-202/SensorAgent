@@ -86,7 +86,7 @@ pytest -q tests\unit\test_vision_open_vocab.py
 ```
 
 Real Grounding DINO and SAM 2 inference is a separate environment acceptance
-step. Follow `docs/guides/vision_open_vocab_cn.md`; do not treat the mock unit
+step. Follow `docs/guides/vision/open-vocabulary.md`; do not treat the mock unit
 tests as evidence of model accuracy or robot-coordinate correctness.
 
 ## Single-image and dataset vision checks

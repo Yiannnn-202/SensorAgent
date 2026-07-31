@@ -22,7 +22,7 @@ vision.open_vocab_detect
 对象，也不进入当前 8 月 10 日交付链路。仓库保留旧训练入口只用于历史兼容，不在这一
 阶段分配数据和训练时间。SAM3 已完成官方资料调研，但需要独立 backend、checkpoint
 访问、环境和同测试集测量，当前只作为后续创新对照。详细结论见
-[SAM3 适配性评估](vision_sam3_assessment_cn.md)。
+[SAM3 适配性评估](sam3-assessment.md)。
 
 仓库已提供开训前检查和训练入口：
 

@@ -34,7 +34,7 @@ ros2_ws/src/sensoragent_rm65_b_bringup/worlds/industrial_pgs.sdf
 
 当前默认只生成一个方块，避免圆柱放置后滚动影响 pick/place bringup。需要验证
 视觉空间选择器时，可再手动生成多个滚柱或多个方块实例。详见
-[gazebo_vision_actionlist_test.md](gazebo_vision_actionlist_test.md)。
+[Gazebo RGB-D ActionList test](../vision/gazebo-actionlist-test.md)。
 
 模型使用基础几何体和简化碰撞体，尺寸均控制在 Robotiq 2F-85 的
 `84.8 mm` 最大开口范围内。

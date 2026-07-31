@@ -24,7 +24,7 @@ It populates:
 - `ros2_ws/src/rm_65_config`
 
 For build and launch instructions, see
-[`docs/guides/rm65_b_gazebo_quickstart_cn.md`](../docs/guides/rm65_b_gazebo_quickstart_cn.md).
+[`docs/guides/simulation/rm65b-quickstart.md`](../docs/guides/simulation/rm65b-quickstart.md).
 
 Only the standard RM65 description, meshes, Gazebo integration, and MoveIt 2
 simulation configuration are selected. Drivers, examples, force-sensor

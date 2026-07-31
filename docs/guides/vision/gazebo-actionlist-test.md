@@ -126,7 +126,7 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_si
 
 Relations `left/right/front/back/largest/smallest` need no depth;
 `nearest/farthest` back-project through `scene.workspace.table_z`. See
-[vision_open_vocab_cn.md](vision_open_vocab_cn.md) section 7 for the full
+[open-vocabulary.md](open-vocabulary.md) section 7 for the full
 resolver semantics and the `OBJECT_AMBIGUOUS` cases.
 
 ## Notes

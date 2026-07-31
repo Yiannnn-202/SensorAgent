@@ -101,7 +101,7 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-See the [testing guide](docs/guides/testing.md) for the suite's scope and its
+See the [testing guide](docs/guides/operations/testing.md) for the suite's scope and its
 current known issues.
 
 ## Repository Layout
@@ -157,7 +157,7 @@ script) currently exposes:
 | `vision-detect` | Run open-vocabulary detection on one RGB(-D) image and print the Tool result |
 
 Gazebo workflows are driven by `scripts/linux/` runners instead of CLI
-subcommands. See the [testing guide](docs/guides/testing.md) for the full list.
+subcommands. See the [testing guide](docs/guides/operations/testing.md) for the full list.
 
 ## Documentation
 
@@ -167,23 +167,18 @@ Start from the documentation index:
 
 Key SensorAgent documents:
 
-- [Architecture (single source)](docs/architecture.md)
-- [Layered technical-report view](architecture.md)
-- [Competition technical plan](COMPETITION_TECHNICAL_PLAN_CN.md)
+- [Architecture (single source)](architecture.md)
+- [Competition technical plan](docs/planning/competition-plan.md)
+- [Competition schedule and progress](docs/planning/schedule.md)
 - [Development backlog](TODO.md)
-- [Testing guide](docs/guides/testing.md)
-- [Audio guide](docs/guides/audio.md)
-- [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
-- [RM65-B named joint pose tuning](docs/guides/rm65_b_named_joint_poses.md)
-- [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
-- [Industrial tabletop Gazebo environment](docs/guides/industrial_gazebo_environment_cn.md)
-- [Industrial intent to ActionList guide](docs/guides/intent_to_actionlist_cn.md)
-- [Failure detection and recovery guide](docs/guides/failure_recovery_cn.md)
-- [Gazebo failure recovery demo](docs/guides/gazebo_recovery_demo_cn.md)
-- [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
-- [Public vision datasets and licenses](docs/guides/vision_public_datasets_cn.md)
-- [Gazebo vision VM setup](docs/guides/gazebo_vision_vm_setup.md)
-- [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
+- [Documentation index](docs/README.md)
+- [Testing guide](docs/guides/operations/testing.md)
+- [Audio guide](docs/guides/audio/local-audio.md)
+- [RM65-B Gazebo quickstart](docs/guides/simulation/rm65b-quickstart.md)
+- [Simulation robot HTTP bridge](docs/guides/simulation/robot-bridge.md)
+- [Industrial intent to ActionList guide](docs/guides/workflows/intent-to-actionlist.md)
+- [Failure detection and recovery guide](docs/guides/workflows/failure-recovery.md)
+- [Open-vocabulary vision guide](docs/guides/vision/open-vocabulary.md)
 - [Team conventions](docs/team/convention.md)
 
 ## Vision Model Training and Evaluation
@@ -244,10 +239,10 @@ support and are outside the current 2026-08-10 delivery path.
 The templates are not checked-in training data or evidence that a model has
 trained. Grounding DINO checkpoints, datasets, caches, and run outputs stay
 outside Git.
-See the [Chinese open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
+See the [open-vocabulary vision guide](docs/guides/vision/open-vocabulary.md)
 for the manifest contract, data-source plan, evaluation metrics, and current
 Grounding DINO + SAM2 delivery route.
-The [SAM3 assessment](docs/guides/vision_sam3_assessment_cn.md) records why SAM3
+The [SAM3 assessment](docs/guides/vision/sam3-assessment.md) records why SAM3
 is a later same-split comparison instead of a drop-in replacement for the current
 Grounding DINO + SAM2 delivery.
 
@@ -279,7 +274,7 @@ bash scripts/linux/run_rm65_b_sim.sh
 ```
 
 An optional shell alias reduces this to `sensoragent-sim`; see the
-[full Ubuntu guide](docs/guides/rm65_b_gazebo_quickstart_cn.md).
+[full Ubuntu guide](docs/guides/simulation/rm65b-quickstart.md).
 
 To start Gazebo without MoveIt and RViz:
 
@@ -290,7 +285,7 @@ bash scripts/linux/run_rm65_b_sim.sh start_moveit:=false
 The combined model, arm motion, and gripper opening/closing have been manually
 exercised on Ubuntu. Repeatable object-contact and grasp-stability acceptance
 remain before this simulation should be used for reinforcement learning. See the
-[full Ubuntu guide](docs/guides/rm65_b_gazebo_quickstart_cn.md).
+[full Ubuntu guide](docs/guides/simulation/rm65b-quickstart.md).
 
 ## Local Voice Command Pipeline
 
@@ -312,7 +307,7 @@ python -m pip install -r requirements.txt
 ```
 
 Place local model assets under the ignored `models/` directory as described in
-the [audio guide](docs/guides/audio.md), configure the LLM credentials in an
+the [audio guide](docs/guides/audio/local-audio.md), configure the LLM credentials in an
 ignored `.env`, and run:
 
 ```bash
