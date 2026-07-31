@@ -40,8 +40,16 @@ class ConfigLoaderTest(TestCase):
   def test_load_robot_sim_vision_config(self) -> None:
     config = load_config(ROOT / "configs" / "robot_sim.yaml")
 
-    self.assertEqual(config.integrations.vision["backend"], "yoloe")
-    self.assertEqual(config.integrations.vision["model_path"], "models/vision/yoloe.pt")
+    self.assertEqual(config.integrations.vision["backend"], "grounding_dino")
+    self.assertEqual(
+      config.integrations.vision["grounding_dino_model"],
+      "IDEA-Research/grounding-dino-tiny",
+    )
+    self.assertEqual(
+      config.integrations.vision["sam2_model_path"],
+      "models/vision/sam2_t.pt",
+    )
+    self.assertNotIn("model_path", config.integrations.vision)
     self.assertIn("vision.open_vocab_detect", config.tools.enabled)
     self.assertEqual(
       config.scene.robot_joint_order,

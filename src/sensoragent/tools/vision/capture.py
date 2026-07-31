@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -19,6 +20,11 @@ from sensoragent.schemas import ToolCall, ToolResult, ToolSpec
 DEFAULT_SCRIPT = "scripts/linux/capture_gazebo_rgbd_frame.py"
 DEFAULT_OUT_DIR = "logs/vision/latest"
 _ROS_PROBE = "import numpy, rclpy; from sensor_msgs.msg import CameraInfo, Image"
+_ROS_SETUP_CANDIDATES = (
+  "/opt/ros/humble/setup.bash",
+  "/opt/ros/jazzy/setup.bash",
+  "/opt/ros/iron/setup.bash",
+)
 
 
 class VisionCaptureFrameTool:
@@ -40,6 +46,7 @@ class VisionCaptureFrameTool:
     *,
     script: str = DEFAULT_SCRIPT,
     ros_python: str | None = None,
+    ros_setup: str | None = None,
     image_topic: str = "/industrial_camera/image",
     depth_topic: str = "/industrial_camera/depth_image",
     camera_info_topic: str = "/industrial_camera/camera_info",
@@ -52,6 +59,7 @@ class VisionCaptureFrameTool:
   ) -> None:
     self._script = str(script)
     self._ros_python = str(ros_python) if ros_python else None
+    self._ros_setup = str(ros_setup) if ros_setup else None
     self._image_topic = str(image_topic)
     self._depth_topic = str(depth_topic)
     self._camera_info_topic = str(camera_info_topic)
@@ -61,6 +69,13 @@ class VisionCaptureFrameTool:
     self._timeout_seconds = float(timeout_seconds)
     self._fallback_t_base_camera = fallback_t_base_camera
     self._fallback_t_world_camera = fallback_t_world_camera
+
+  def _setup_script(self) -> str | None:
+    """Return an explicit or discovered ROS setup script."""
+
+    if self._ros_setup:
+      return self._ros_setup
+    return _discover_ros_setup()
 
   def _python_executable(self) -> tuple[str, dict[str, str] | None]:
     if self._ros_python:
@@ -78,7 +93,36 @@ class VisionCaptureFrameTool:
     call: ToolCall,
   ) -> tuple[list[str], dict[str, str] | None]:
     timeout = float(call.input.get("timeout_seconds", self._timeout_seconds))
+    setup = self._setup_script()
+    if setup is not None:
+      python_executable = (
+        self._ros_python
+        or os.environ.get("SENSORAGENT_ROS_PYTHON")
+        or os.environ.get("ROS_PYTHON")
+        or "python3"
+      )
+      argv = self._argv(python_executable, out_dir, call, timeout)
+      quoted = " ".join(shlex.quote(item) for item in argv)
+      setup_command = f". {_shell_path(setup)} >/dev/null 2>&1"
+      workspace_setup = Path("ros2_ws/install/setup.bash")
+      if workspace_setup.is_file():
+        setup_command += f" && . {_shell_path(str(workspace_setup))} >/dev/null 2>&1"
+      return [
+        "bash",
+        "-c",
+        f"unset PYTHONHOME PYTHONPATH; {setup_command} && exec {quoted}",
+      ], None
+
     python_executable, env = self._python_executable()
+    return self._argv(python_executable, out_dir, call, timeout), env
+
+  def _argv(
+    self,
+    python_executable: str,
+    out_dir: Path,
+    call: ToolCall,
+    timeout: float,
+  ) -> list[str]:
     return [
       python_executable,
       self._script,
@@ -96,7 +140,7 @@ class VisionCaptureFrameTool:
       str(call.input.get("world_frame", self._world_frame)),
       "--timeout",
       str(timeout),
-    ], env
+    ]
 
   def run(self, call: ToolCall) -> ToolResult:
     out_dir = Path(str(call.input.get("out_dir", self._out_dir)))
@@ -205,6 +249,26 @@ def _candidate_python_executables() -> list[str]:
     seen.add(executable)
     result.append(executable)
   return result
+
+
+def _discover_ros_setup() -> str | None:
+  """Find a setup script whose environment makes ROS Python imports available."""
+
+  override = os.environ.get("SENSORAGENT_ROS_SETUP")
+  if override:
+    return override if Path(override).is_file() else None
+  for candidate in _ROS_SETUP_CANDIDATES:
+    if Path(candidate).is_file():
+      return candidate
+  return None
+
+
+def _shell_path(value: str) -> str:
+  """Quote setup paths only when the shell requires it."""
+
+  if any(character.isspace() or character in "'\"$`;&|<>()" for character in value):
+    return shlex.quote(value)
+  return value
 
 
 def _python_can_capture(executable: str, env: dict[str, str] | None = None) -> bool:

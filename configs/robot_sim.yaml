@@ -38,9 +38,10 @@ integrations:
     timeout_seconds: 120.0
   vision:
     backend: grounding_dino
-    model_path: models/vision/yoloe.pt
+    grounding_dino_model: IDEA-Research/grounding-dino-tiny
+    sam2_model_path: models/vision/sam2_t.pt
     # The Gazebo validation scene uses a single red block. This deterministic
-    # fallback keeps "red ..." commands from depending on YOLOE text matching.
+    # fallback keeps "red ..." commands from depending on text matching.
     red_color_shortcut: true
     depth_window: 7
     # Fixed Gazebo transform from ROS optical camera coordinates to base_link,

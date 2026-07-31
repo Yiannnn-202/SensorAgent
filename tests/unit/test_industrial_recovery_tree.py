@@ -368,7 +368,7 @@ class LiveDetectRecoveryTreeTest(TestCase):
     self.assertEqual(detect_input["T_base_camera"], _T_BASE_CAMERA)
     self.assertEqual(detect_input["spatial_constraint"], {"relation": "left", "ordinal": 1})
 
-  def test_live_detection_defaults_missing_spatial_constraint(self) -> None:
+  def test_live_detection_omits_missing_spatial_constraint(self) -> None:
     runtime, tool_runtime, _ = _make_runtime(
       real_verify_in_bin=True,
       open_vocab_sequence=[
@@ -384,9 +384,9 @@ class LiveDetectRecoveryTreeTest(TestCase):
     detect_input = next(
       input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
     )
-    self.assertEqual(detect_input["spatial_constraint"], {})
+    self.assertNotIn("spatial_constraint", detect_input)
 
-  def test_live_detection_normalizes_null_spatial_constraint(self) -> None:
+  def test_live_detection_omits_null_spatial_constraint(self) -> None:
     runtime, tool_runtime, _ = _make_runtime(
       real_verify_in_bin=True,
       open_vocab_sequence=[
@@ -406,7 +406,7 @@ class LiveDetectRecoveryTreeTest(TestCase):
     detect_input = next(
       input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
     )
-    self.assertEqual(detect_input["spatial_constraint"], {})
+    self.assertNotIn("spatial_constraint", detect_input)
 
   def test_terminal_failure_result_serializes_without_recursion(self) -> None:
     runtime, _tool_runtime, _ = _make_runtime(
