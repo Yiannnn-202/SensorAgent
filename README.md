@@ -172,6 +172,7 @@ Key SensorAgent documents:
 - [Competition schedule and progress](docs/planning/schedule.md)
 - [Development backlog](TODO.md)
 - [Documentation index](docs/README.md)
+- [Terminal progress logging convention](TERMINAL_PROGRESS_LOGGING.md)
 - [Testing guide](docs/guides/operations/testing.md)
 - [Audio guide](docs/guides/audio/local-audio.md)
 - [RM65-B Gazebo quickstart](docs/guides/simulation/rm65b-quickstart.md)

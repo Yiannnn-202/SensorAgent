@@ -1,10 +1,13 @@
 # Documentation
 
-The repository root keeps only the three primary Markdown documents:
+The repository root keeps three primary project documents and one operational
+logging convention:
 
 - [README](../README.md): project entry point, status, quick start, and navigation.
 - [Architecture](../architecture.md): the single architecture source of truth.
 - [TODO](../TODO.md): incomplete work, blockers, and immediate priorities.
+- [Terminal progress logging](../TERMINAL_PROGRESS_LOGGING.md): the shared
+  stderr/stdout convention for observable command-line pipelines.
 
 Everything else is organized below by purpose. A topic should have one
 authoritative document; other documents should link to it instead of repeating
@@ -54,7 +57,6 @@ the same status or design.
 ### Operations
 
 - [Testing](guides/operations/testing.md)
-- [Terminal progress logging](guides/operations/terminal-progress.md)
 
 ## Reference
 
