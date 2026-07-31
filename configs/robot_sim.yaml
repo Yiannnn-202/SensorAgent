@@ -37,7 +37,7 @@ integrations:
     endpoint: http://127.0.0.1:8765
     timeout_seconds: 120.0
   vision:
-    backend: yoloe
+    backend: grounding_dino
     model_path: models/vision/yoloe.pt
     # The Gazebo validation scene uses a single red block. This deterministic
     # fallback keeps "red ..." commands from depending on YOLOE text matching.
@@ -69,8 +69,10 @@ integrations:
     recovery_live_detect: true
     capture:
       script: scripts/linux/capture_gazebo_rgbd_frame.py
-      # null -> probe SENSORAGENT_ROS_PYTHON, ROS_PYTHON, then python3 for rclpy.
+      # null -> run python3 under the discovered ROS setup script. rclpy needs
+      # the paths that setup exports, so the capture subprocess sources it.
       ros_python: null
+      ros_setup: null
       image_topic: /industrial_camera/image
       depth_topic: /industrial_camera/depth_image
       camera_info_topic: /industrial_camera/camera_info

@@ -12,11 +12,13 @@ logs/
 !/models/**/README.md
 
 # Weights auto-downloaded into the working directory (Ultralytics writes
-# sam2_t.pt / yolo*.pt to the CWD, not to models/).
+# sam2_t.pt / yolo*.pt to the CWD, not to models/). YOLOE also fetches its
+# MobileCLIP text encoder as a TorchScript .ts file.
 *.pt
 *.pth
 *.safetensors
 *.onnx
+mobileclip_*.ts
 
 # Python
 __pycache__/
@@ -29,6 +31,7 @@ __pycache__/
 # Virtual environments
 .venv/
 .venv-*/
+.venv[0-9]*
 venv/
 
 # Local environment

@@ -155,6 +155,7 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
     return VisionCaptureFrameTool(
       script=str(capture_config.get("script", "scripts/linux/capture_gazebo_rgbd_frame.py")),
       ros_python=capture_config.get("ros_python"),
+      ros_setup=capture_config.get("ros_setup"),
       image_topic=str(capture_config.get("image_topic", "/industrial_camera/image")),
       depth_topic=str(capture_config.get("depth_topic", "/industrial_camera/depth_image")),
       camera_info_topic=str(
