@@ -1,6 +1,6 @@
 # 视觉公开数据集选择与使用
 
-更新时间：2026-07-30
+更新时间：2026-07-31
 
 ## 先说结论
 
@@ -10,7 +10,7 @@
 再用 Gazebo 精确类别和真实工位数据完成比赛域微调与验收。
 
 当前最值得先核实的是 **Mechanical Parts Dataset 2022**：它有齿轮、螺栓、螺母和轴承，
-提供 COCO/YOLO/VOC 标注，能补 `gear`、`short bolt`、`hex nut` 的第一轮预热。它仍然
+提供 COCO/YOLO/VOC 标注，能补 `gear`、`bolt`、`nut` 的第一轮通用预热。它仍然
 不能替代比赛数据：来源图片来自互联网，已有 split 是否按原始拍摄来源隔离需要重新检查，
 `bolt` 也不一定等于比赛的 `short bolt`。
 
@@ -18,7 +18,7 @@
 
 | 数据集 | 能补什么 | 标注和许可证 | 在本项目中的定位 |
 | --- | --- | --- | --- |
-| [Mechanical Parts Dataset 2022](https://zenodo.org/records/7504801) | `gear`、`nut`、`bolt`，另有 `bearing` | 2250 张图；10597 个框；YOLO、COCO、VOC；页面标注 CC BY 4.0 | **首选公开预热集**。人工确认类别后映射到 `gear`、`hex nut`、`short bolt`；轴承只作干扰物，不映射成比赛类别 |
+| [Mechanical Parts Dataset 2022](https://zenodo.org/records/7504801) | `bearing`、`bolt`、`gear`、`nut` | 2250 张图；10597 个框；YOLO、COCO、VOC；页面标注 CC BY 4.0 | **首选公开预热集**。公开阶段保留四个原始宽类别；人工确认的特定图片才能进入 `hex nut`、`short bolt` 比赛微调 |
 | [MVTec Screws](https://www.mvtec.com/research-teaching/datasets/mvtec-screws) | 13 类螺钉和螺母 | 384 张图、4426 个旋转框；CC BY-NC-SA 4.0 | 可补螺纹/螺母外形和旋转框鲁棒性；许可证限制明显，不能未经确认用于最终公开/商业用途 |
 | [Open Images V7](https://storage.googleapis.com/openimages/web/index.html) | `Drill (Tool)`、`Screwdriver`、`Wrench` | 600 类、约 1600 万框；逐图核对来源和许可证 | 只补扳手、螺丝刀、钻头等工具；不覆盖比赛六类零件，适合工具类辅助训练或测试 |
 | [BOP T-LESS](https://bop.felk.cvut.cz/datasets/) | 无纹理、相似形状和对称工业物体 | 30 个工业相关物体；RGB-D、2D 框、掩码、6D 位姿；CC BY 4.0 | 补遮挡、弱纹理和相似零件的鲁棒性；对象是实例编号，不能直接当自然语言比赛类别 |
@@ -29,29 +29,29 @@
 
 ## 目前的使用顺序
 
-1. 先下载并检查 Mechanical Parts Dataset 2022 的 COCO 版本，保留 `gear`、`nut`、
-   `bolt` 三类；`bearing` 不改名成比赛零件，必要时作为干扰物单独记录。
+1. 先下载并检查 Mechanical Parts Dataset 2022 的 COCO 版本，公开预热阶段保留
+   `bearing`、`bolt`、`gear`、`nut` 原始宽类别。
 2. 用 `scripts/vision_coco_to_grounding_dino.py` 转为本项目 JSONL。转换前先检查原图、
-   COCO 框、重复图片和类别名；转换后的 `bolt -> short bolt`、`nut -> hex nut` 只能算
-   暂定映射，必须人工抽检。
+   COCO 框、重复图片和类别名；不要在全量转换时自动执行 `bolt -> short bolt` 或
+   `nut -> hex nut`。只有人工确认的特定样本才能进入更窄的比赛类别清单。
 3. 与 Gazebo 数据合并前，按原始来源/场景重新划分 `train/val/test`。不能把公开集的
    `test` 直接当比赛最终测试集，也不能把同一网络图片的裁剪版分到不同集合。
-4. Grounding DINO 的第一轮训练仍以比赛六类文本顺序为主。公开集只扩充其中能可靠映射
-   的类，`roller`、`stepped shaft`、`flange` 必须靠仿真和真实工位数据补齐。
+4. 公开数据先使用独立四类配置做通用预热；随后再用比赛六类文本顺序和仿真/真实数据
+   微调。`roller`、`stepped shaft`、`flange` 仍必须靠仿真和真实工位数据补齐。
 5. 最终冻结一批不参与训练的真实工位图片，单独报告公开集预热、仿真微调和真实数据微调
    三种设置，不能把混合后的一个数字当成公开数据集效果。
 
 ## Mechanical Parts Dataset 的落地命令
 
 下载页面提供 COCO 压缩包。解压后，假设 COCO 文件为
-`data/vision/public/mechanical_parts/annotations/instances_train.json`，原图根目录为
-`data/vision/public/mechanical_parts/images`，类别映射可以从模板开始：
+`data/vision/public/mechanical_parts_2022/annotations/instances_train.json`，原图根目录为
+`data/vision/public/mechanical_parts_2022/images`，类别映射可以从模板开始：
 
 ```powershell
 python scripts\vision_coco_to_grounding_dino.py `
-  --annotations data\vision\public\mechanical_parts\annotations\instances_train.json `
-  --image-root data\vision\public\mechanical_parts\images `
-  --output data\vision\public\mechanical_parts\mechanical_train.jsonl `
+  --annotations data\vision\public\mechanical_parts_2022\annotations\instances_train.json `
+  --image-root data\vision\public\mechanical_parts_2022\images `
+  --output data\vision\public\mechanical_parts_2022\mechanical_train.jsonl `
   --category-map configs\vision_public_mechanical_parts_mapping.example.yaml `
   --split train `
   --scene-prefix public_mechanical_train `
@@ -59,22 +59,22 @@ python scripts\vision_coco_to_grounding_dino.py `
   --source-license "CC BY 4.0"
 ```
 
-转换器只保留明确映射的正样本，默认不会把只有 `bearing` 等未映射类别的图片当成负样本。
-这是为了避免“图里有目标但没有标注”被错误训练成背景。只有人工确认其余目标都已标注后，
-才可以追加 `--include-negative`。
+转换器只保留明确映射的正样本。默认不把没有映射目标的图片自动写成负样本，这是为了
+避免“图里有目标但没有标注”被错误训练成背景。只有人工确认其余目标都已标注后，才可以
+追加 `--include-negative`。
 
 转换完成后先运行 Grounding DINO 预检：
 
 ```powershell
 python scripts\vision_train_grounding_dino.py `
-  --config configs\vision_train_grounding_dino.example.yaml `
-  --manifest data\vision\public\mechanical_parts\mechanical_train.jsonl `
+  --config configs\vision_train_grounding_dino_public_mechanical.example.yaml `
+  --manifest data\vision\public\mechanical_parts_2022\mechanical_parts_train_val.jsonl `
   --dry-run
 ```
 
-注意：模板中的六类要求 train/val 都覆盖全部类别。公开集只有部分类别时，应先和仿真/真实
-数据合并成完整清单，或把训练配置类别临时缩小为当前实验的类别集合；不要为绕过预检随便
-伪造缺失类别。
+公开预热配置要求 train/val 都覆盖 `bearing`、`bolt`、`gear`、`nut`。比赛六类训练
+仍使用 `configs/vision_train_grounding_dino.example.yaml`；不要为绕过预检伪造公开集
+没有的比赛类别。
 
 ## 下载、提交和许可证边界
 

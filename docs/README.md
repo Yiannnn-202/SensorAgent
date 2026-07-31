@@ -27,6 +27,7 @@ operation guides, and a small number of project planning records.
 - [中文约定](team/convention_cn.md)
 - [团队总览](team/general_cn.md)
 - [视觉模块阶段交接](team/vision_handoff_cn.md)
+- [8 月 10 日视觉交付计划](team/vision_aug10_delivery_cn.md)
 
 ## Operational guides
 
@@ -42,6 +43,7 @@ operation guides, and a small number of project planning records.
 - [Gazebo failure recovery demo](guides/gazebo_recovery_demo_cn.md)
 - [Open-vocabulary vision Tool](guides/vision_open_vocab_cn.md)
 - [Public vision datasets and licenses](guides/vision_public_datasets_cn.md)
+- [SAM3 适配性评估](guides/vision_sam3_assessment_cn.md)
 - [Gazebo vision VM setup](guides/gazebo_vision_vm_setup.md)
 - [Gazebo RGB-D vision ActionList test](guides/gazebo_vision_actionlist_test.md)
 - [Gazebo pick pipeline test script](guides/gazebo_pick_pipeline_test.md)

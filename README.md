@@ -230,15 +230,18 @@ python scripts\vision_train_grounding_dino.py `
 order and reproducible training parameters. `class_labels` are indexes into
 that exact text list; they are not an independent YOLO class map. SAM 2 masks
 remain useful annotations, but Grounding DINO is optimized on text-grounded
-boxes. YOLO11n-seg and `scripts/vision_train.py` remain optional later student
-baselines, not the current primary training task.
+boxes. YOLO11n-seg and `scripts/vision_train.py` remain historical experiment
+support and are outside the current 2026-08-10 delivery path.
 
 The templates are not checked-in training data or evidence that a model has
 trained. Grounding DINO checkpoints, datasets, caches, and run outputs stay
 outside Git.
 See the [Chinese open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
-for the manifest contract, data-source plan, evaluation metrics, and teacher to
-student optimization route.
+for the manifest contract, data-source plan, evaluation metrics, and current
+Grounding DINO + SAM2 delivery route.
+The [SAM3 assessment](docs/guides/vision_sam3_assessment_cn.md) records why SAM3
+is a later same-split comparison instead of a drop-in replacement for the current
+Grounding DINO + SAM2 delivery.
 
 ## RM65-B and Robotiq Simulation
 
