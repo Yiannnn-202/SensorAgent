@@ -85,7 +85,7 @@ For a small manually varied training dataset, use the interactive collector:
 
 ```bash
 cd ~/SensorAgent
-python3 scripts/linux/collect_gazebo_dataset.py
+./.venv312/bin/python scripts/linux/collect_gazebo_dataset.py --ros-python /usr/bin/python3
 ```
 
 Its menu is:
@@ -119,6 +119,11 @@ data/vision/red_block_v0/
 Upload only `roboflow_images/*.png` to the Roboflow instance-segmentation
 project. Keep `raw/` and `capture_manifest.csv` for dataset provenance and later
 RGB-D work. The collector resumes at the next unused image number after restart.
+
+You do not need to activate `.venv312` first when using the explicit interpreter
+path above. If you do activate it, keep `--ros-python /usr/bin/python3` so the
+capture subprocess still uses the ROS 2 Python environment that provides
+`rclpy`.
 
 ## 4. Run the vision ActionList
 
@@ -172,6 +177,9 @@ resolver semantics and the `OBJECT_AMBIGUOUS` cases.
 
 - `python3 scripts/linux/capture_gazebo_rgbd_frame.py` uses ROS 2 Python because
   it imports `rclpy`.
+- `./.venv312/bin/python scripts/linux/collect_gazebo_dataset.py --ros-python
+  /usr/bin/python3` runs the collector with the Agent Python environment while
+  keeping the actual ROS frame capture on system ROS Python.
 - `.venv312/bin/python scripts/linux/run_gazebo_vision_actionlist_sim.py` uses
   the Agent Python environment.
 - `vision.open_vocab_detect` uses YOLOE/Ultralytics when the model is present.

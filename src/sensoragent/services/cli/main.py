@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
@@ -17,7 +17,7 @@ from sensoragent.tools.vision import SPATIAL_RELATIONS
 
 
 def _default_task_log_path(prefix: str = "mock_pick_place") -> Path:
-  timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+  timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
   return Path("logs") / "tasks" / f"{prefix}_{timestamp}.jsonl"
 
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import shutil
@@ -77,7 +77,7 @@ def _append_manifest(
       {
         "capture_index": index,
         "scene_id": f"scene_{index:03d}",
-        "captured_at": datetime.now(UTC).isoformat(),
+        "captured_at": datetime.now(timezone.utc).isoformat(),
         "class_name": class_name,
         "image": _relative(image_path, dataset_dir),
         "raw_dir": _relative(raw_dir, dataset_dir),

@@ -19,7 +19,7 @@ import json
 import sys
 import time
 import wave
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -37,7 +37,7 @@ def _progress(message: str) -> None:
 
 
 def _recording_path(output_dir: Path, index: int) -> Path:
-  timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+  timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
   return output_dir / f"stream_asr_{timestamp}_{index:03d}.wav"
 
 
@@ -106,7 +106,7 @@ def _print_event(event: str, payload: dict) -> None:
     json.dumps(
       {
         "event": event,
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         **payload,
       },
       ensure_ascii=False,
