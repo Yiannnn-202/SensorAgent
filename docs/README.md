@@ -13,6 +13,8 @@ operation guides, and a small number of project planning records.
   the competition report. `docs/architecture.md` wins on any disagreement.
 - [Development backlog](../TODO.md) — the single source for planned and incomplete
   work.
+- [Competition progress baseline](../COMPETITION_GANTT_PLAN_CN.md) — the current
+  evidence-based module levels, stage-gate status, overdue decisions, and dates.
 - [Root README](../README.md) — entry point, quick start, CLI surface, and
   common commands.
 

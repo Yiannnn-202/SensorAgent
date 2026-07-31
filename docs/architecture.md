@@ -160,6 +160,13 @@ Task logs use JSONL records for requests, workflow steps, tool calls, retries,
 failures, and final status. External robot or simulator logs remain owned by their
 runtime unless an integration explicitly imports them.
 
+The current state layer is task-oriented rather than a complete competition
+world model. Workflow context can carry detected objects, plans, failures, and
+verification results during one run, but there is not yet a durable
+`WorldState` model covering instance identity, multi-frame validity, robot and
+gripper state, target occupancy, source timestamps, and replay. That missing
+contract is a first-stage integration item, not an already implemented feature.
+
 ## Configuration
 
 YAML files under `configs/` select enabled tools, skills, integrations, logging, and
@@ -469,3 +476,20 @@ wins and the root view must be updated to match. `TODO.md` is the only
 development backlog. Team-wide material stays under `docs/team/`; operational
 instructions stay under `docs/guides/`. Superseded documents are deleted and remain
 available through Git history rather than being copied into an archive folder.
+
+## 2026-07-31 maturity snapshot
+
+| Area | Evidence-based maturity |
+| --- | --- |
+| Agent and workflow runtime | L2 |
+| Robot execution and bridge | L2-, pending automated Gazebo acceptance |
+| Vision perception and localization | L1+ to L2-, pending fixed-set metrics and calibration |
+| Failure verification and recovery | L2-, pending Gazebo batch results |
+| Industrial scene and data | L1 |
+| Unified world state | L1 |
+| Physical robot integration | L0 |
+| Model experiments | L1; runners exist, formal results do not |
+
+The immediate engineering gate is a repeatable minimum scene with reset, batch
+execution, complete logs, and measured success/recovery rates. API expansion and
+reinforcement learning are not on that critical path.

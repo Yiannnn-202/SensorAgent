@@ -41,6 +41,12 @@ SensorAgent is not responsible for:
 
 ## Current Status
 
+As of 2026-07-31, the repository is beyond framework scaffolding and has a
+working simulation-oriented prototype. The Agent and workflow framework is at
+an integration-ready level, while competition acceptance is still limited by
+repeatable Gazebo testing, measured vision quality, unified world state, and the
+absence of physical-robot integration.
+
 | Area | Status |
 | --- | --- |
 | Agent, Tool, Skill, ActionList, and DecisionTree runtimes | Implemented |
@@ -55,6 +61,8 @@ SensorAgent is not responsible for:
 | Gazebo RGB-D frame capture Tool (`vision.capture_frame`) | Implemented; requires a ROS 2 Python interpreter on Ubuntu |
 | Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
 | Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
+| Unified competition world state | Partial; task lifecycle and workflow context exist, but there is no durable object/robot/bin world-state model yet |
+| Batch simulation evaluation and repeatable scene reset | Not implemented |
 | HTTP/WebSocket/MCP service entry points | Not implemented; only the CLI exists |
 | Physical robot connection | Not connected |
 | Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
@@ -418,11 +426,18 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
 
 ## Current Development Priorities
 
-1. Add automated ROS 2/Gazebo acceptance tests and repeatable scene reset.
-2. Connect recognized voice commands to approved robot workflows.
-3. Broaden industrial object/bin coverage with recovery branches.
-4. Define the Gymnasium observation, action, reward, and termination contract.
-5. Add service entry points and a physical robot adapter.
+1. Establish a clean offline test baseline and automated ROS 2/Gazebo acceptance.
+2. Add repeatable scene reset, batch execution, and report-ready metrics.
+3. Freeze the competition object classes, validation data, camera contract, and
+   physical-robot access plan.
+4. Complete measured RGB-D perception and recovery acceptance on the minimum
+   competition scene.
+5. Define the unified world-state contract needed by perception, planning,
+   execution, and replay.
+
+Service entry points, broader object coverage, and reinforcement learning remain
+outside the critical path until the repeatable simulation loop passes its first
+stage gate.
 
 The Python Agent package currently declares Python 3.12, while Ubuntu 22.04 and
 ROS 2 Humble normally use Python 3.10. The implemented design keeps them in

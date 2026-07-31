@@ -267,6 +267,11 @@ without becoming part of the source tree.
 
 ## Current implementation status
 
+As of 2026-07-31, the decision and execution framework is integrated, but the
+competition system has not passed repeatable end-to-end acceptance. The
+deterministic industrial ActionList uses configured object poses; the separate
+vision ActionList and live recovery-tree mode provide the actual RGB-D path.
+
 Implemented in the repository:
 
 - Agent runtime, task lifecycle, static planner, OpenAI-compatible LLM planner,
@@ -285,10 +290,18 @@ Planned or environment-dependent:
 
 - Team-optimized Grounded SAM2 as the primary production vision backend.
 - Automated Gazebo acceptance tests and repeatable scene reset.
+- A unified world-state model for object instances, robot/gripper state, target
+  areas, source timestamps, and replay.
+- Batch experiment execution and report-ready task/recovery metrics.
 - Physical robot adapter and hardware safety integration.
 - A larger selectable scene library for demo comparison and benchmark coverage.
 - Reinforcement-learning environment, reward definition, and evaluation harness.
 - External service API and MCP-style integration beyond the local CLI paths.
+
+Current maturity is approximately **core software L2- and overall system L1+**.
+Model training entry points and evaluation harnesses are implemented, but no
+formal competition dataset, fine-tuned result, localization-error report, or
+ablation should be inferred from the presence of those scripts.
 
 ## Deployment boundary
 

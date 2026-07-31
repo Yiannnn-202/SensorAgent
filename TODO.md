@@ -2,6 +2,24 @@
 
 This file tracks SensorAgent development progress by framework maturity. The current priority is to build a reliable Agent architecture before adding competition-specific workflows.
 
+## 2026-07-31 project snapshot
+
+The generic Agent framework is largely implemented. Current competition progress
+is better described as **core software L2- and overall system L1+**:
+
+- Agent planning, registered workflows, robot Tools, the HTTP simulation bridge,
+  RGB-D capture, open-vocabulary vision, and classified recovery are connected.
+- The deterministic industrial ActionList still uses configured object poses;
+  live RGB-D perception is an explicit vision ActionList and recovery-tree mode.
+- The main blockers are repeatable Gazebo reset and batch acceptance, a unified
+  world-state model, fixed evaluation datasets and metrics, and physical-robot
+  integration.
+- The 2026-07-31 offline run collected 224 tests and ended with one failure and
+  two errors listed under [Known issues](#known-issues).
+
+Do not start reinforcement-learning work or expand service surfaces at the
+expense of the first repeatable simulation acceptance loop.
+
 ## Phase 0 - Project skeleton and documentation
 
 Goal: make the project understandable to new contributors and keep repository boundaries clear.
@@ -363,16 +381,18 @@ reinforcement-learning tasks.
 - [x] Add combined Gazebo and MoveIt 2 launch files.
 - [x] Add bounded-effort two-finger gripper control and a standard GripperCommand bridge.
 - [x] Manually verify the combined model, arm motion, and gripper open/close path on Ubuntu.
+- [x] Add the initial industrial tabletop world, part models, RGB-D rig, and named target areas.
 - [ ] Validate finger contact, friction, and grasp stability in Gazebo Sim.
 - [ ] Add automated ROS 2 launch and controller smoke tests.
-- [ ] Add industrial worlds, objects, and repeatable grasp scenarios.
+- [ ] Add repeatable scene reset, object randomization, and grasp scenarios.
+- [ ] Add a batch simulation runner with per-task JSONL/CSV metrics.
 - [ ] Define the Gymnasium observation, action, reward, and termination contract.
 - [ ] Implement the first RL environment and scripted baseline.
 
 ## Known issues
 
-Observed on 2026-07-29 with `python -m unittest discover -s tests -p 'test_*.py'`
-(215 tests collected, 2 errors) on a Windows machine without ROS 2:
+Observed on 2026-07-31 with `python -m unittest discover -s tests -p 'test_*.py'`
+(224 tests run, 1 failure and 2 errors) on a Windows machine without ROS 2:
 
 - [ ] `tests/unit/test_vision_evaluation.py` imports `pytest`, which is not declared
   in `requirements.txt` or `pyproject.toml`. Either declare a test dependency set
@@ -382,6 +402,11 @@ Observed on 2026-07-29 with `python -m unittest discover -s tests -p 'test_*.py'
   `configs/robot_sim.yaml` and fails with `ROBOT_BRIDGE_UNAVAILABLE` unless the
   bridge is running. The case needs a fake robot backend and a stateful fake
   detector to match its name, or it should be moved out of the default suite.
+- [ ] `DecisionTreeLastFailureTest.test_failed_node_is_available_to_recovery_tools`
+  expects `last_failure.failed_step` to remain `not_found`, but the current
+  runtime reports the subsequent `found_check` condition node. The intended
+  failure-evidence semantics must be fixed or the test expectation deliberately
+  updated.
 - [ ] `vision.capture_frame` and the `robot.plan_*` planning tools have no files
   under `contracts/tools/`.
 - [ ] `src/sensoragent/services/api/` is still an empty placeholder while the
