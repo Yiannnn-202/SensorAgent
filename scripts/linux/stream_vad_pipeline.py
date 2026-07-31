@@ -16,7 +16,7 @@ import math
 import sys
 import wave
 from collections import deque
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from queue import Empty, Queue
 
@@ -43,7 +43,7 @@ def _print_event(event: str, payload: dict) -> None:
     json.dumps(
       {
         "event": event,
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         **payload,
       },
       ensure_ascii=False,
@@ -65,7 +65,7 @@ def _write_mono_16k_wav(path: Path, samples) -> None:
 
 
 def _utterance_path(output_dir: Path, index: int) -> Path:
-  timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+  timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
   return output_dir / f"stream_vad_{timestamp}_{index:03d}.wav"
 
 

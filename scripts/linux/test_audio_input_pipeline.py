@@ -14,7 +14,7 @@ import json
 import math
 import sys
 import wave
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -32,7 +32,7 @@ def _progress(message: str) -> None:
 
 
 def _default_audio_path(prefix: str) -> Path:
-  timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+  timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
   return ROOT / "logs" / "audio" / f"{prefix}_{timestamp}.wav"
 
 

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import struct
 import time
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -150,6 +152,33 @@ def _write_ppm(path: Path, image: np.ndarray) -> None:
     stream.write(image.astype(np.uint8).tobytes())
 
 
+def _write_png(path: Path, image: np.ndarray) -> None:
+  """Write an RGB PNG without requiring Pillow in the ROS 2 environment."""
+
+  height, width, channels = image.shape
+  if channels != 3:
+    raise ValueError("PNG output requires an RGB image")
+
+  def chunk(name: bytes, payload: bytes) -> bytes:
+    return (
+      struct.pack(">I", len(payload))
+      + name
+      + payload
+      + struct.pack(">I", zlib.crc32(name + payload) & 0xFFFFFFFF)
+    )
+
+  pixels = image.astype(np.uint8)
+  scanlines = b"".join(b"\x00" + pixels[row].tobytes() for row in range(height))
+  header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+  path.parent.mkdir(parents=True, exist_ok=True)
+  path.write_bytes(
+    b"\x89PNG\r\n\x1a\n"
+    + chunk(b"IHDR", header)
+    + chunk(b"IDAT", zlib.compress(scanlines))
+    + chunk(b"IEND", b"")
+  )
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(description="Capture one industrial Gazebo RGB-D frame.")
   parser.add_argument("--out-dir", type=Path, default=Path("logs/vision/latest"))
@@ -179,6 +208,7 @@ def main() -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     np.save(args.out_dir / "rgb.npy", image)
     _write_ppm(args.out_dir / "rgb.ppm", image)
+    _write_png(args.out_dir / "rgb.png", image)
     np.save(args.out_dir / "depth.npy", depth)
     (args.out_dir / "camera_info.json").write_text(
       json.dumps(camera_info, ensure_ascii=False, indent=2),
@@ -187,6 +217,7 @@ def main() -> int:
     manifest = {
       "image_path": str(args.out_dir / "rgb.npy"),
       "preview_path": str(args.out_dir / "rgb.ppm"),
+      "png_path": str(args.out_dir / "rgb.png"),
       "depth_path": str(args.out_dir / "depth.npy"),
       "camera_info_path": str(args.out_dir / "camera_info.json"),
       "camera_frame": camera_frame,
