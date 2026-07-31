@@ -81,6 +81,45 @@ logs/vision/latest/camera_info.json
 logs/vision/latest/manifest.json
 ```
 
+For a small manually varied training dataset, use the interactive collector:
+
+```bash
+cd ~/SensorAgent
+python3 scripts/linux/collect_gazebo_dataset.py
+```
+
+Its menu is:
+
+```text
+1  capture the current camera frame
+2  show progress and the next scene number
+0  exit without deleting existing captures
+```
+
+Move or rotate the object in Gazebo, return to the terminal, and press `1`.
+Successful captures are automatically numbered and saved under:
+
+```text
+data/vision/red_block_v0/
+├── capture_manifest.csv
+├── roboflow_images/
+│   ├── red_block_001.png
+│   └── ...
+└── raw/
+    ├── scene_001/
+    │   ├── rgb.npy
+    │   ├── rgb.ppm
+    │   ├── rgb.png
+    │   ├── depth.npy
+    │   ├── camera_info.json
+    │   └── manifest.json
+    └── ...
+```
+
+Upload only `roboflow_images/*.png` to the Roboflow instance-segmentation
+project. Keep `raw/` and `capture_manifest.csv` for dataset provenance and later
+RGB-D work. The collector resumes at the next unused image number after restart.
+
 ## 4. Run the vision ActionList
 
 Plan-only / fake robot backend:
