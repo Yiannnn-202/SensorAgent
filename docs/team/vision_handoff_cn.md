@@ -7,7 +7,8 @@
 [开放词汇视觉接入说明](../guides/vision_open_vocab_cn.md)为准，这里不重复维护另一套
 操作手册。公开数据集的筛选、许可证和转换命令见[视觉公开数据集选择与使用](../guides/vision_public_datasets_cn.md)，
 最新节点安排见[8 月 10 日视觉交付计划](vision_aug10_delivery_cn.md)，SAM3 是否适合替换
-当前方案见[SAM3 适配性评估](../guides/vision_sam3_assessment_cn.md)。
+当前方案见[SAM3 适配性评估](../guides/vision_sam3_assessment_cn.md)，7 月 31 日的公开数据
+和训练实测证据见[视觉任务执行记录](vision_20260731_execution_cn.md)。
 
 ## 1. 先说结论
 
@@ -218,16 +219,17 @@ box fallback：0/4
 `batch_size: 1`，通过梯度累积扩大有效批量，避免当前 Transformers 版本的大 batch
 类别标签图偏移风险。
 
-正式训练后，本地会保存最佳和最后 checkpoint、模型来源、类别提示顺序、训练参数、
+正式训练时，本地会保存最佳和最后 checkpoint、模型来源、类别提示顺序、训练参数、
 数据清单哈希、图片内容哈希、checkpoint SHA-256、每轮损失和耗时。现在只完成了数据
-预检和代码级测试，还没有拿比赛数据跑第一轮，所以不能写成“Grounding DINO 已完成
-训练”。
+预检、代码级测试和公开机械零件小子集的一轮预热验证；无 AMP 运行完成 8 次有效优化器
+更新，checkpoint 已离线重新加载。公开预热不等于比赛训练：还没有拿比赛数据跑第一轮，
+所以不能写成“比赛 Grounding DINO 已完成训练”。
 
 当前最新主线加本次文档/配置调整的测试结果：
 
 ```text
-Grounding DINO 训练、COCO 转换和视觉接口专项测试：43 passed
-完整仓库测试：247 passed, 3 failed
+Grounding DINO 训练、COCO 审计/转换和视觉接口专项测试：63 passed
+完整仓库测试：249 passed, 3 failed
 ```
 
 完整测试中的三个失败与本次视觉调整无关：一个是本机缺少

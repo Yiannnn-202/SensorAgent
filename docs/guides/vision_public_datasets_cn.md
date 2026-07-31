@@ -31,7 +31,8 @@
 
 1. 先下载并检查 Mechanical Parts Dataset 2022 的 COCO 版本，公开预热阶段保留
    `bearing`、`bolt`、`gear`、`nut` 原始宽类别。
-2. 用 `scripts/vision_coco_to_grounding_dino.py` 转为本项目 JSONL。转换前先检查原图、
+2. 先用 `scripts/vision_coco_audit.py` 检查 COCO 是否引用缺失图片，再用
+   `scripts/vision_coco_to_grounding_dino.py` 转为本项目 JSONL。转换前先检查原图、
    COCO 框、重复图片和类别名；不要在全量转换时自动执行 `bolt -> short bolt` 或
    `nut -> hex nut`。只有人工确认的特定样本才能进入更窄的比赛类别清单。
 3. 与 Gazebo 数据合并前，按原始来源/场景重新划分 `train/val/test`。不能把公开集的
@@ -48,16 +49,27 @@
 `data/vision/public/mechanical_parts_2022/images`，类别映射可以从模板开始：
 
 ```powershell
-python scripts\vision_coco_to_grounding_dino.py `
+python scripts\vision_coco_audit.py `
   --annotations data\vision\public\mechanical_parts_2022\annotations\instances_train.json `
+  --image-root data\vision\public\mechanical_parts_2022\images `
+  --clean-output data\vision\public\mechanical_parts_2022\annotations\instances_train.cleaned.json `
+  --report-output data\vision\public\mechanical_parts_2022\annotations\instances_train.audit.json
+
+python scripts\vision_coco_to_grounding_dino.py `
+  --annotations data\vision\public\mechanical_parts_2022\annotations\instances_train.cleaned.json `
   --image-root data\vision\public\mechanical_parts_2022\images `
   --output data\vision\public\mechanical_parts_2022\mechanical_train.jsonl `
   --category-map configs\vision_public_mechanical_parts_mapping.example.yaml `
   --split train `
   --scene-prefix public_mechanical_train `
+  --source-dataset "Mechanical Parts Dataset 2022" `
   --source-url https://zenodo.org/records/7504801 `
   --source-license "CC BY 4.0"
 ```
+
+审计工具不会修改原始 COCO。只有压缩包本身确实缺图并且报告列出了被删除的图片 ID、
+文件名和关联标注数时，才使用 `--clean-output` 生成的副本继续转换；审计报告和清洗副本
+属于本地数据处理记录，不上传 GitHub。
 
 转换器只保留明确映射的正样本。默认不把没有映射目标的图片自动写成负样本，这是为了
 避免“图里有目标但没有标注”被错误训练成背景。只有人工确认其余目标都已标注后，才可以
@@ -68,7 +80,7 @@ python scripts\vision_coco_to_grounding_dino.py `
 ```powershell
 python scripts\vision_train_grounding_dino.py `
   --config configs\vision_train_grounding_dino_public_mechanical.example.yaml `
-  --manifest data\vision\public\mechanical_parts_2022\mechanical_parts_train_val.jsonl `
+  --manifest data\vision\public\mechanical_parts_2022\manifests\mechanical_parts_train_val.jsonl `
   --dry-run
 ```
 

@@ -28,6 +28,7 @@ operation guides, and a small number of project planning records.
 - [团队总览](team/general_cn.md)
 - [视觉模块阶段交接](team/vision_handoff_cn.md)
 - [8 月 10 日视觉交付计划](team/vision_aug10_delivery_cn.md)
+- [7 月 31 日视觉任务执行记录](team/vision_20260731_execution_cn.md)
 
 ## Operational guides
 

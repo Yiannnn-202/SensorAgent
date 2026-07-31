@@ -300,6 +300,7 @@ def validate_manifest(
 
   sample_ids: set[str] = set()
   image_ids: dict[Path, str] = {}
+  image_hashes: dict[str, str] = {}
   scene_splits: dict[str, str] = {}
   for sample in samples:
     if sample.sample_id in sample_ids:
@@ -310,6 +311,13 @@ def validate_manifest(
         f"image is listed more than once: {sample.image} ({image_ids[sample.image_path]}, {sample.sample_id})"
       )
     image_ids[sample.image_path] = sample.sample_id
+    if check_files:
+      image_hash = _sha256(sample.image_path)
+      previous_sample = image_hashes.setdefault(image_hash, sample.sample_id)
+      if previous_sample != sample.sample_id:
+        raise GroundingDinoDatasetError(
+          f"image content is duplicated: {previous_sample} and {sample.sample_id}"
+        )
     previous_split = scene_splits.setdefault(sample.scene_id, sample.split)
     if previous_split != sample.split:
       raise GroundingDinoDatasetError(
@@ -612,6 +620,8 @@ def train(
   best_checkpoint_sha256 = None
   optimizer_updates = 0
   skipped_optimizer_steps = 0
+  if device.startswith("cuda"):
+    torch.cuda.reset_peak_memory_stats(device)
   started = time.perf_counter()
 
   for epoch in range(1, settings.epochs + 1):
@@ -680,6 +690,15 @@ def train(
 
   last_checkpoint_sha256 = _save_checkpoint(model, processor, destination / "checkpoint-last")
   elapsed = time.perf_counter() - started
+  cuda_memory = None
+  if device.startswith("cuda"):
+    properties = torch.cuda.get_device_properties(device)
+    cuda_memory = {
+      "device_name": properties.name,
+      "total_device_memory_bytes": properties.total_memory,
+      "peak_allocated_bytes": torch.cuda.max_memory_allocated(device),
+      "peak_reserved_bytes": torch.cuda.max_memory_reserved(device),
+    }
   result = {
     "status": "completed" if optimizer_updates else "no_optimizer_update",
     "training_target": "GroundingDinoForObjectDetection",
@@ -708,6 +727,7 @@ def train(
       "torch": torch.__version__,
       "transformers": transformers.__version__,
     },
+    "cuda_memory": cuda_memory,
     "best_val_loss": best_val_loss,
     "best_checkpoint": (destination / "checkpoint-best").as_posix(),
     "best_checkpoint_sha256": best_checkpoint_sha256,

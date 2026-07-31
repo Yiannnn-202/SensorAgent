@@ -28,6 +28,10 @@
 - 已在 RTX 4060 上完成 Grounding DINO + SAM2 预训练模型的真实图片冒烟测试。这个证据
   只能证明推理链路和掩码输出能运行，不是比赛准确率。
 - 已核对 SAM3 官方仓库、安装要求、参数量、微调入口和许可证，形成独立评估文档。
+- 已完成 Mechanical Parts Dataset 2022 的下载校验、缺图审计、train/val 全量转换和
+  Grounding DINO 真实数据预检；公开预热清单共 2024 张图片、9497 个框。
+- 已用四类均覆盖的小子集完成 1 个 epoch 的 Grounding DINO 无 AMP 预热验证，发生
+  8 次有效优化器更新，checkpoint 已离线重新加载。该结果只证明训练链路，不代表精度。
 - 已同步 `main` 到远端最新状态，并删除已经合入的本地视觉实验分支；未合入的恢复分支
   保留，没有误删。
 
@@ -97,6 +101,10 @@ python scripts\vision_train_grounding_dino.py `
   --manifest data\vision\competition_train.jsonl `
   --device cuda:0
 ```
+
+本机 RTX 4060 的 FP16 AMP 冒烟运行跳过了全部优化器更新。训练脚本会返回非零状态，
+当前公开预热配置已设为 `amp: false`；比赛数据训练前仍要先做短跑并确认
+`optimizer_updates > 0`，不能只看进程是否结束。
 
 训练结果、权重、图片、公开数据缓存和 checkpoint 都留在本地；GitHub 只上传代码、
 配置模板、测试、接口契约、来源和说明文档。

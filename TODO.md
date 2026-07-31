@@ -312,7 +312,7 @@ scope agreed in the 2026-07-26 vision discussion.
   experiment support and excluded from the current delivery path.
 - [ ] Review every Grounding DINO training box and preserve optional SAM 2 masks
   for segmentation analysis or later student training.
-- [ ] Inspect Mechanical Parts Dataset 2022 and any selected BOP/MVTec subset;
+- [x] Inspect Mechanical Parts Dataset 2022 and any selected BOP/MVTec subset;
   record version, license, category mapping, duplicate policy, and source split
   before adding it to a local training manifest.
 - [ ] Split complete capture scenes/sessions before augmentation to prevent nearby

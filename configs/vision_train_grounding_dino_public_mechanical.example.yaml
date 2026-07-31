@@ -1,6 +1,6 @@
 # Public pretraining keeps broad Mechanical Parts Dataset concepts unchanged.
 model: IDEA-Research/grounding-dino-tiny
-manifest: data/vision/public/mechanical_parts_2022/mechanical_parts_train_val.jsonl
+manifest: data/vision/public/mechanical_parts_2022/manifests/mechanical_parts_train_val.jsonl
 output_dir: runs/vision/train/grounding_dino_public_mechanical
 
 classes:
@@ -22,4 +22,5 @@ training:
   num_workers: 0
   seed: 42
   device: cuda:0
-  amp: true
+  # The RTX 4060 smoke run skipped every optimizer step with FP16 loss scaling.
+  amp: false
