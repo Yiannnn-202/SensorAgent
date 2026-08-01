@@ -38,6 +38,7 @@ contracts/
     ├── robot.resolve_place_target.schema.json
     ├── robot.stop.schema.json
     ├── vision.config_detect.schema.json
+    ├── vision.grounded_sam2.schema.json
     ├── vision.mock_detect.schema.json
     ├── vision.open_vocab_detect.schema.json
     ├── vision.verify_object_in_bin.schema.json
@@ -62,7 +63,7 @@ errors
 ## Current coverage
 
 Contracts exist for the mock, audio, vision, recovery, arm, and gripper tools
-listed above. Three implemented tools intentionally have no contract file yet
+listed above. Four implemented tools intentionally have no contract file yet
 because their interface is still repository-internal:
 
 ```text

@@ -32,6 +32,7 @@ the same status or design.
 
 ### Vision
 
+- [Grounded SAM 2 strict Tool and red-block evaluation](guides/vision/grounded-sam2-tool-cn.md)
 - [Open-vocabulary vision](guides/vision/open-vocabulary.md)
 - [Public datasets and licenses](guides/vision/public-datasets.md)
 - [SAM3 suitability assessment](guides/vision/sam3-assessment.md)

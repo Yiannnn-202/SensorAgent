@@ -1,0 +1,29 @@
+agent:
+  name: sensoragent
+  mode: vision_grounded_sam2
+
+tools:
+  enabled:
+    - vision.grounded_sam2
+
+skills:
+  enabled: []
+
+integrations:
+  vision:
+    grounding_dino_model: IDEA-Research/grounding-dino-tiny
+    sam2_model_path: models/vision/sam2_t.pt
+    box_threshold: 0.35
+    text_threshold: 0.25
+    device: "0"
+    depth_scale: 1.0
+    camera_frame: camera_color_optical_frame
+    base_frame: base_link
+
+logging:
+  level: info
+  console: true
+  app_log: logs/app.log
+  task_dir: logs/tasks
+  trace_dir: logs/traces
+  error_dir: logs/errors

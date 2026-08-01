@@ -177,7 +177,13 @@ def _build_parser() -> argparse.ArgumentParser:
     "--config",
     type=Path,
     default=Path("configs/vision_grounding_dino.yaml"),
-    help="Config containing vision.open_vocab_detect and its backend settings.",
+    help="Config containing the selected vision Tool and its backend settings.",
+  )
+  vision_detect.add_argument(
+    "--tool",
+    choices=("vision.open_vocab_detect", "vision.grounded_sam2"),
+    default="vision.open_vocab_detect",
+    help="Vision Tool to invoke. The Grounded SAM2 Tool always requires masks.",
   )
   vision_detect.add_argument("--image", type=Path, required=True)
   vision_detect.add_argument("--query", required=True)
@@ -464,11 +470,12 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
     raise SystemExit("--spatial-ordinal must be >= 1")
   log_path = args.log_path or _default_task_log_path("vision_detect")
   bundle = build_agent_from_env(args.config, log_path=log_path)
+  strict_grounded_sam2 = args.tool == "vision.grounded_sam2"
   input_data = {
     "query": args.query,
     "image_path": str(args.image),
-    "refine_masks": not args.no_refine,
-    "require_masks": args.require_masks,
+    "refine_masks": True if strict_grounded_sam2 else not args.no_refine,
+    "require_masks": True if strict_grounded_sam2 else args.require_masks,
   }
   optional = {
     "depth_path": str(args.depth) if args.depth is not None else None,
@@ -488,7 +495,7 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
       "ordinal": args.spatial_ordinal,
     }
   result = bundle.tool_runtime.invoke(
-    "vision.open_vocab_detect",
+    args.tool,
     input_data,
     trace=TraceContext(),
   )

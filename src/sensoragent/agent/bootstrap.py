@@ -56,7 +56,11 @@ from sensoragent.tools.robot import (
   default_place_target_registry,
 )
 from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
-from sensoragent.tools.vision import VisionConfigDetectTool, VisionOpenVocabularyDetectTool
+from sensoragent.tools.vision import (
+  VisionConfigDetectTool,
+  VisionGroundedSam2Tool,
+  VisionOpenVocabularyDetectTool,
+)
 from sensoragent.tools.vision import VisionCaptureFrameTool
 from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
 from sensoragent.tools.vision.mock import MockDetectTool
@@ -94,6 +98,7 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
 
 SCENE_TOOL_NAMES = {
   "vision.config_detect",
+  "vision.grounded_sam2",
   "vision.open_vocab_detect",
   "vision.capture_frame",
   "vision.verify_object_in_bin",
@@ -124,11 +129,10 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
   if tool_name == "vision.config_detect":
     catalog = config.scene.objects or {}
     return VisionConfigDetectTool(catalog)
-  if tool_name == "vision.open_vocab_detect":
+  if tool_name in {"vision.grounded_sam2", "vision.open_vocab_detect"}:
     vision_config = config.integrations.vision
-    return VisionOpenVocabularyDetectTool(
+    common_settings = dict(
       model_path=str(vision_config.get("model_path", "models/vision/yoloe.pt")),
-      backend=str(vision_config.get("backend", "yoloe")),
       grounding_dino_model=vision_config.get("grounding_dino_model"),
       sam2_model_path=vision_config.get("sam2_model_path"),
       camera_info_path=vision_config.get("camera_info_path"),
@@ -140,14 +144,20 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       box_threshold=float(vision_config.get("box_threshold", 0.35)),
       text_threshold=float(vision_config.get("text_threshold", 0.25)),
       device=vision_config.get("device"),
-      refine_masks=vision_config.get("refine_masks"),
-      require_masks=bool(vision_config.get("require_masks", False)),
-      red_color_shortcut=bool(vision_config.get("red_color_shortcut", False)),
       camera_frame=str(
         vision_config.get("camera_frame", "camera_color_optical_frame")
       ),
       base_frame=str(vision_config.get("base_frame", "base_link")),
       workspace=dict(config.scene.workspace or {}),
+    )
+    if tool_name == "vision.grounded_sam2":
+      return VisionGroundedSam2Tool(**common_settings)
+    return VisionOpenVocabularyDetectTool(
+      backend=str(vision_config.get("backend", "yoloe")),
+      refine_masks=vision_config.get("refine_masks"),
+      require_masks=bool(vision_config.get("require_masks", False)),
+      red_color_shortcut=bool(vision_config.get("red_color_shortcut", False)),
+      **common_settings,
     )
   if tool_name == "vision.capture_frame":
     vision_config = config.integrations.vision
