@@ -41,7 +41,7 @@ SensorAgent is not responsible for:
 
 ## Current Status
 
-As of 2026-07-31, the repository is beyond framework scaffolding and has a
+As of 2026-08-01, the repository is beyond framework scaffolding and has a
 working simulation-oriented prototype. The Agent and workflow framework is at
 an integration-ready level, while competition acceptance is still limited by
 repeatable Gazebo testing, measured vision quality, unified world state, and the
@@ -59,6 +59,7 @@ absence of physical-robot integration.
 | Industrial config-detect pick/place ActionLists | Implemented for the current tabletop world |
 | Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
 | Gazebo RGB-D frame capture Tool (`vision.capture_frame`) | Implemented; requires a ROS 2 Python interpreter on Ubuntu |
+| Strict Grounding DINO + SAM 2 Tool (`vision.grounded_sam2`) | Implemented with a pretrained baseline; team-fine-tuned weights and industrial acceptance remain pending |
 | Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
 | Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
 | Unified competition world state | Partial; task lifecycle and workflow context exist, but there is no durable object/robot/bin world-state model yet |
@@ -180,13 +181,17 @@ Key SensorAgent documents:
 - [Industrial intent to ActionList guide](docs/guides/workflows/intent-to-actionlist.md)
 - [Failure detection and recovery guide](docs/guides/workflows/failure-recovery.md)
 - [Open-vocabulary vision guide](docs/guides/vision/open-vocabulary.md)
+- [Grounded SAM 2 strict Tool and red-block evaluation](docs/guides/vision/grounded-sam2-tool-cn.md)
 - [Team conventions](docs/team/convention.md)
 
 ## Vision Model Training and Evaluation
 
-The open-vocabulary model path uses `vision.open_vocab_detect` for both the
-temporary YOLOE baseline and the Grounding DINO + SAM 2 teacher model. Validate a
-portable dataset manifest before running a long evaluation:
+The generic open-vocabulary path uses `vision.open_vocab_detect` for the
+temporary YOLOE baseline and configurable experimental backends. The strict
+`vision.grounded_sam2` Tool fixes the detector to Grounding DINO, always invokes
+SAM 2, and fails instead of silently falling back to a detector box when mask
+generation fails. Validate a portable dataset manifest before running a long
+evaluation:
 
 ```powershell
 python scripts\vision_eval.py validate `
@@ -199,7 +204,8 @@ Run a labeled local dataset with one persistent model instance:
 ```powershell
 python scripts\vision_eval.py run `
   --manifest data\vision\competition_test.jsonl `
-  --config configs\vision_grounding_dino.yaml `
+  --config configs\vision_grounded_sam2.yaml `
+  --tool vision.grounded_sam2 `
   --output-dir runs\vision\competition_test `
   --device 0 `
   --require-masks `
@@ -208,6 +214,21 @@ python scripts\vision_eval.py run `
 
 The runner saves per-sample JSONL, aggregate metrics, Tool logs, and optional
 overlays. Dataset images, model weights, caches, and `runs/` outputs remain local.
+
+Roboflow-style COCO segmentation exports can be converted without adding a
+runtime dependency on `pycocotools`:
+
+```powershell
+python scripts\vision_coco_segmentation_to_eval.py `
+  --source-root "..\red block.v2i.coco-segmentation" `
+  --output-root data\vision\team\red_block_v2 `
+  --sample-prefix red_block_v2 `
+  --query "red block" `
+  --category-name "red-block" `
+  --dataset-name "Roboflow red block v2" `
+  --source-url "https://universe.roboflow.com/yiannnn202s-workspace/red-block" `
+  --source-license "CC BY 4.0"
+```
 
 The current first training target is Grounding DINO itself. Its JSONL manifest
 keeps text class names, absolute `bbox_xyxy` targets, provenance, and scene-level
@@ -243,6 +264,9 @@ outside Git.
 See the [open-vocabulary vision guide](docs/guides/vision/open-vocabulary.md)
 for the manifest contract, data-source plan, evaluation metrics, and current
 Grounding DINO + SAM2 delivery route.
+The [strict Tool guide](docs/guides/vision/grounded-sam2-tool-cn.md) documents
+the fixed Tool contract, COCO conversion workflow, red-block data audit, and
+the measured 2026-08-01 pretrained baseline.
 The [SAM3 assessment](docs/guides/vision/sam3-assessment.md) records why SAM3
 is a later same-split comparison instead of a drop-in replacement for the current
 Grounding DINO + SAM2 delivery.

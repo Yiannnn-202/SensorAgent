@@ -624,6 +624,7 @@ def evaluate_manifest(
   save_overlays: bool = False,
   warmup_runs: int = 1,
   thresholds: AcceptanceThresholds | None = None,
+  tool_name: str = "vision.open_vocab_detect",
 ) -> EvaluationRun:
   """Validate a manifest, run one persistent backend, and save report artifacts."""
 
@@ -657,7 +658,7 @@ def evaluate_manifest(
       result = _normalize_result(runner(input_data))
     except Exception as exc:  # Keep the remaining dataset evaluable after one failure.
       result = {
-        "tool": "vision.open_vocab_detect",
+        "tool": tool_name,
         "success": False,
         "output": {},
         "error": f"EVALUATION_RUNNER_ERROR: {exc}",

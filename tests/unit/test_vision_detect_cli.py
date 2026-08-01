@@ -38,7 +38,13 @@ def _parse(argv: list[str]):
 
 
 class VisionDetectCliArgsTest(TestCase):
-  def _run(self, argv: list[str], tmp_log: Path) -> dict:
+  def _run(
+    self,
+    argv: list[str],
+    tmp_log: Path,
+    *,
+    expected_tool: str = "vision.open_vocab_detect",
+  ) -> dict:
     args = _parse([*argv, "--log-path", str(tmp_log)])
     runtime = _RecordingToolRuntime()
     bundle = SimpleNamespace(tool_runtime=runtime)
@@ -50,7 +56,7 @@ class VisionDetectCliArgsTest(TestCase):
     self.assertEqual(exit_code, 0)
     self.assertEqual(len(runtime.calls), 1)
     name, input_data = runtime.calls[0]
-    self.assertEqual(name, "vision.open_vocab_detect")
+    self.assertEqual(name, expected_tool)
     return input_data
 
   def test_spatial_constraint_absent_by_default(self) -> None:
@@ -126,3 +132,23 @@ class VisionDetectCliArgsTest(TestCase):
     )
     with self.assertRaises(SystemExit):
       _run_vision_detect(args)
+
+  def test_grounded_sam2_route_forces_mask_refinement(self) -> None:
+    input_data = self._run(
+      [
+        "--config",
+        "configs/vision_grounded_sam2.yaml",
+        "--tool",
+        "vision.grounded_sam2",
+        "--image",
+        "scene.jpg",
+        "--query",
+        "red block",
+        "--no-refine",
+      ],
+      Path("logs") / "tasks" / "unused.jsonl",
+      expected_tool="vision.grounded_sam2",
+    )
+
+    self.assertTrue(input_data["refine_masks"])
+    self.assertTrue(input_data["require_masks"])
