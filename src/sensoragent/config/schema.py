@@ -39,6 +39,7 @@ class LoggingConfig:
   task_dir: Path = Path("logs/tasks")
   trace_dir: Path = Path("logs/traces")
   error_dir: Path = Path("logs/errors")
+  progress_dir: Path = Path("logs/runs")
 
 
 @dataclass(frozen=True)

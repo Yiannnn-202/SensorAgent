@@ -334,7 +334,13 @@ def build_agent(
 ) -> AgentBundle:
   """Build SensorAgent runtime objects from a loaded config."""
 
-  logger = TaskLogger(log_path, console=config.logging.console)
+  # Derive a human-readable progress log that pairs by filename with the
+  # structured JSONL (e.g. logs/tasks/run.jsonl <-> logs/runs/run.log). Mirrors
+  # the JSONL gating: no log_path means neither file is written.
+  progress_path: Path | None = None
+  if log_path is not None:
+    progress_path = config.logging.progress_dir / f"{log_path.stem}.log"
+  logger = TaskLogger(log_path, console=config.logging.console, progress_path=progress_path)
 
   tool_registry = ToolRegistry()
   robot_client = None
