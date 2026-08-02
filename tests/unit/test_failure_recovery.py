@@ -205,6 +205,20 @@ class FailureDetectorTest(TestCase):
     self.assertTrue(result.retryable)
     self.assertEqual(result.failure_type, FailureType.PLACE_EXEC_FAILED)
 
+  def test_classifies_staging_move_failure_as_recoverable_motion(self) -> None:
+    # Staging move nodes target robot.move_joints at a fixed configured pose; a
+    # failure there is almost certainly a bridge/readiness fault, not an
+    # unreachable pose, so it must classify as recoverable MOTION_FAILED (routed
+    # to recover_bridge), not fall through to UNKNOWN.
+    result = FailureDetector().classify({
+      "failed_step": "carry_joints",
+      "target": "robot.move_joints",
+      "error": "motion aborted during carry",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.MOTION_FAILED)
+    self.assertTrue(result.retryable)
+
   def test_classifies_pick_exec_failed(self) -> None:
     result = FailureDetector().classify({
       "failed_step": "pick",
@@ -438,7 +452,10 @@ class DecisionTreeLastFailureTest(TestCase):
 
     self.assertFalse(result.success)
     self.assertIn("last_failure", result.output)
-    self.assertEqual(result.output["last_failure"]["failed_step"], "not_found")
+    # last_failure records the last non-terminal failing node; the terminal
+    # `not_found` node is intentionally not written back (pinned by
+    # test_terminal_failure_result_serializes_without_recursion).
+    self.assertEqual(result.output["last_failure"]["failed_step"], "found_check")
 
 
 def _call(tool: str, input_data: dict, trace: TraceContext):

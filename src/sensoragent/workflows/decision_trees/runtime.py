@@ -22,6 +22,18 @@ from sensoragent.workflows.actionlists.runtime import _render_value, _resolve_pa
 from sensoragent.workflows.errors import WorkflowExecutionError
 
 
+_DEFAULT_MAX_RECOVERY_ATTEMPTS = 2
+
+
+def _recovery_attempt_limit(context: dict[str, Any]) -> int:
+  """Resolve the global recovery-attempt budget from the tree context."""
+
+  value = context.get("max_recovery_attempts")
+  if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+    return value
+  return _DEFAULT_MAX_RECOVERY_ATTEMPTS
+
+
 class DecisionTreeRuntime:
   """Executes DecisionTree nodes until a terminal result is reached."""
 
@@ -126,6 +138,8 @@ class DecisionTreeRuntime:
       )
 
     context: dict[str, Any] = {**tree.input_defaults, **input_data}
+    max_recovery_attempts = _recovery_attempt_limit(context)
+    recovery_attempts = 0
     results: list[DecisionNodeResult] = []
     current_name: str | None = tree.start
     self._logger.log("decision_tree_started", trace, {"decision_tree": tree.name})
@@ -160,6 +174,29 @@ class DecisionTreeRuntime:
           {"decision_tree": tree.name, "success": False, "error": final.error},
         )
         return final
+
+      # Global recovery budget: each entry into recovery.classify_failure counts
+      # as one recovery attempt; short-circuit to failure once the configured
+      # limit is exceeded, complementing the max_decision_nodes hard cap.
+      if (
+        node.kind == DecisionNodeKind.TOOL
+        and node.target == "recovery.classify_failure"
+      ):
+        recovery_attempts += 1
+        if recovery_attempts > max_recovery_attempts:
+          final = DecisionTreeResult(
+            tree.name,
+            False,
+            results,
+            context,
+            f"DecisionTree exceeded max_recovery_attempts={max_recovery_attempts}",
+          )
+          self._logger.log(
+            "decision_tree_finished",
+            trace,
+            {"decision_tree": tree.name, "success": False, "error": final.error},
+          )
+          return final
 
       self._logger.log(
         "decision_node_started",

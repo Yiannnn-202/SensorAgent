@@ -124,6 +124,58 @@ class IndustrialRecoveryTreeTest(TestCase):
       ],
     )
 
+  def test_staging_move_failure_recovers_via_bridge_reset(self) -> None:
+    # A staging move_joints failure (here observe_before_detect) classifies as
+    # MOTION_FAILED and routes through recover_bridge (robot.stop -> redetect ->
+    # plan_pick) instead of fail-fast at the chain tail.
+    joint_poses = {
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "pick_staging_joints": [0.1, 0.2, -0.3, 0.4, -0.5, 0.6],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+      "place_staging_joints": [0.3, 0.4, -0.5, 0.6, -0.7, 0.8],
+    }
+    runtime, _tool_runtime, _ = _make_runtime(
+      move_joints_sequence=[
+        _StubResult(False, error="motion aborted during observe"),
+        _StubResult(True, {"completed": True, "state": {}}),
+      ],
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(joint_poses),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("recover_bridge", node_names)
+    self.assertEqual(result.output["classification"]["failure_type"], "MOTION_FAILED")
+
+  def test_recovery_attempts_are_bounded_by_max_recovery_attempts(self) -> None:
+    # With max_recovery_attempts=1, the second entry into recovery.classify_failure
+    # must short-circuit to failure instead of attempting another recovery.
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ],
+      plan_place_sequence=[_StubResult(False, error="PLACE_PLAN failed for bin_cell_3")],
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3", "max_recovery_attempts": 1},
+      TraceContext(),
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("max_recovery_attempts", result.error or "")
+    # classify_failure runs once (first recovery); the second entry short-circuits.
+    self.assertEqual(
+      [call[0] for call in tool_runtime.calls].count("recovery.classify_failure"), 1
+    )
+
   def test_pick_node_uses_block_close_opening(self) -> None:
     tree = build_industrial_recovery_pick_place_tree()
     pick_node = next(node for node in tree.nodes if node.name == "pick")
@@ -633,6 +685,7 @@ def _make_runtime(
   config_detect_sequence: list[_StubResult] | None = None,
   plan_pick_sequence: list[_StubResult] | None = None,
   verify_place_sequence: list[_StubResult] | None = None,
+  move_joints_sequence: list[_StubResult] | None = None,
   real_verify_in_bin: bool = False,
   real_verify_lifted: bool = False,
 ):
@@ -650,6 +703,9 @@ def _make_runtime(
   )
   verify_place_results = _sequence(
     verify_place_sequence or [_StubResult(True, {"released": True, "opening": 0.0848})]
+  )
+  move_joints_results = _sequence(
+    move_joints_sequence or [_StubResult(True, {"completed": True, "state": {}})]
   )
 
   classify_tool = RecoveryClassifyFailureTool()
@@ -696,7 +752,7 @@ def _make_runtime(
       },
     },
     "robot.plan_place": lambda _i: next(plan_place_results),
-    "robot.move_joints": lambda _i: {"completed": True, "state": {}},
+    "robot.move_joints": lambda _i: next(move_joints_results),
     "robot.move_pose": lambda _i: {"completed": True, "state": {}},
     "robot.move_linear": lambda _i: {"completed": True, "state": {}},
     "gripper.open": lambda _i: {"completed": True, "state": {"opening": 0.0848}},

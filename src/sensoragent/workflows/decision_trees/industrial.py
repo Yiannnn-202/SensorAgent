@@ -328,7 +328,8 @@ def build_industrial_recovery_pick_place_tree(
       _failure_type_check("is_release_failed", "RELEASE_FAILED", "recover_release", "is_gripper_failed"),
       _failure_type_check("is_gripper_failed", "GRIPPER_FAILED", "recover_release", "is_bridge_error"),
       _failure_type_check("is_bridge_error", "BRIDGE_ERROR", "recover_bridge", "is_robot_not_ready"),
-      _failure_type_check("is_robot_not_ready", "ROBOT_NOT_READY", "recover_bridge", "failure"),
+      _failure_type_check("is_robot_not_ready", "ROBOT_NOT_READY", "recover_bridge", "is_motion_failed"),
+      _failure_type_check("is_motion_failed", "MOTION_FAILED", "recover_bridge", "failure"),
       *_move_joints_node(
         "recover_observe_before_redetect",
         observe,
