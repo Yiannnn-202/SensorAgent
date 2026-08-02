@@ -151,7 +151,7 @@ def build_industrial_recovery_pick_place_tree(
     "target": "string",
     "max_recovery_attempts": "integer",
   }
-  input_defaults: dict = {}
+  input_defaults: dict = {"max_recovery_attempts": None}
   if spatial_constraint_input:
     inputs["spatial_constraint"] = "object"
     # Callers may omit the constraint; None means "no spatial filtering".
@@ -297,7 +297,10 @@ def build_industrial_recovery_pick_place_tree(
         name="plan_recovery",
         kind=DecisionNodeKind.TOOL,
         target="recovery.plan",
-        input={"classification": "{{ classification }}"},
+        input={
+          "classification": "{{ classification }}",
+          "context": {"max_recovery_attempts": "{{ max_recovery_attempts }}"},
+        },
         save_as="recovery",
         on_success="is_recovery_retryable",
         on_failure="failure",

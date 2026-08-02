@@ -300,6 +300,27 @@ class IndustrialRecoveryTreeTest(TestCase):
       [call[0] for call in tool_runtime.calls].count("robot.plan_top_down_pick"), 2
     )
 
+  def test_max_recovery_attempts_is_forwarded_to_planner(self) -> None:
+    # The tree declares max_recovery_attempts as an input, so when a caller sets
+    # it the recovery planner must honour it instead of always falling back to
+    # the default of 2. Pins the plan_recovery node forwarding the attempt limit
+    # through to RecoveryPlanTool via the context input.
+    runtime, _tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3", "max_recovery_attempts": 5},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(result.output["recovery"]["max_attempts"], 5)
+
   def test_release_failure_recovers_by_reopening_gripper(self) -> None:
     # The gripper does not confirm release on the first place; recovery re-opens
     # it and then rejoins the lift-clearance step rather than re-placing.

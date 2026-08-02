@@ -189,6 +189,22 @@ class FailureDetectorTest(TestCase):
       result.recommended_strategy, RecoveryStrategy.CHECK_BRIDGE_AND_RESET
     )
 
+  def test_classifies_place_lift_clearance_as_recoverable_motion(self) -> None:
+    # The runtime's last_failure carries both the node name (failed_step) and
+    # the invoked tool target, so the detector must classify motion failures via
+    # the tool target when the node name is not itself a tool name. place_lift_clearance
+    # is a robot.move_linear lift step; a motion failure there is recoverable and
+    # must NOT fall through to UNKNOWN (which fail-fasts).
+    result = FailureDetector().classify({
+      "failed_step": "place_lift_clearance",
+      "target": "robot.move_linear",
+      "error": "motion aborted during lift clearance",
+    })
+
+    self.assertNotEqual(result.failure_type, FailureType.UNKNOWN)
+    self.assertTrue(result.retryable)
+    self.assertEqual(result.failure_type, FailureType.PLACE_EXEC_FAILED)
+
   def test_classifies_pick_exec_failed(self) -> None:
     result = FailureDetector().classify({
       "failed_step": "pick",

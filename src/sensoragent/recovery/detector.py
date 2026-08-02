@@ -48,6 +48,7 @@ class FailureDetector:
     error_upper = error.upper()
     output = normalized.output or {}
     step = normalized.failed_step or ""
+    target = normalized.target or ""
     phase = normalized.phase or _infer_phase(step)
 
     if "VISION_MODEL_NOT_READY" in error_upper:
@@ -195,7 +196,7 @@ class FailureDetector:
         normalized,
         strategy,
       )
-    if step.startswith("robot.move") or step in {"place_move_place", "place_retreat"}:
+    if step.startswith("robot.move") or target.startswith("robot.move") or step in {"place_move_place", "place_retreat"}:
       if phase == "pick" or step in _PICK_STEPS:
         failure_type = FailureType.PICK_EXEC_FAILED
         strategy = RecoveryStrategy.RECOVER_TO_STAGING_AND_REPLAN_PICK
