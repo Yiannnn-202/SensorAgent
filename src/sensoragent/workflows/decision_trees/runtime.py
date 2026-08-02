@@ -197,6 +197,11 @@ class DecisionTreeRuntime:
             {"decision_tree": tree.name, "success": False, "error": final.error},
           )
           return final
+        # Mirror the counter into the context so result.output records how many
+        # recoveries actually ran; the exceeded limit is reported in the error.
+        # Set after the budget check so a short-circuit leaves the count at the
+        # recoveries that ran rather than the one that was refused.
+        context["recovery_attempts"] = recovery_attempts
 
       self._logger.log(
         "decision_node_started",

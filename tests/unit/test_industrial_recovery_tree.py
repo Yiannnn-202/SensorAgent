@@ -176,6 +176,52 @@ class IndustrialRecoveryTreeTest(TestCase):
       [call[0] for call in tool_runtime.calls].count("recovery.classify_failure"), 1
     )
 
+  def test_recovery_attempts_are_observable_in_output(self) -> None:
+    # The recovery counter must land in the tree context so result.output shows
+    # how many recoveries actually ran; without it, debugging a short-circuit
+    # only yields the configured limit from the error message.
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    classify_calls = [call[0] for call in tool_runtime.calls].count("recovery.classify_failure")
+    self.assertEqual(result.output["recovery_attempts"], classify_calls)
+    self.assertEqual(result.output["recovery_attempts"], 1)
+
+  def test_recovery_attempts_are_observable_after_short_circuit(self) -> None:
+    # On short-circuit the counter reflects the recoveries that ran (1), while
+    # the error carries the limit that was exceeded.
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ],
+      plan_place_sequence=[_StubResult(False, error="PLACE_PLAN failed for bin_cell_3")],
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3", "max_recovery_attempts": 1},
+      TraceContext(),
+    )
+
+    self.assertFalse(result.success)
+    self.assertEqual(
+      result.output["recovery_attempts"],
+      [call[0] for call in tool_runtime.calls].count("recovery.classify_failure"),
+    )
+    self.assertEqual(result.output["recovery_attempts"], 1)
+
   def test_pick_node_uses_block_close_opening(self) -> None:
     tree = build_industrial_recovery_pick_place_tree()
     pick_node = next(node for node in tree.nodes if node.name == "pick")
