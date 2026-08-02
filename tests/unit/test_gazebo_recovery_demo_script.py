@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import socket
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 from unittest.mock import patch
 
 from sensoragent.schemas import ToolSpec
@@ -27,6 +28,15 @@ def _load_demo_module():
   assert spec is not None and spec.loader is not None
   spec.loader.exec_module(module)
   return module
+
+
+def _bridge_available() -> bool:
+  """The wrong-table --execute path drives the real robot bridge; skip when it is not running."""
+  try:
+    socket.create_connection(("127.0.0.1", 8765), timeout=0.5).close()
+    return True
+  except OSError:
+    return False
 
 
 class GazeboRecoveryDemoScriptTest(TestCase):
@@ -69,6 +79,7 @@ class GazeboRecoveryDemoScriptTest(TestCase):
       0.29,
     )
 
+  @skipUnless(_bridge_available(), "robot bridge at 127.0.0.1:8765 not available")
   def test_wrong_table_demo_runs_without_gazebo(self) -> None:
     module = _load_demo_module()
     output = ROOT / "logs" / "tasks" / "test_recovery_table_demo_script.json"
