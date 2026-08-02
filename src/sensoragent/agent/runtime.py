@@ -10,6 +10,7 @@ from sensoragent.schemas import (
   PlanTargetKind,
   TraceContext,
 )
+from sensoragent.agent.llm_planner import LLMPlanner
 from sensoragent.agent.planner import Planner, StaticPlanner
 from sensoragent.agent.selector import IdentityWorkflowSelector, WorkflowSelector
 from sensoragent.skills import SkillRuntime
@@ -225,10 +226,25 @@ class AgentRuntime:
     task = self.create_task(user_input, input_data)
     task.mark(TaskStatus.RUNNING)
     self._event_stream.publish("task_started", task.trace, {})
+    self._logger.log(
+      "task_started", task.trace, {"user_input": user_input, "task_id": task.task_id}
+    )
 
+    is_llm_planner = isinstance(self._planner, LLMPlanner)
+    if is_llm_planner:
+      self._logger.log("llm_plan_started", task.trace, {"user_input": user_input})
     plan = self._selector.select(self._planner.plan(user_input, task.input))
+    if is_llm_planner:
+      self._logger.log(
+        "llm_plan_finished",
+        task.trace,
+        {"target": plan.target, "target_kind": str(plan.target_kind)},
+      )
     task.plan = plan
     self._event_stream.publish("task_planned", task.trace, {"plan": plan.to_dict()})
+    self._logger.log(
+      "task_planned", task.trace, {"plan": plan.to_dict(), "task_id": task.task_id}
+    )
 
     # Merge caller-provided task inputs with the planner's extracted inputs.
     # Planner output wins on conflict so incomplete ASR/LLM extraction fails
@@ -238,6 +254,9 @@ class AgentRuntime:
     if validation_error is not None:
       task.mark(TaskStatus.FAILED, error=validation_error)
       self._event_stream.publish("task_failed", task.trace, {"error": task.error})
+      self._logger.log(
+        "task_failed", task.trace, {"error": task.error, "task_id": task.task_id}
+      )
       self._task_store.save(task)
       return task
     if plan.target_kind == PlanTargetKind.SKILL:
@@ -252,8 +271,14 @@ class AgentRuntime:
     if response.success:
       task.mark(TaskStatus.SUCCEEDED)
       self._event_stream.publish("task_succeeded", task.trace, {"result": task.result})
+      self._logger.log(
+        "task_succeeded", task.trace, {"result": task.result, "task_id": task.task_id}
+      )
     else:
       task.mark(TaskStatus.FAILED, error=response.error)
       self._event_stream.publish("task_failed", task.trace, {"error": task.error})
+      self._logger.log(
+        "task_failed", task.trace, {"error": task.error, "task_id": task.task_id}
+      )
     self._task_store.save(task)
     return task
