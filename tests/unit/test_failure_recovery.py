@@ -189,6 +189,36 @@ class FailureDetectorTest(TestCase):
       result.recommended_strategy, RecoveryStrategy.CHECK_BRIDGE_AND_RESET
     )
 
+  def test_classifies_place_lift_clearance_as_recoverable_motion(self) -> None:
+    # The runtime's last_failure carries both the node name (failed_step) and
+    # the invoked tool target, so the detector must classify motion failures via
+    # the tool target when the node name is not itself a tool name. place_lift_clearance
+    # is a robot.move_linear lift step; a motion failure there is recoverable and
+    # must NOT fall through to UNKNOWN (which fail-fasts).
+    result = FailureDetector().classify({
+      "failed_step": "place_lift_clearance",
+      "target": "robot.move_linear",
+      "error": "motion aborted during lift clearance",
+    })
+
+    self.assertNotEqual(result.failure_type, FailureType.UNKNOWN)
+    self.assertTrue(result.retryable)
+    self.assertEqual(result.failure_type, FailureType.PLACE_EXEC_FAILED)
+
+  def test_classifies_staging_move_failure_as_recoverable_motion(self) -> None:
+    # Staging move nodes target robot.move_joints at a fixed configured pose; a
+    # failure there is almost certainly a bridge/readiness fault, not an
+    # unreachable pose, so it must classify as recoverable MOTION_FAILED (routed
+    # to recover_bridge), not fall through to UNKNOWN.
+    result = FailureDetector().classify({
+      "failed_step": "carry_joints",
+      "target": "robot.move_joints",
+      "error": "motion aborted during carry",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.MOTION_FAILED)
+    self.assertTrue(result.retryable)
+
   def test_classifies_pick_exec_failed(self) -> None:
     result = FailureDetector().classify({
       "failed_step": "pick",
@@ -422,7 +452,10 @@ class DecisionTreeLastFailureTest(TestCase):
 
     self.assertFalse(result.success)
     self.assertIn("last_failure", result.output)
-    self.assertEqual(result.output["last_failure"]["failed_step"], "not_found")
+    # last_failure records the last non-terminal failing node; the terminal
+    # `not_found` node is intentionally not written back (pinned by
+    # test_terminal_failure_result_serializes_without_recursion).
+    self.assertEqual(result.output["last_failure"]["failed_step"], "found_check")
 
 
 def _call(tool: str, input_data: dict, trace: TraceContext):

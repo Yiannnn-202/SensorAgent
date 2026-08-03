@@ -122,18 +122,41 @@ def _format_console_event(event: str, payload: dict) -> str | None:
     status = "ok" if payload.get("success") else "fail"
     return f"[actionlist] {status} {payload.get('actionlist')} error={payload.get('error')}"
 
+  if event == "llm_plan_started":
+    return f"[llm] request input={json.dumps(payload.get('user_input', ''), ensure_ascii=False)}"
+  if event == "llm_plan_finished":
+    return f"[llm] plan target={payload.get('target')} kind={payload.get('target_kind')}"
+
+  if event == "task_started":
+    return f"[agent] task start input={json.dumps(payload.get('user_input', ''), ensure_ascii=False)}"
+  if event == "task_planned":
+    return f"[agent] task plan target={payload.get('plan', {}).get('target')}"
+  if event == "task_succeeded":
+    return f"[agent] task ok task_id={payload.get('task_id')}"
+  if event == "task_failed":
+    return f"[agent] task fail error={payload.get('error')}"
+
   return None
 
 
 class TaskLogger:
   """In-memory logger with optional JSONL persistence."""
 
-  def __init__(self, jsonl_path: Path | None = None, *, console: bool = False) -> None:
+  def __init__(
+    self,
+    jsonl_path: Path | None = None,
+    *,
+    console: bool = False,
+    progress_path: Path | None = None,
+  ) -> None:
     self._records: list[LogRecord] = []
     self._jsonl_path = jsonl_path
+    self._progress_path = progress_path
     self._console = console
     if self._jsonl_path is not None:
       self._jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+    if self._progress_path is not None:
+      self._progress_path.parent.mkdir(parents=True, exist_ok=True)
 
   @property
   def records(self) -> list[LogRecord]:
@@ -152,10 +175,21 @@ class TaskLogger:
     if self._jsonl_path is not None:
       with self._jsonl_path.open("a", encoding="utf-8") as stream:
         stream.write(json.dumps(record.to_dict(), ensure_ascii=False) + "\n")
-    if self._console:
+    # Format the human-readable line once and emit to whichever sinks are
+    # enabled. Unknown events return None from _format_console_event and are
+    # skipped by both sinks, so neither produces noise.
+    line: str | None = None
+    if self._console or self._progress_path is not None:
       line = _format_console_event(event, record.payload)
-      if line is not None:
+    if line is not None:
+      if self._console:
         print(line, file=sys.stderr, flush=True)
+      if self._progress_path is not None:
+        # record.timestamp is the fixed-format ISO output of utc_now_iso();
+        # slice the leading "YYYY-MM-DD HH:MM:SS" for ordered offline reading.
+        stamp = record.timestamp[:19].replace("T", " ")
+        with self._progress_path.open("a", encoding="utf-8") as stream:
+          stream.write(f"{stamp} {line}\n")
     return record
 
   def events(self) -> Iterable[str]:
