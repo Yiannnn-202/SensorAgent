@@ -5,6 +5,31 @@ offline path is needed. Git ignores the weight files and retains only this
 README and `.gitkeep`. Never commit a weight, framework cache, partial download,
 training run, exported engine, or inference output.
 
+## Recommended local layout
+
+Use separate paths for each detector family. Do not replace the YOLOE baseline
+with a Grounding DINO checkpoint or rename different model types to the same
+generic filename.
+
+```text
+models/vision/
+├── yoloe.pt
+├── grounding-dino/
+│   ├── grounding-dino-tiny/
+│   └── competition-v1/
+├── sam2/
+│   └── sam2_t.pt
+├── sam2_t.pt
+└── metadata/
+    ├── grounding-dino-competition-v1.example.json
+    └── yoloe-baseline.example.json
+```
+
+`models/vision/yoloe.pt` remains the YOLOE baseline path for compatibility.
+`models/vision/sam2_t.pt` also remains supported because existing configs and
+docs already reference it. New local SAM 2 weights may use
+`models/vision/sam2/` once the corresponding config is updated.
+
 ## Stage 1 - YOLOE baseline
 
 The existing Gazebo configuration expects the temporary baseline at:
@@ -16,6 +41,15 @@ models/vision/yoloe.pt
 This file is not distributed in Git. A contributor who owns an approved copy
 must provide its download location and SHA-256 checksum before baseline
 acceptance can be repeated.
+
+Use the dedicated YOLOE config when you need to force this baseline:
+
+```powershell
+python -m sensoragent.services.cli.main vision-detect `
+  --config configs\vision_yoloe.yaml `
+  --image examples\scene.jpg `
+  --query "red block"
+```
 
 ## Stage 2 - Grounding DINO and SAM 2
 
@@ -35,6 +69,16 @@ integrations:
   vision:
     backend: grounding_dino
     grounding_dino_model: IDEA-Research/grounding-dino-tiny
+    sam2_model_path: models/vision/sam2_t.pt
+```
+
+For a local fine-tuned Grounding DINO checkpoint, prefer a named directory:
+
+```yaml
+integrations:
+  vision:
+    backend: grounding_dino
+    grounding_dino_model: models/vision/grounding-dino/competition-v1
     sam2_model_path: models/vision/sam2_t.pt
 ```
 
@@ -68,6 +112,17 @@ but they are not Grounding DINO loss targets. Fine-tuned model directories are
 written under `runs/vision/train/` and must remain outside Git. Publish the
 approved download location, source model ID, prompt order, configuration,
 dataset hash, and checkpoint SHA-256 only after same-split evaluation.
+
+After approval, copy or download the selected `from_pretrained` directory into a
+stable local path such as:
+
+```text
+models/vision/grounding-dino/competition-v1/
+```
+
+Then update a config to point at that directory. Keep YOLOE's
+`models/vision/yoloe.pt` in place so the older baseline can still be reproduced
+and compared.
 
 ## Historical YOLO11n-seg experiment support
 

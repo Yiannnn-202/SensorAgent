@@ -1,0 +1,16 @@
+{
+  "artifact": "yoloe-baseline",
+  "model_family": "yoloe",
+  "local_path": "models/vision/yoloe.pt",
+  "source_model": "",
+  "download_url": "",
+  "license": "",
+  "class_or_prompt_order": [],
+  "dataset_manifest": "",
+  "dataset_sha256": "",
+  "checkpoint_sha256": "",
+  "evaluation_manifest": "",
+  "evaluation_summary": "",
+  "accepted_for": "baseline comparison",
+  "notes": "Template only. Fill this before repeating baseline acceptance."
+}

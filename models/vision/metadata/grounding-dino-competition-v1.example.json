@@ -1,0 +1,17 @@
+{
+  "artifact": "grounding-dino-competition-v1",
+  "model_family": "grounding_dino",
+  "local_path": "models/vision/grounding-dino/competition-v1",
+  "source_model": "IDEA-Research/grounding-dino-tiny",
+  "download_url": "",
+  "license": "",
+  "prompt_order": [],
+  "training_config": "configs/vision_train_grounding_dino.example.yaml",
+  "dataset_manifest": "",
+  "dataset_sha256": "",
+  "checkpoint_sha256": "",
+  "evaluation_manifest": "",
+  "evaluation_summary": "",
+  "accepted_for": "",
+  "notes": "Template only. Fill this after same-split evaluation passes."
+}

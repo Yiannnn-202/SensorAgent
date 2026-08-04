@@ -10,6 +10,7 @@ logs/
 !/models/**/
 !/models/**/.gitkeep
 !/models/**/README.md
+!/models/vision/metadata/*.json
 
 # Weights auto-downloaded into the working directory (Ultralytics writes
 # sam2_t.pt / yolo*.pt to the CWD, not to models/). YOLOE also fetches its
