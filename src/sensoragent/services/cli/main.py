@@ -227,6 +227,35 @@ def _build_parser() -> argparse.ArgumentParser:
   )
   vision_detect.add_argument("--log-path", type=Path, default=None)
 
+  competition = subparsers.add_parser(
+    "competition",
+    help="Run a batch of recovery-tree scenarios and write competition metrics.",
+  )
+  competition.add_argument(
+    "--config",
+    type=Path,
+    default=Path("configs/robot_mock.yaml"),
+    help="SensorAgent config with a fake/local backend (default: configs/robot_mock.yaml).",
+  )
+  competition.add_argument(
+    "--scenarios",
+    type=Path,
+    required=True,
+    help="YAML file with a top-level 'scenarios' list.",
+  )
+  competition.add_argument(
+    "--out-dir",
+    type=Path,
+    default=None,
+    help="Directory for results.jsonl + summary.json (default: logs/competition/<ts>).",
+  )
+  competition.add_argument(
+    "--baseline-success-rate",
+    type=float,
+    default=None,
+    help="Override the nominal baseline success rate used for recovery_gain.",
+  )
+
   return parser
 
 
@@ -514,6 +543,35 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
   return 0 if result.success else 1
 
 
+def _run_competition(args: argparse.Namespace) -> int:
+  from sensoragent.evaluation import evaluate_runs
+  from sensoragent.evaluation.batch import load_scenarios, run_batch
+
+  scenarios = load_scenarios(args.scenarios)
+  out_dir = args.out_dir or (
+    Path("logs") / "competition" / datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+  )
+  records, baseline = run_batch(
+    scenarios, args.config, baseline_success_rate=args.baseline_success_rate
+  )
+  evaluation = evaluate_runs(
+    records, output_dir=out_dir, baseline_success_rate=baseline
+  )
+  print(
+    json.dumps(
+      {
+        "summary_path": str(out_dir / "summary.json"),
+        "results_path": str(out_dir / "results.jsonl"),
+        "run_count": len(evaluation.rows),
+        "passed": evaluation.passed,
+      },
+      ensure_ascii=False,
+      indent=2,
+    )
+  )
+  return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
   parser = _build_parser()
   args = parser.parse_args(argv)
@@ -526,6 +584,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return _run_listen_task(args)
   if args.command == "vision-detect":
     return _run_vision_detect(args)
+  if args.command == "competition":
+    return _run_competition(args)
 
   parser.error(f"Unknown command: {args.command}")
   return 2
