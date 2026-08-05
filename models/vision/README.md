@@ -113,6 +113,12 @@ written under `runs/vision/train/` and must remain outside Git. Publish the
 approved download location, source model ID, prompt order, configuration,
 dataset hash, and checkpoint SHA-256 only after same-split evaluation.
 
+The local single-class `red_block_v0` run has now completed the training and
+Tool-chain validation steps. It is recorded in
+`models/vision/metadata/grounding-dino-red-block-v0.example.json` and
+`docs/guides/vision/grounding-dino-red-block-v0-cn.md`. This is a handoff
+checkpoint for process validation, not the final multi-class competition model.
+
 After approval, copy or download the selected `from_pretrained` directory into a
 stable local path such as:
 

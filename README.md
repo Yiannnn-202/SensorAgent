@@ -41,7 +41,7 @@ SensorAgent is not responsible for:
 
 ## Current Status
 
-As of 2026-08-01, the repository is beyond framework scaffolding and has a
+As of 2026-08-05, the repository is beyond framework scaffolding and has a
 working simulation-oriented prototype. The Agent and workflow framework is at
 an integration-ready level, while competition acceptance is still limited by
 repeatable Gazebo testing, measured vision quality, unified world state, and the
@@ -59,7 +59,7 @@ absence of physical-robot integration.
 | Industrial config-detect pick/place ActionLists | Implemented for the current tabletop world |
 | Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
 | Gazebo RGB-D frame capture Tool (`vision.capture_frame`) | Implemented; requires a ROS 2 Python interpreter on Ubuntu |
-| Strict Grounding DINO + SAM 2 Tool (`vision.grounded_sam2`) | Implemented with a pretrained baseline; team-fine-tuned weights and industrial acceptance remain pending |
+| Strict Grounding DINO + SAM 2 Tool (`vision.grounded_sam2`) | Implemented with a pretrained baseline and a local single-class `red_block_v0` fine-tuning run; multi-class and industrial acceptance remain pending |
 | Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
 | Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
 | Unified competition world state | Partial; task lifecycle and workflow context exist, but there is no durable object/robot/bin world-state model yet |
@@ -258,9 +258,11 @@ remain useful annotations, but Grounding DINO is optimized on text-grounded
 boxes. YOLO11n-seg and `scripts/vision_train.py` remain historical experiment
 support and are outside the current 2026-08-10 delivery path.
 
-The templates are not checked-in training data or evidence that a model has
-trained. Grounding DINO checkpoints, datasets, caches, and run outputs stay
-outside Git.
+The templates are not checked-in training data. A local single-class
+`red_block_v0` run has been completed for training and Tool-chain validation;
+its checkpoint, dataset, caches, and run outputs stay outside Git. See the
+[red_block_v0 training handoff](docs/guides/vision/grounding-dino-red-block-v0-cn.md)
+for the recorded configuration, hashes, metrics, and remaining work.
 See the [open-vocabulary vision guide](docs/guides/vision/open-vocabulary.md)
 for the manifest contract, data-source plan, evaluation metrics, and current
 Grounding DINO + SAM2 delivery route.
