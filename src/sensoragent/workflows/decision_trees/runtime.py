@@ -236,6 +236,31 @@ class DecisionTreeRuntime:
       results.append(result)
       if node.save_as and result.success:
         context[node.save_as] = result.output
+      # Accumulate per-attempt recovery evidence for offline metrics.
+      # classify_failure opens a new attempt record; plan_recovery backfills
+      # the chosen strategy on the most recent attempt. recovery_attempts and
+      # last_failure are left untouched so existing observers keep working.
+      if result.success and node.target == "recovery.classify_failure":
+        classification = context.get("classification") or {}
+        context.setdefault("recovery_history", []).append(
+          {
+            "attempt": recovery_attempts,
+            "failure_type": classification.get("failure_type"),
+            "phase": classification.get("phase"),
+            "retryable": classification.get("retryable"),
+            "confidence": classification.get("confidence"),
+            "reason": classification.get("reason"),
+            "strategy": None,
+            "next_step": None,
+            "node": node.name,
+          }
+        )
+      elif result.success and node.target == "recovery.plan":
+        recovery_plan = context.get("recovery") or {}
+        history = context.get("recovery_history")
+        if history:
+          history[-1]["strategy"] = recovery_plan.get("strategy")
+          history[-1]["next_step"] = recovery_plan.get("next_step")
       if not result.success and node.kind != DecisionNodeKind.TERMINAL:
         context["last_failure"] = {
           "node": node.name,
