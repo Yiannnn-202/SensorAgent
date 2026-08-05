@@ -197,6 +197,16 @@ class IndustrialRecoveryTreeTest(TestCase):
     classify_calls = [call[0] for call in tool_runtime.calls].count("recovery.classify_failure")
     self.assertEqual(result.output["recovery_attempts"], classify_calls)
     self.assertEqual(result.output["recovery_attempts"], 1)
+    # Per-attempt recovery evidence is accumulated for offline metrics: the
+    # history length agrees with the counter, the recorded failure type matches
+    # the final classification, and plan_recovery backfills the chosen strategy.
+    history = result.output.get("recovery_history", [])
+    self.assertEqual(len(history), result.output["recovery_attempts"])
+    self.assertEqual(
+      history[0]["failure_type"],
+      result.output["classification"]["failure_type"],
+    )
+    self.assertEqual(history[0]["strategy"], result.output["recovery"]["strategy"])
 
   def test_recovery_attempts_are_observable_after_short_circuit(self) -> None:
     # On short-circuit the counter reflects the recoveries that ran (1), while
@@ -221,6 +231,9 @@ class IndustrialRecoveryTreeTest(TestCase):
       [call[0] for call in tool_runtime.calls].count("recovery.classify_failure"),
     )
     self.assertEqual(result.output["recovery_attempts"], 1)
+    # A refused (short-circuited) attempt must not append to recovery_history;
+    # only the recovery that actually ran is recorded.
+    self.assertEqual(len(result.output.get("recovery_history", [])), 1)
 
   def test_pick_node_uses_block_close_opening(self) -> None:
     tree = build_industrial_recovery_pick_place_tree()
