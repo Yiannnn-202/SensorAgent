@@ -25,12 +25,13 @@ from sensoragent.schemas import TraceContext  # noqa: E402
 class SensorAgentVisionRunner:
   """Reuse one configured ToolRuntime across a complete evaluation run."""
 
-  def __init__(self, config: Path, log_path: Path) -> None:
+  def __init__(self, config: Path, log_path: Path, tool_name: str) -> None:
     self._bundle = build_agent_from_env(config, log_path=log_path)
+    self.tool_name = tool_name
 
   def __call__(self, input_data: dict[str, object]):
     return self._bundle.tool_runtime.invoke(
-      "vision.open_vocab_detect",
+      self.tool_name,
       input_data,
       trace=TraceContext(),
     )
@@ -53,6 +54,12 @@ def _parser() -> argparse.ArgumentParser:
   run.add_argument("--manifest", type=Path, required=True)
   run.add_argument(
     "--config", type=Path, default=Path("configs/vision_grounding_dino.yaml")
+  )
+  run.add_argument(
+    "--tool",
+    choices=("vision.open_vocab_detect", "vision.grounded_sam2"),
+    default="vision.open_vocab_detect",
+    help="Vision Tool to evaluate. vision.grounded_sam2 always requires masks.",
   )
   run.add_argument("--output-dir", type=Path, default=Path("runs/vision/eval"))
   run.add_argument("--device", default=None)
@@ -87,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
   runner = SensorAgentVisionRunner(
     args.config,
     args.output_dir / "tool_calls.jsonl",
+    args.tool,
   )
   thresholds = AcceptanceThresholds(
     min_precision=args.min_precision,
@@ -109,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
       save_overlays=args.save_overlays,
       warmup_runs=args.warmup_runs,
       thresholds=thresholds,
+      tool_name=args.tool,
     )
   except ValueError as exc:
     print(str(exc), file=sys.stderr)

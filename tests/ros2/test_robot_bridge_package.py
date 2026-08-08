@@ -72,6 +72,10 @@ class RobotBridgePackageTest(TestCase):
     )
 
     self.assertIn('<link name="robotiq_85_tcp"/>', urdf)
+    self.assertIn(
+      '<xacro:arg name="robot_mount_rpy" default="0 0 3.141592653589793"/>',
+      urdf,
+    )
     self.assertIn('tip_link="robotiq_85_tcp"', srdf)
     self.assertIn('end_effector_link: "robotiq_85_tcp"', bridge_config)
     self.assertIn("orientation_tolerance: 0.20", bridge_config)
@@ -102,9 +106,15 @@ class RobotBridgePackageTest(TestCase):
     self.assertIn("sensoragent_camera_right_post", obstacle_source)
     self.assertIn("sensoragent_camera_crossbar", obstacle_source)
     self.assertIn("sensoragent_camera_body", obstacle_source)
-    self.assertIn("size=(0.14, 0.14, 1.20)", obstacle_source)
-    self.assertIn("size=(0.13, 0.98, 0.13)", obstacle_source)
-    self.assertIn("size=(0.18, 0.14, 0.12)", obstacle_source)
+    self.assertIn("center=(-0.34, -0.42, 0.39)", obstacle_source)
+    self.assertIn("center=(-0.34, 0.42, 0.39)", obstacle_source)
+    self.assertIn("center=(-0.34, 0.0, 0.94)", obstacle_source)
+    self.assertIn("center=(-0.34, 0.0, 0.90)", obstacle_source)
+    self.assertIn("size=(0.24, 0.24, 1.32)", obstacle_source)
+    self.assertIn("size=(0.22, 1.08, 0.22)", obstacle_source)
+    self.assertIn("size=(0.26, 0.22, 0.20)", obstacle_source)
+    self.assertIn("TRANSIENT_LOCAL", bridge_source)
+    self.assertIn("/scene/obstacles", bridge_source)
     self.assertIn("static_scene_publisher", setup_source)
     self.assertIn("static_scene_publisher", moveit_launch)
 

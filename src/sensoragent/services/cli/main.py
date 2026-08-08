@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import UTC, datetime
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
@@ -16,7 +17,7 @@ from sensoragent.tools.vision import SPATIAL_RELATIONS
 
 
 def _default_task_log_path(prefix: str = "mock_pick_place") -> Path:
-  timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+  timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
   return Path("logs") / "tasks" / f"{prefix}_{timestamp}.jsonl"
 
 
@@ -134,6 +135,12 @@ def _build_parser() -> argparse.ArgumentParser:
     help="Optional VAD minimum RMS energy gate for listen-task.",
   )
   listen_task.add_argument(
+    "--vad-pre-roll-ms",
+    type=int,
+    default=None,
+    help="Optional VAD pre-speech audio buffer override in milliseconds.",
+  )
+  listen_task.add_argument(
     "--vad-post-roll-ms",
     type=int,
     default=None,
@@ -170,7 +177,13 @@ def _build_parser() -> argparse.ArgumentParser:
     "--config",
     type=Path,
     default=Path("configs/vision_grounding_dino.yaml"),
-    help="Config containing vision.open_vocab_detect and its backend settings.",
+    help="Config containing the selected vision Tool and its backend settings.",
+  )
+  vision_detect.add_argument(
+    "--tool",
+    choices=("vision.open_vocab_detect", "vision.grounded_sam2"),
+    default="vision.open_vocab_detect",
+    help="Vision Tool to invoke. The Grounded SAM2 Tool always requires masks.",
   )
   vision_detect.add_argument("--image", type=Path, required=True)
   vision_detect.add_argument("--query", required=True)
@@ -213,6 +226,35 @@ def _build_parser() -> argparse.ArgumentParser:
     help="Optional path for a box/mask visualization (.jpg, .png, or .webp).",
   )
   vision_detect.add_argument("--log-path", type=Path, default=None)
+
+  competition = subparsers.add_parser(
+    "competition",
+    help="Run a batch of recovery-tree scenarios and write competition metrics.",
+  )
+  competition.add_argument(
+    "--config",
+    type=Path,
+    default=Path("configs/robot_mock.yaml"),
+    help="SensorAgent config with a fake/local backend (default: configs/robot_mock.yaml).",
+  )
+  competition.add_argument(
+    "--scenarios",
+    type=Path,
+    required=True,
+    help="YAML file with a top-level 'scenarios' list.",
+  )
+  competition.add_argument(
+    "--out-dir",
+    type=Path,
+    default=None,
+    help="Directory for results.jsonl + summary.json (default: logs/competition/<ts>).",
+  )
+  competition.add_argument(
+    "--baseline-success-rate",
+    type=float,
+    default=None,
+    help="Override the nominal baseline success rate used for recovery_gain.",
+  )
 
   return parser
 
@@ -294,6 +336,8 @@ def _run_listen_task(args: argparse.Namespace) -> int:
     vad_input["threshold"] = args.vad_threshold
   if args.vad_min_rms is not None:
     vad_input["min_rms"] = args.vad_min_rms
+  if args.vad_pre_roll_ms is not None:
+    vad_input["pre_roll_ms"] = args.vad_pre_roll_ms
   if args.vad_post_roll_ms is not None:
     vad_input["post_roll_ms"] = args.vad_post_roll_ms
   if args.vad_tail_padding_ms is not None:
@@ -310,6 +354,14 @@ def _run_listen_task(args: argparse.Namespace) -> int:
     },
   )
 
+  print(
+    (
+      "Listening now. Speak one complete command after this line "
+      f"(max {duration_seconds:g}s, silence tail {vad_input['post_roll_ms']} ms)."
+    ),
+    file=sys.stderr,
+    flush=True,
+  )
   transcript = bundle.tool_runtime.invoke(
     "audio.listen_vad_transcribe",
     listen_input,
@@ -447,11 +499,12 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
     raise SystemExit("--spatial-ordinal must be >= 1")
   log_path = args.log_path or _default_task_log_path("vision_detect")
   bundle = build_agent_from_env(args.config, log_path=log_path)
+  strict_grounded_sam2 = args.tool == "vision.grounded_sam2"
   input_data = {
     "query": args.query,
     "image_path": str(args.image),
-    "refine_masks": not args.no_refine,
-    "require_masks": args.require_masks,
+    "refine_masks": True if strict_grounded_sam2 else not args.no_refine,
+    "require_masks": True if strict_grounded_sam2 else args.require_masks,
   }
   optional = {
     "depth_path": str(args.depth) if args.depth is not None else None,
@@ -471,7 +524,7 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
       "ordinal": args.spatial_ordinal,
     }
   result = bundle.tool_runtime.invoke(
-    "vision.open_vocab_detect",
+    args.tool,
     input_data,
     trace=TraceContext(),
   )
@@ -490,6 +543,35 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
   return 0 if result.success else 1
 
 
+def _run_competition(args: argparse.Namespace) -> int:
+  from sensoragent.evaluation import evaluate_runs
+  from sensoragent.evaluation.batch import load_scenarios, run_batch
+
+  scenarios = load_scenarios(args.scenarios)
+  out_dir = args.out_dir or (
+    Path("logs") / "competition" / datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+  )
+  records, baseline = run_batch(
+    scenarios, args.config, baseline_success_rate=args.baseline_success_rate
+  )
+  evaluation = evaluate_runs(
+    records, output_dir=out_dir, baseline_success_rate=baseline
+  )
+  print(
+    json.dumps(
+      {
+        "summary_path": str(out_dir / "summary.json"),
+        "results_path": str(out_dir / "results.jsonl"),
+        "run_count": len(evaluation.rows),
+        "passed": evaluation.passed,
+      },
+      ensure_ascii=False,
+      indent=2,
+    )
+  )
+  return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
   parser = _build_parser()
   args = parser.parse_args(argv)
@@ -502,6 +584,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return _run_listen_task(args)
   if args.command == "vision-detect":
     return _run_vision_detect(args)
+  if args.command == "competition":
+    return _run_competition(args)
 
   parser.error(f"Unknown command: {args.command}")
   return 2

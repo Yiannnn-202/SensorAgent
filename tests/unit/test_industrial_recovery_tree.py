@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from unittest import TestCase
 
@@ -14,7 +14,7 @@ if str(SRC) not in sys.path:
 
 from sensoragent.schemas import TraceContext
 from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
-from sensoragent.tools.vision import VisionVerifyObjectInBinTool
+from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
 from sensoragent.workflows.actionlists import (
   ActionListRuntime,
   build_industrial_pick_only_actionlist,
@@ -124,6 +124,117 @@ class IndustrialRecoveryTreeTest(TestCase):
       ],
     )
 
+  def test_staging_move_failure_recovers_via_bridge_reset(self) -> None:
+    # A staging move_joints failure (here observe_before_detect) classifies as
+    # MOTION_FAILED and routes through recover_bridge (robot.stop -> redetect ->
+    # plan_pick) instead of fail-fast at the chain tail.
+    joint_poses = {
+      "observe_joints": [0.0, 0.1, -0.2, 0.3, -0.4, 0.5],
+      "pick_staging_joints": [0.1, 0.2, -0.3, 0.4, -0.5, 0.6],
+      "carry_joints": [0.2, 0.3, -0.4, 0.5, -0.6, 0.7],
+      "place_staging_joints": [0.3, 0.4, -0.5, 0.6, -0.7, 0.8],
+    }
+    runtime, _tool_runtime, _ = _make_runtime(
+      move_joints_sequence=[
+        _StubResult(False, error="motion aborted during observe"),
+        _StubResult(True, {"completed": True, "state": {}}),
+      ],
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(joint_poses),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("recover_bridge", node_names)
+    self.assertEqual(result.output["classification"]["failure_type"], "MOTION_FAILED")
+
+  def test_recovery_attempts_are_bounded_by_max_recovery_attempts(self) -> None:
+    # With max_recovery_attempts=1, the second entry into recovery.classify_failure
+    # must short-circuit to failure instead of attempting another recovery.
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ],
+      plan_place_sequence=[_StubResult(False, error="PLACE_PLAN failed for bin_cell_3")],
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3", "max_recovery_attempts": 1},
+      TraceContext(),
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("max_recovery_attempts", result.error or "")
+    # classify_failure runs once (first recovery); the second entry short-circuits.
+    self.assertEqual(
+      [call[0] for call in tool_runtime.calls].count("recovery.classify_failure"), 1
+    )
+
+  def test_recovery_attempts_are_observable_in_output(self) -> None:
+    # The recovery counter must land in the tree context so result.output shows
+    # how many recoveries actually ran; without it, debugging a short-circuit
+    # only yields the configured limit from the error message.
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    classify_calls = [call[0] for call in tool_runtime.calls].count("recovery.classify_failure")
+    self.assertEqual(result.output["recovery_attempts"], classify_calls)
+    self.assertEqual(result.output["recovery_attempts"], 1)
+    # Per-attempt recovery evidence is accumulated for offline metrics: the
+    # history length agrees with the counter, the recorded failure type matches
+    # the final classification, and plan_recovery backfills the chosen strategy.
+    history = result.output.get("recovery_history", [])
+    self.assertEqual(len(history), result.output["recovery_attempts"])
+    self.assertEqual(
+      history[0]["failure_type"],
+      result.output["classification"]["failure_type"],
+    )
+    self.assertEqual(history[0]["strategy"], result.output["recovery"]["strategy"])
+
+  def test_recovery_attempts_are_observable_after_short_circuit(self) -> None:
+    # On short-circuit the counter reflects the recoveries that ran (1), while
+    # the error carries the limit that was exceeded.
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ],
+      plan_place_sequence=[_StubResult(False, error="PLACE_PLAN failed for bin_cell_3")],
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3", "max_recovery_attempts": 1},
+      TraceContext(),
+    )
+
+    self.assertFalse(result.success)
+    self.assertEqual(
+      result.output["recovery_attempts"],
+      [call[0] for call in tool_runtime.calls].count("recovery.classify_failure"),
+    )
+    self.assertEqual(result.output["recovery_attempts"], 1)
+    # A refused (short-circuited) attempt must not append to recovery_history;
+    # only the recovery that actually ran is recorded.
+    self.assertEqual(len(result.output.get("recovery_history", [])), 1)
+
   def test_pick_node_uses_block_close_opening(self) -> None:
     tree = build_industrial_recovery_pick_place_tree()
     pick_node = next(node for node in tree.nodes if node.name == "pick")
@@ -208,6 +319,143 @@ class IndustrialRecoveryTreeTest(TestCase):
     self.assertEqual(result.output["classification"]["failure_type"], "WRONG_BIN")
     self.assertGreaterEqual([call[0] for call in tool_runtime.calls].count("vision.verify_object_in_bin"), 2)
 
+  def test_object_not_found_recovers_by_redetect(self) -> None:
+    # The detect node has one internal retry (max_retries=1), so it must fail
+    # twice before the tree classifies the failure. Recovery re-observes and
+    # re-detects, then the nominal pick-place flow completes.
+    runtime, tool_runtime, _ = _make_runtime(
+      config_detect_sequence=[
+        _StubResult(False, {"found": False, "confidence": 0.0}, "OBJECT_NOT_FOUND: no match for roller"),
+        _StubResult(False, {"found": False, "confidence": 0.0}, "OBJECT_NOT_FOUND: no match for roller"),
+        _StubResult(True, _config_detection()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("recover_redetect", node_names)
+    self.assertEqual(result.output["classification"]["failure_type"], "OBJECT_NOT_FOUND")
+    # detect_object is retried internally (2 calls) then recover_redetect runs
+    # once more, for 3 detect calls in total.
+    self.assertEqual(
+      [call[0] for call in tool_runtime.calls].count("vision.config_detect"), 3
+    )
+
+  def test_low_confidence_recovers_by_redetect(self) -> None:
+    # The detector surfaces a low-confidence detection as a failed detect node;
+    # recovery re-observes and re-detects with relaxed vision sampling.
+    runtime, tool_runtime, _ = _make_runtime(
+      config_detect_sequence=[
+        _StubResult(False, {"found": True, "confidence": 0.10}, "LOW_CONFIDENCE: 0.010 below 0.350"),
+        _StubResult(False, {"found": True, "confidence": 0.10}, "LOW_CONFIDENCE: 0.010 below 0.350"),
+        _StubResult(True, _config_detection()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn("recover_redetect", [node.node for node in result.nodes])
+    self.assertEqual(result.output["classification"]["failure_type"], "LOW_CONFIDENCE")
+
+  def test_pose_invalid_recovers_by_redetect(self) -> None:
+    # A non-finite depth-derived position makes the pose unusable; the detect
+    # node fails through its internal retry, then recovery re-detects to
+    # refresh RGB-D evidence.
+    runtime, tool_runtime, _ = _make_runtime(
+      config_detect_sequence=[
+        _StubResult(False, {"found": True, "confidence": 0.9}, "VISION_DEPTH_ERROR: non-finite pose_3d"),
+        _StubResult(False, {"found": True, "confidence": 0.9}, "VISION_DEPTH_ERROR: non-finite pose_3d"),
+        _StubResult(True, _config_detection()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn("recover_redetect", [node.node for node in result.nodes])
+    self.assertEqual(result.output["classification"]["failure_type"], "POSE_INVALID")
+
+  def test_pick_plan_failure_recovers_by_re_pick(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertIn("recover_pick", [node.node for node in result.nodes])
+    self.assertEqual(result.output["classification"]["failure_type"], "PICK_PLAN_FAILED")
+    self.assertGreaterEqual(
+      [call[0] for call in tool_runtime.calls].count("robot.plan_top_down_pick"), 2
+    )
+
+  def test_max_recovery_attempts_is_forwarded_to_planner(self) -> None:
+    # The tree declares max_recovery_attempts as an input, so when a caller sets
+    # it the recovery planner must honour it instead of always falling back to
+    # the default of 2. Pins the plan_recovery node forwarding the attempt limit
+    # through to RecoveryPlanTool via the context input.
+    runtime, _tool_runtime, _ = _make_runtime(
+      plan_pick_sequence=[
+        _StubResult(False, error="PLAN_TOP_DOWN_PICK failed: IK unreachable"),
+        _StubResult(True, _pick_plan()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3", "max_recovery_attempts": 5},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(result.output["recovery"]["max_attempts"], 5)
+
+  def test_release_failure_recovers_by_reopening_gripper(self) -> None:
+    # The gripper does not confirm release on the first place; recovery re-opens
+    # it and then rejoins the lift-clearance step rather than re-placing.
+    runtime, tool_runtime, _ = _make_runtime(
+      verify_place_sequence=[
+        _StubResult(False, {"released": False, "opening": 0.03}, "PLACE NOT CONFIRMED: gripper still closed"),
+        _StubResult(True, {"released": True, "opening": 0.0848}),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("recover_release", node_names)
+    # After re-opening the gripper the tree rejoins the lift-clearance node,
+    # not the start of place, so the place motion is not repeated.
+    self.assertIn("place_lift_clearance", node_names)
+    self.assertEqual(result.output["classification"]["failure_type"], "RELEASE_FAILED")
+
 
 class LiveDetectRecoveryTreeTest(TestCase):
   """The perception-driven variant must observe placement, not assume it."""
@@ -217,6 +465,7 @@ class LiveDetectRecoveryTreeTest(TestCase):
       real_verify_in_bin=True,
       open_vocab_sequence=[
         _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
         _StubResult(True, _detection([0.36, -0.06, 0.30])),
       ],
     )
@@ -228,14 +477,15 @@ class LiveDetectRecoveryTreeTest(TestCase):
     self.assertNotIn("vision.config_detect", names)
     self.assertEqual(names[0], "vision.capture_frame")
     self.assertEqual(names[1], "vision.open_vocab_detect")
-    # One capture for the initial detection, one after placing.
-    self.assertEqual(names.count("vision.capture_frame"), 2)
+    # One capture for the initial detection, one after grasping, one after placing.
+    self.assertEqual(names.count("vision.capture_frame"), 3)
 
   def test_live_detection_receives_captured_frame_and_spatial_constraint(self) -> None:
     runtime, tool_runtime, _ = _make_runtime(
       real_verify_in_bin=True,
       open_vocab_sequence=[
         _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
         _StubResult(True, _detection([0.36, -0.06, 0.30])),
       ],
     )
@@ -250,6 +500,65 @@ class LiveDetectRecoveryTreeTest(TestCase):
     self.assertEqual(detect_input["T_base_camera"], _T_BASE_CAMERA)
     self.assertEqual(detect_input["spatial_constraint"], {"relation": "left", "ordinal": 1})
 
+  def test_live_detection_omits_missing_spatial_constraint(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    request = {"object_query": "roller", "target": "bin_cell_3"}
+    result = runtime.run(_live_tree(), request, TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    detect_input = next(
+      input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
+    )
+    self.assertNotIn("spatial_constraint", detect_input)
+
+  def test_live_detection_omits_null_spatial_constraint(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    request = {
+      "object_query": "roller",
+      "target": "bin_cell_3",
+      "spatial_constraint": None,
+    }
+    result = runtime.run(_live_tree(), request, TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    detect_input = next(
+      input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
+    )
+    self.assertNotIn("spatial_constraint", detect_input)
+
+  def test_terminal_failure_result_serializes_without_recursion(self) -> None:
+    runtime, _tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(False, error="DETECT_FAILED"),
+        _StubResult(False, error="DETECT_FAILED"),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    self.assertFalse(result.success)
+    serialized = asdict(result)
+    self.assertEqual(serialized["nodes"][-1]["node"], "failure")
+    self.assertNotEqual(
+      serialized["output"].get("last_failure", {}).get("node"),
+      "failure",
+    )
+
   def test_wrong_bin_is_observed_from_re_detection_not_commanded_pose(self) -> None:
     # The object is detected away from bin_cell_3 after the first place, so the
     # real verify tool must report WRONG_BIN. A commanded-pose check could not.
@@ -257,6 +566,7 @@ class LiveDetectRecoveryTreeTest(TestCase):
       real_verify_in_bin=True,
       open_vocab_sequence=[
         _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
         _StubResult(True, _detection([0.55, -0.30, 0.31])),
         _StubResult(True, _detection([0.36, -0.06, 0.30])),
       ],
@@ -300,6 +610,114 @@ class LiveDetectRecoveryTreeTest(TestCase):
     self.assertIn("pose_3d", verify_input)
 
 
+  def test_lift_verification_detects_a_dropped_object(self) -> None:
+    # The object is re-detected still on the table after grasping, so the lift
+    # check must fail and route through DROPPED_OBJECT recovery.
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      real_verify_lifted=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        # Still resting on the table after the grasp -> dropped.
+        _StubResult(True, _detection([0.24, 0.23, 0.145])),
+        # Recovery re-picks, then the post-place check sees the target cell.
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("verify_object_lifted", node_names)
+    self.assertIn("recover_pick", node_names)
+    self.assertEqual(
+      result.output["classification"]["failure_type"],
+      "DROPPED_OBJECT",
+      msg=f"nodes={node_names}",
+    )
+    # The step name is what the detector keys DROPPED_OBJECT off, so pin it.
+    self.assertEqual(
+      result.output["classification"]["evidence"]["failed_step"],
+      "verify_object_lifted",
+    )
+    self.assertEqual(result.output["classification"]["phase"], "transport")
+
+  def test_lift_verification_passes_when_object_rises(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      real_verify_lifted=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertNotIn("recover_pick", [node.node for node in result.nodes])
+    self.assertTrue(result.output["lift_check"]["lifted"])
+
+  def test_occluded_object_after_grasp_does_not_block_transport(self) -> None:
+    # A lifted object is often hidden by the gripper; absence is not a drop.
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      real_verify_lifted=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(False, None, "OBJECT_NOT_FOUND: no match for roller"),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(_live_tree(), _live_request(), TraceContext())
+
+    self.assertTrue(result.success, msg=result.error)
+    node_names = [node.node for node in result.nodes]
+    self.assertIn("redetect_post_grasp", node_names)
+    self.assertNotIn("verify_object_lifted", node_names)
+    self.assertNotIn("recover_pick", node_names)
+
+  def test_default_tree_has_no_lift_verification(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(real_verify_in_bin=True)
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertNotIn("vision.verify_object_lifted", [call[0] for call in tool_runtime.calls])
+
+
+  def test_live_tree_runs_without_a_spatial_constraint(self) -> None:
+    # The sim config enables the constraint input unconditionally, but callers
+    # usually omit it; an absent value must not break variable resolution.
+    runtime, tool_runtime, _ = _make_runtime(
+      real_verify_in_bin=True,
+      open_vocab_sequence=[
+        _StubResult(True, _detection([0.24, 0.23, 0.142])),
+        _StubResult(True, _detection([0.24, 0.23, 0.30])),
+        _StubResult(True, _detection([0.36, -0.06, 0.30])),
+      ],
+    )
+
+    result = runtime.run(
+      _live_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    detect_input = next(
+      input_data for name, input_data in tool_runtime.calls if name == "vision.open_vocab_detect"
+    )
+    # Absent rather than null: tool contracts type the field as an object.
+    self.assertNotIn("spatial_constraint", detect_input)
+
+
 def _live_tree():
   return build_industrial_recovery_pick_place_tree(
     detect_tool="vision.open_vocab_detect",
@@ -323,7 +741,12 @@ def _make_runtime(
   plan_place_sequence: list[_StubResult] | None = None,
   verify_bin_sequence: list[_StubResult] | None = None,
   open_vocab_sequence: list[_StubResult] | None = None,
+  config_detect_sequence: list[_StubResult] | None = None,
+  plan_pick_sequence: list[_StubResult] | None = None,
+  verify_place_sequence: list[_StubResult] | None = None,
+  move_joints_sequence: list[_StubResult] | None = None,
   real_verify_in_bin: bool = False,
+  real_verify_lifted: bool = False,
 ):
   verify_grasp_results = _sequence(
     verify_grasp_sequence or [_StubResult(True, {"held": True, "opening": 0.03})]
@@ -331,6 +754,18 @@ def _make_runtime(
   plan_place_results = _sequence(plan_place_sequence or [_StubResult(True, _place_plan())])
   verify_bin_results = _sequence(verify_bin_sequence or [_StubResult(True, _bin_check(True))])
   open_vocab_results = _sequence(open_vocab_sequence or [_StubResult(True, _detection())])
+  config_detect_results = _sequence(
+    config_detect_sequence or [_StubResult(True, _config_detection())]
+  )
+  plan_pick_results = _sequence(
+    plan_pick_sequence or [_StubResult(True, _pick_plan())]
+  )
+  verify_place_results = _sequence(
+    verify_place_sequence or [_StubResult(True, {"released": True, "opening": 0.0848})]
+  )
+  move_joints_results = _sequence(
+    move_joints_sequence or [_StubResult(True, {"completed": True, "state": {}})]
+  )
 
   classify_tool = RecoveryClassifyFailureTool()
   plan_tool = RecoveryPlanTool()
@@ -344,6 +779,7 @@ def _make_runtime(
     return _from_tool_result(result)
 
   verify_in_bin_tool = VisionVerifyObjectInBinTool(_PLACE_TARGETS)
+  verify_lifted_tool = VisionVerifyObjectLiftedTool()
 
   def verify_in_bin(input_data):
     """Run the real geometric check so live tests exercise the observation path."""
@@ -351,14 +787,12 @@ def _make_runtime(
     result = verify_in_bin_tool.run(_tool_call("vision.verify_object_in_bin", input_data))
     return _from_tool_result(result)
 
+  def verify_lifted(input_data):
+    result = verify_lifted_tool.run(_tool_call("vision.verify_object_lifted", input_data))
+    return _from_tool_result(result)
+
   tool_runtime = _StubRuntime({
-    "vision.config_detect": lambda _i: {
-      "found": True,
-      "label": "roller",
-      "confidence": 1.0,
-      "object_id": "roller",
-      "pose_3d": [0.24, 0.23, 0.142, 0.0, 0.0, 0.0],
-    },
+    "vision.config_detect": lambda _i: next(config_detect_results),
     "vision.capture_frame": lambda input_data: {
       "image_path": f"{input_data.get('out_dir', 'logs/frame')}/rgb.npy",
       "depth_path": f"{input_data.get('out_dir', 'logs/frame')}/depth.npy",
@@ -367,9 +801,7 @@ def _make_runtime(
       "T_world_camera": None,
     },
     "vision.open_vocab_detect": lambda _i: next(open_vocab_results),
-    "robot.plan_top_down_pick": lambda _i: {
-      "plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}
-    },
+    "robot.plan_top_down_pick": lambda _i: next(plan_pick_results),
     "robot.resolve_place_target": lambda input_data: {
       "target": input_data["target"],
       "place_pose": {
@@ -379,12 +811,15 @@ def _make_runtime(
       },
     },
     "robot.plan_place": lambda _i: next(plan_place_results),
-    "robot.move_joints": lambda _i: {"completed": True, "state": {}},
+    "robot.move_joints": lambda _i: next(move_joints_results),
     "robot.move_pose": lambda _i: {"completed": True, "state": {}},
     "robot.move_linear": lambda _i: {"completed": True, "state": {}},
     "gripper.open": lambda _i: {"completed": True, "state": {"opening": 0.0848}},
     "vision.verify_object_in_bin": (
       verify_in_bin if real_verify_in_bin else lambda _i: next(verify_bin_results)
+    ),
+    "vision.verify_object_lifted": (
+      verify_lifted if real_verify_lifted else lambda _i: {"lifted": True}
     ),
     "recovery.classify_failure": classify,
     "recovery.plan": plan_recovery,
@@ -393,7 +828,7 @@ def _make_runtime(
   skill_runtime = _StubRuntime({
     "robot.pick": lambda _i: {"picked": True},
     "robot.verify_grasp": lambda _i: next(verify_grasp_results),
-    "robot.verify_place": lambda _i: {"released": True, "opening": 0.0848},
+    "robot.verify_place": lambda _i: next(verify_place_results),
   })
   actionlists = {
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
@@ -429,6 +864,21 @@ def _place_plan() -> dict:
         "frame_id": "base_link",
       },
     }
+  }
+
+
+def _pick_plan() -> dict:
+  return {"plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}}
+
+
+def _config_detection(position: list[float] | None = None) -> dict:
+  pose = list(position or [0.24, 0.23, 0.142])
+  return {
+    "found": True,
+    "label": "roller",
+    "confidence": 1.0,
+    "object_id": "roller",
+    "pose_3d": [*pose[:3], 0.0, 0.0, 0.0],
   }
 
 

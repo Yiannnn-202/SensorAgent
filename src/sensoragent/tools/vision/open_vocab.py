@@ -328,7 +328,11 @@ def _grounding_prompt(query: str) -> str:
     "螺丝刀": "screwdriver",
     "螺丝": "screw",
     "扳手": "wrench",
+    "六角螺母": "hex nut",
     "螺母": "nut",
+    "短螺栓": "short bolt",
+    "螺栓": "bolt",
+    "阶梯轴": "stepped shaft",
     "滚柱": "roller",
     "滚筒": "roller",
     "齿轮": "gear",
@@ -365,13 +369,28 @@ class UltralyticsOpenVocabularyBackend:
       return np.load(path)
     return str(path)
 
-  def _set_classes_if_supported(self, query: str) -> None:
+  def _set_classes_if_supported(self, query: str) -> bool:
     classes = [query]
     try:
       text_embeddings = self._model.get_text_pe(classes)
       self._model.set_classes(classes, text_embeddings)
     except AttributeError:
-      return
+      return False
+    return True
+
+  @staticmethod
+  def _fixed_class_matches_query(label: str, query: str) -> bool:
+    """Match a trained class label against a natural-language object query."""
+
+    def tokens(value: str) -> set[str]:
+      normalized = _grounding_prompt(value).casefold().replace("_", " ").replace("-", " ")
+      return {token for token in normalized.split() if token}
+
+    label_tokens = tokens(label)
+    query_tokens = tokens(query)
+    return bool(label_tokens and query_tokens) and (
+      label_tokens <= query_tokens or query_tokens <= label_tokens
+    )
 
   @staticmethod
   def _all_detections(result, source: str, model: str) -> list[VisionDetection]:
@@ -433,7 +452,7 @@ class UltralyticsOpenVocabularyBackend:
   ) -> list[VisionDetection]:
     """Run YOLOE once and return every above-threshold detection with timing."""
 
-    self._set_classes_if_supported(query)
+    dynamic_classes = self._set_classes_if_supported(query)
     image = self._load_image(image_path)
     arguments: dict[str, object] = {
       "source": image,
@@ -452,6 +471,12 @@ class UltralyticsOpenVocabularyBackend:
       self._backend,
       self._model_path.as_posix(),
     )
+    if not dynamic_classes:
+      detections = [
+        detection
+        for detection in detections
+        if self._fixed_class_matches_query(detection.label, query)
+      ]
     if not detections:
       return [self._not_found(query, elapsed_ms)]
     return [replace(detection, timing_ms={"detector": elapsed_ms}) for detection in detections]
@@ -543,8 +568,6 @@ class GroundingDinoBackend:
     path = Path(image_path)
     if not path.is_file():
       raise ValueError(f"image_path does not exist: {path}")
-    if path.suffix.casefold() == ".npy":
-      raise ValueError("Grounding DINO requires a standard RGB image, not .npy")
     prompt = _grounding_prompt(query)
     if not prompt:
       raise ValueError("query must be a non-empty string")
@@ -560,7 +583,12 @@ class GroundingDinoBackend:
     if selected_device is None:
       selected_device = "cuda:0" if torch.cuda.is_available() else "cpu"
     model = model.to(selected_device)
-    image = Image.open(path).convert("RGB")
+    # The capture tool writes RGB as .npy, so accept the array form directly
+    # rather than requiring callers to pass the preview image alongside it.
+    if path.suffix.casefold() == ".npy":
+      image = Image.fromarray(np.load(path)).convert("RGB")
+    else:
+      image = Image.open(path).convert("RGB")
     inputs = processor(images=image, text=[prompt], return_tensors="pt")
     inputs = {
       key: value.to(selected_device) if hasattr(value, "to") else value

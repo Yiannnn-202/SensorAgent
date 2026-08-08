@@ -56,7 +56,11 @@ from sensoragent.tools.robot import (
   default_place_target_registry,
 )
 from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
-from sensoragent.tools.vision import VisionConfigDetectTool, VisionOpenVocabularyDetectTool
+from sensoragent.tools.vision import (
+  VisionConfigDetectTool,
+  VisionGroundedSam2Tool,
+  VisionOpenVocabularyDetectTool,
+)
 from sensoragent.tools.vision import VisionCaptureFrameTool
 from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
 from sensoragent.tools.vision.mock import MockDetectTool
@@ -95,6 +99,7 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
 
 SCENE_TOOL_NAMES = {
   "vision.config_detect",
+  "vision.grounded_sam2",
   "vision.open_vocab_detect",
   "vision.capture_frame",
   "vision.verify_object_in_bin",
@@ -125,11 +130,10 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
   if tool_name == "vision.config_detect":
     catalog = config.scene.objects or {}
     return VisionConfigDetectTool(catalog, config.scene.release_profiles)
-  if tool_name == "vision.open_vocab_detect":
+  if tool_name in {"vision.grounded_sam2", "vision.open_vocab_detect"}:
     vision_config = config.integrations.vision
-    return VisionOpenVocabularyDetectTool(
+    common_settings = dict(
       model_path=str(vision_config.get("model_path", "models/vision/yoloe.pt")),
-      backend=str(vision_config.get("backend", "yoloe")),
       grounding_dino_model=vision_config.get("grounding_dino_model"),
       sam2_model_path=vision_config.get("sam2_model_path"),
       camera_info_path=vision_config.get("camera_info_path"),
@@ -141,14 +145,20 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       box_threshold=float(vision_config.get("box_threshold", 0.35)),
       text_threshold=float(vision_config.get("text_threshold", 0.25)),
       device=vision_config.get("device"),
-      refine_masks=vision_config.get("refine_masks"),
-      require_masks=bool(vision_config.get("require_masks", False)),
-      red_color_shortcut=bool(vision_config.get("red_color_shortcut", False)),
       camera_frame=str(
         vision_config.get("camera_frame", "camera_color_optical_frame")
       ),
       base_frame=str(vision_config.get("base_frame", "base_link")),
       workspace=dict(config.scene.workspace or {}),
+    )
+    if tool_name == "vision.grounded_sam2":
+      return VisionGroundedSam2Tool(**common_settings)
+    return VisionOpenVocabularyDetectTool(
+      backend=str(vision_config.get("backend", "yoloe")),
+      refine_masks=vision_config.get("refine_masks"),
+      require_masks=bool(vision_config.get("require_masks", False)),
+      red_color_shortcut=bool(vision_config.get("red_color_shortcut", False)),
+      **common_settings,
     )
   if tool_name == "vision.capture_frame":
     vision_config = config.integrations.vision
@@ -156,6 +166,7 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
     return VisionCaptureFrameTool(
       script=str(capture_config.get("script", "scripts/linux/capture_gazebo_rgbd_frame.py")),
       ros_python=capture_config.get("ros_python"),
+      ros_setup=capture_config.get("ros_setup"),
       image_topic=str(capture_config.get("image_topic", "/industrial_camera/image")),
       depth_topic=str(capture_config.get("depth_topic", "/industrial_camera/depth_image")),
       camera_info_topic=str(
@@ -166,6 +177,7 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       out_dir=str(capture_config.get("out_dir", "logs/vision/latest")),
       timeout_seconds=float(capture_config.get("timeout_seconds", 10.0)),
       fallback_t_base_camera=vision_config.get("T_base_camera"),
+      fallback_t_world_camera=vision_config.get("T_world_camera"),
     )
   if tool_name == "robot.resolve_place_target":
     targets = config.scene.place_targets or default_place_target_registry()
@@ -323,7 +335,13 @@ def build_agent(
 ) -> AgentBundle:
   """Build SensorAgent runtime objects from a loaded config."""
 
-  logger = TaskLogger(log_path)
+  # Derive a human-readable progress log that pairs by filename with the
+  # structured JSONL (e.g. logs/tasks/run.jsonl <-> logs/runs/run.log). Mirrors
+  # the JSONL gating: no log_path means neither file is written.
+  progress_path: Path | None = None
+  if log_path is not None:
+    progress_path = config.logging.progress_dir / f"{log_path.stem}.log"
+  logger = TaskLogger(log_path, console=config.logging.console, progress_path=progress_path)
 
   tool_registry = ToolRegistry()
   robot_client = None

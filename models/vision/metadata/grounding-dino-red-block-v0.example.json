@@ -1,0 +1,20 @@
+{
+  "artifact": "grounding-dino-red-block-v0",
+  "model_family": "grounding_dino",
+  "local_path": "runs/vision/train/grounding_dino_red_block_v0/output/checkpoint-best",
+  "source_model": "IDEA-Research/grounding-dino-tiny",
+  "download_url": "",
+  "license": "",
+  "prompt_order": [
+    "red block"
+  ],
+  "training_config": "configs/vision_train_grounding_dino_red_block_v0.example.yaml",
+  "dataset_manifest": "data/vision/team/red_block_v2/grounding_dino_train_val.jsonl",
+  "dataset_sha256": "1b6824d2b22f68a15f837363f7071cb224c1652c6c253ef8c8b78da910668890",
+  "checkpoint_sha256": "030594d0ed79ddaeffe4d0df9b34e1a59e1ff4078d8c1c57f3d08424e619426e",
+  "evaluation_config": "configs/vision_eval_grounding_dino_red_block_v0.example.yaml",
+  "evaluation_manifest": "data/vision/team/red_block_v2/manifest_test.jsonl",
+  "evaluation_summary": "runs/vision/red_block_v2_grounded_sam2_finetuned_v0_low_threshold/summary.json",
+  "accepted_for": "training-and-tool-chain-validation-only",
+  "notes": "Single-class local V0 run. Not accepted as the final multi-class competition model; one background false positive remains on the small test split."
+}

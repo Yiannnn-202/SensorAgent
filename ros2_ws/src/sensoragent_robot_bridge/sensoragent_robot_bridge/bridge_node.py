@@ -28,6 +28,7 @@ from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
+from rclpy.qos import QoSDurabilityPolicy, QoSProfile
 from rclpy.time import Time
 from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
@@ -152,10 +153,14 @@ class RobotBridgeNode(Node):
             GetCartesianPath,
             "/compute_cartesian_path",
         )
+        planning_scene_qos = QoSProfile(
+            depth=10,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self._planning_scene_pub = self.create_publisher(
             PlanningScene,
             "/planning_scene",
-            10,
+            planning_scene_qos,
         )
 
         self._tf_buffer = Buffer()
@@ -378,6 +383,29 @@ class RobotBridgeNode(Node):
 
     def _camera_rig_collision_objects(self) -> list[CollisionObject]:
         return camera_rig_collision_objects(frame_id=self._base_frame)
+
+    def get_scene_obstacles(self) -> dict:
+        objects = []
+        for collision in self._camera_rig_collision_objects():
+            primitive = collision.primitives[0]
+            pose = collision.primitive_poses[0]
+            objects.append(
+                {
+                    "id": collision.id,
+                    "frame_id": collision.header.frame_id,
+                    "center": [
+                        pose.position.x,
+                        pose.position.y,
+                        pose.position.z,
+                    ],
+                    "size": list(primitive.dimensions),
+                }
+            )
+        return _response(
+            True,
+            message="MoveIt static scene obstacles configured.",
+            state={"collision_objects": objects},
+        )
 
     def _publish_static_obstacles(self) -> None:
         scene = PlanningScene()
@@ -910,6 +938,9 @@ class RobotBridgeNode(Node):
                     return
                 if self.path == "/ready":
                     self._write_json(200, bridge.get_ready())
+                    return
+                if self.path == "/scene/obstacles":
+                    self._write_json(200, bridge.get_scene_obstacles())
                     return
                 if self.path == "/gripper/state":
                     self._write_json(200, bridge.get_gripper_state())

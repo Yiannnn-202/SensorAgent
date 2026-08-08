@@ -1,7 +1,7 @@
 # 约定
 
 项目级代码、文档、CMake 与 git 规则。仓库架构统一维护在
-`docs/architecture.md`，操作说明统一维护在 `docs/guides/`。
+根目录 `architecture.md`，操作说明统一维护在 `docs/guides/`。
 
 ## C 与 C++
 
@@ -156,15 +156,15 @@ ai/perception/detection/
 不要为每个模块单独创建 Markdown。稳定的跨模块输入、输出、所有权、单位、
 错误和调用方责任应写入 `contracts/` 或公共代码注释。
 
-**架构文档** —— 仓库级设计和职责边界只维护在 `docs/architecture.md`，
-不要为各模块创建相互竞争的架构文档。只有长期有效的安装、运行和验证说明
-才放入 `docs/guides/`，并优先更新已有文件。
+**架构文档** —— 仓库级设计和职责边界只维护在根目录 `architecture.md`，
+不要为各模块创建相互竞争的架构文档。只有长期有效的安装、运行和验证说明才放入
+`docs/guides/`，并优先更新已有文件。
 
 ```mermaid
 flowchart LR
   code["module/ 代码"] --> tests["module/tests/"]
   code --> contract["contracts/"]
-  code --> arch["docs/architecture.md"]
+  code --> arch["architecture.md"]
   code --> guide["docs/guides/"]
 ```
 

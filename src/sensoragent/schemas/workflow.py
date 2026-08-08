@@ -119,6 +119,9 @@ class DecisionTree:
   description: str = ""
   version: str = "0.1.0"
   inputs: dict[str, str] = field(default_factory=dict)
+  # Values seeded into the run context for inputs the caller may omit, so
+  # optional templated inputs do not fail variable resolution.
+  input_defaults: dict = field(default_factory=dict)
   tags: tuple[str, ...] = ()
 
 

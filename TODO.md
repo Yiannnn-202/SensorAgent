@@ -2,6 +2,24 @@
 
 This file tracks SensorAgent development progress by framework maturity. The current priority is to build a reliable Agent architecture before adding competition-specific workflows.
 
+## 2026-07-31 project snapshot
+
+The generic Agent framework is largely implemented. Current competition progress
+is better described as **core software L2- and overall system L1+**:
+
+- Agent planning, registered workflows, robot Tools, the HTTP simulation bridge,
+  RGB-D capture, open-vocabulary vision, and classified recovery are connected.
+- The deterministic industrial ActionList still uses configured object poses;
+  live RGB-D perception is an explicit vision ActionList and recovery-tree mode.
+- The main blockers are repeatable Gazebo reset and batch acceptance, a unified
+  world-state model, fixed evaluation datasets and metrics, and physical-robot
+  integration.
+- The 2026-07-31 offline run collected 224 tests and ended with one failure and
+  two errors listed under [Known issues](#known-issues).
+
+Do not start reinforcement-learning work or expand service surfaces at the
+expense of the first repeatable simulation acceptance loop.
+
 ## Phase 0 - Project skeleton and documentation
 
 Goal: make the project understandable to new contributors and keep repository boundaries clear.
@@ -186,8 +204,8 @@ Completed:
 
 Remaining:
 
-- [ ] Add audio tool failure-path tests.
-- [ ] Add local-only tests that skip when model assets are unavailable.
+- [x] Add audio tool failure-path tests.
+- [x] Add local-only tests that skip when model assets are unavailable.
 - [ ] Decide whether TTS playback belongs in SensorAgent or the interaction frontend.
 - [ ] Add optional spoken task responses only after ownership is decided.
 - [ ] Remove unused Radish-derived code and confirm no ROS 2 audio dependency remains.
@@ -237,7 +255,7 @@ Goal: implement competition-specific task logic after the generic framework is s
   attributes, target bin cell, constraints, allowed skills, and retry policy.
 - [ ] Define the world-state schema needed by task decomposition: object instances,
   confidence, 3D pose, bin cells, robot state, gripper state, and task state.
-- [ ] Add the L1 fixed industrial pick-and-place ActionList workflow as the
+- [x] Add the L1 fixed industrial pick-and-place ActionList workflow as the
   deterministic baseline.
 - [x] Add the L2 industrial DecisionTree workflow with detect, plan-pick, pick,
   verify-grasp, plan-place, place, verify-place, success, and failure nodes.
@@ -247,11 +265,11 @@ Goal: implement competition-specific task logic after the generic framework is s
   pick failure, dropped object, wrong-bin placement, and pose abnormality.
 - [x] Add typed failure classification and deterministic recovery-plan tools.
 - [x] Add visual postcondition verification tools for lifted-object and target-bin checks.
-- [ ] Add a constrained planner prompt/schema that can only select approved
+- [x] Add a constrained planner prompt/schema that can only select approved
   workflows, skills, and failure-recovery policies.
 - [ ] Add fixture-based planner tests for standard commands, synonymous commands,
   ambiguous commands, missing target information, and invalid object categories.
-- [ ] Add fixture-based DecisionTree e2e tests for every required failure type.
+- [x] Add fixture-based DecisionTree e2e tests for every required failure type.
 - [ ] Add task log export for report tables and replay, including parsed intent,
   selected plan, node results, failure type, recovery attempts, and final status.
 - [ ] Add evaluation metrics logging for parse accuracy, sequence validity,
@@ -302,14 +320,37 @@ scope agreed in the 2026-07-26 vision discussion.
 - [ ] Add real RGB-D samples, camera intrinsics, and hand-eye calibration before
   claiming base-frame position accuracy.
 
-### Stage 3 - Industrial fine-tuning and lightweight student model
+### Stage 3 - Industrial fine-tuning and later model comparisons
 
-- [ ] Use the Stage 2 teacher to draft boxes and masks, then manually review every
-  training annotation.
+- [x] Add direct Grounding DINO fine-tuning with ordered text prompts, COCO-style
+  detection targets, scene-level leakage checks, provenance validation, and
+  reproducible checkpoint summaries.
+- [x] Add a YOLO11n-seg baseline runner with class-map, polygon-label, and
+  train/validation/test leakage preflight. It is retained as historical
+  experiment support and excluded from the current delivery path.
+- [ ] Review every Grounding DINO training box and preserve optional SAM 2 masks
+  for segmentation analysis or later student training.
+- [x] Inspect Mechanical Parts Dataset 2022 and any selected BOP/MVTec subset;
+  record version, license, category mapping, duplicate policy, and source split
+  before adding it to a local training manifest.
 - [ ] Split complete capture scenes/sessions before augmentation to prevent nearby
   frames from leaking across train, validation, and test sets.
+- [ ] Fine-tune Grounding DINO on the frozen competition prompt order and report
+  same-split detection metrics, latency, VRAM, model identity, and data identity.
+- [x] Verify the 2026-07-31 Grounding DINO fine-tuning branch was merged into
+  `main`, synchronize the local checkout, and remove only local branches already
+  contained by `origin/main`.
+- [x] Review official SAM3 code, prerequisites, training surface, checkpoint
+  access, parameter count, and license; keep it outside the 2026-08-10 delivery
+  path until a same-split local comparison exists.
+- [ ] Receive the first 10-20 simulation images with class names and `scene_id`,
+  review or generate boxes, and run the first Grounding DINO overfit/smoke
+  fine-tuning pass.
+- [ ] By 2026-08-10, deliver a repeatable simulation inference run, a directly
+  trainable local JSONL dataset layout, fixed-split evidence, and an innovation
+  draft that distinguishes implemented work from SAM3 experiments.
 - [ ] Fine-tune a fixed-class YOLOE/segmentation student for the final industrial
-  categories; keep the teacher as a low-confidence or hard-sample fallback.
+  categories only if deployment constraints justify a smaller later model.
 - [ ] Compare teacher, student, and hybrid routing on the exact same test split.
 - [ ] Run ablations for fine-tuning data, mask refinement, model size, input size,
   and fallback threshold. Report accuracy, latency, VRAM, and model size together.
@@ -352,11 +393,36 @@ reinforcement-learning tasks.
 - [x] Add combined Gazebo and MoveIt 2 launch files.
 - [x] Add bounded-effort two-finger gripper control and a standard GripperCommand bridge.
 - [x] Manually verify the combined model, arm motion, and gripper open/close path on Ubuntu.
+- [x] Add the initial industrial tabletop world, part models, RGB-D rig, and named target areas.
 - [ ] Validate finger contact, friction, and grasp stability in Gazebo Sim.
 - [ ] Add automated ROS 2 launch and controller smoke tests.
-- [ ] Add industrial worlds, objects, and repeatable grasp scenarios.
+- [ ] Add repeatable scene reset, object randomization, and grasp scenarios.
+- [ ] Add a batch simulation runner with per-task JSONL/CSV metrics.
 - [ ] Define the Gymnasium observation, action, reward, and termination contract.
 - [ ] Implement the first RL environment and scripted baseline.
+
+## Known issues
+
+Observed on 2026-07-31 with `python -m unittest discover -s tests -p 'test_*.py'`
+(224 tests run, 1 failure and 2 errors) on a Windows machine without ROS 2:
+
+- [ ] `tests/unit/test_vision_evaluation.py` imports `pytest`, which is not declared
+  in `requirements.txt` or `pyproject.toml`. Either declare a test dependency set
+  or port the module to `unittest`.
+- [ ] `test_gazebo_recovery_demo_script.GazeboRecoveryDemoScriptTest.test_wrong_table_demo_runs_without_gazebo`
+  runs the demo with `--execute`, so it keeps the `http` robot backend from
+  `configs/robot_sim.yaml` and fails with `ROBOT_BRIDGE_UNAVAILABLE` unless the
+  bridge is running. The case needs a fake robot backend and a stateful fake
+  detector to match its name, or it should be moved out of the default suite.
+- [ ] `DecisionTreeLastFailureTest.test_failed_node_is_available_to_recovery_tools`
+  expects `last_failure.failed_step` to remain `not_found`, but the current
+  runtime reports the subsequent `found_check` condition node. The intended
+  failure-evidence semantics must be fixed or the test expectation deliberately
+  updated.
+- [ ] `vision.capture_frame` and the `robot.plan_*` planning tools have no files
+  under `contracts/tools/`.
+- [ ] `src/sensoragent/services/api/` is still an empty placeholder while the
+  README and architecture describe API/MCP entry points as future work.
 
 ## Notes
 

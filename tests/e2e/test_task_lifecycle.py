@@ -12,10 +12,27 @@ if str(SRC) not in sys.path:
   sys.path.insert(0, str(SRC))
 
 from sensoragent.agent import build_agent_from_config
+from sensoragent.agent.runtime import _validate_required_workflow_inputs
+from sensoragent.schemas import AgentPlan, PlanTargetKind
 from sensoragent.state import TaskStatus
 
 
 class TaskLifecycleTest(TestCase):
+  def test_required_workflow_inputs_reject_empty_planner_fields(self) -> None:
+    error = _validate_required_workflow_inputs(
+      AgentPlan(
+        target_kind=PlanTargetKind.DECISION_TREE,
+        target="industrial.recovery_pick_place_tree",
+        input={"object_query": "", "target": "bin_cell_3"},
+      ),
+      {"object_query": "", "target": "bin_cell_3"},
+    )
+
+    self.assertEqual(
+      error,
+      "Planner selected industrial.recovery_pick_place_tree but missing required input(s): object_query",
+    )
+
   def test_agent_run_task_lifecycle_succeeds(self) -> None:
     bundle = build_agent_from_config(ROOT / "configs" / "mock.yaml")
 

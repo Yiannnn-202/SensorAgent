@@ -1,7 +1,7 @@
 # Conventions
 
 Repository-wide rules for code, docs, CMake, and git. Repository architecture
-belongs in `docs/architecture.md`; operational instructions belong in `docs/guides/`.
+belongs in root `architecture.md`; operational instructions belong in `docs/guides/`.
 
 ## C and C++
 
@@ -168,7 +168,7 @@ outputs, ownership, units, errors, and caller responsibilities in `contracts/` o
 public code comments.
 
 **Architecture** — keep repository-wide design and ownership boundaries in the
-single `docs/architecture.md` file. Do not create competing module architecture
+single root `architecture.md` file. Do not create competing module architecture
 documents.
 
 **Operational guides** — add a file under `docs/guides/` only when contributors
@@ -179,7 +179,7 @@ existing guide over creating another file.
 flowchart LR
   code["module/ code"] --> tests["module/tests/"]
   code --> contract["contracts/"]
-  code --> arch["docs/architecture.md"]
+  code --> arch["architecture.md"]
   code --> guide["docs/guides/"]
 ```
 
@@ -196,7 +196,7 @@ Use the larger workflow when adding or redesigning a module. Use the small-chang
 1. Define the problem, success criteria, constraints, and non-goals.
 2. Research existing approaches, dependencies, algorithms, hardware limits, and failure modes.
 3. Define the public interface before choosing final data sources. Keep simulation, replay, mock, hardware, and live inputs behind the same contract where practical.
-4. Update `docs/architecture.md` only when repository-wide design or ownership changes.
+4. Update `architecture.md` only when repository-wide design or ownership changes.
 5. Update an existing `docs/guides/` file when setup or verification behavior changes.
 6. Build an MVP with the smallest useful API and unit tests.
 7. Update contracts and public code comments before relying on an interface from

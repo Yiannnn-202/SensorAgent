@@ -5,7 +5,10 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase, skipUnless
+
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -20,9 +23,88 @@ from sensoragent.tools.vision import (
   VisionInferenceOptions,
   VisionOpenVocabularyDetectTool,
 )
+from sensoragent.tools.vision.open_vocab import UltralyticsOpenVocabularyBackend
 
 
 PIL_AVAILABLE = importlib.util.find_spec("PIL") is not None
+
+
+class _FakeTensor:
+  def __init__(self, values) -> None:
+    self._values = np.asarray(values)
+
+  def cpu(self):
+    return self
+
+  def numpy(self):
+    return self._values
+
+
+class _FakeBoxes:
+  def __init__(self) -> None:
+    self.xyxy = _FakeTensor([[0, 0, 20, 20], [30, 0, 50, 20]])
+    self.conf = _FakeTensor([0.99, 0.75])
+    self.cls = _FakeTensor([0, 1])
+
+  def __len__(self) -> int:
+    return 2
+
+
+class _FakeFixedClassModel:
+  def predict(self, **kwargs):
+    del kwargs
+    return [
+      SimpleNamespace(
+        boxes=_FakeBoxes(),
+        masks=None,
+        names={0: "gear", 1: "roller"},
+      )
+    ]
+
+
+def test_fixed_class_model_filters_predictions_by_query() -> None:
+  backend = object.__new__(UltralyticsOpenVocabularyBackend)
+  backend._model_path = Path("models/vision/industrial_student_best.pt")
+  backend._backend = "yolo_seg"
+  backend._model = _FakeFixedClassModel()
+
+  detections = backend.detect_all(
+    query="silver roller",
+    image_path="frame.jpg",
+    depth_path=None,
+    options=VisionInferenceOptions(),
+  )
+
+  assert len(detections) == 1
+  assert detections[0].found
+  assert detections[0].label == "roller"
+  assert detections[0].confidence == 0.75
+
+
+def test_fixed_class_model_reports_not_found_for_absent_query() -> None:
+  backend = object.__new__(UltralyticsOpenVocabularyBackend)
+  backend._model_path = Path("models/vision/industrial_student_best.pt")
+  backend._backend = "yolo_seg"
+  backend._model = _FakeFixedClassModel()
+
+  detections = backend.detect_all(
+    query="flange",
+    image_path="frame.jpg",
+    depth_path=None,
+    options=VisionInferenceOptions(),
+  )
+
+  assert len(detections) == 1
+  assert not detections[0].found
+  assert detections[0].label == "flange"
+
+
+def test_fixed_class_match_supports_competition_chinese_aliases() -> None:
+  matches = UltralyticsOpenVocabularyBackend._fixed_class_matches_query
+
+  assert matches("hex_nut", "六角螺母")
+  assert matches("short_bolt", "螺栓")
+  assert matches("stepped_shaft", "阶梯轴")
 
 
 class _FakeVisionBackend:
@@ -640,7 +722,7 @@ class VisionOpenVocabularyToolTest(TestCase):
 
     workspace = load_config(ROOT / "configs" / "robot_sim.yaml").scene.workspace
     self.assertEqual(workspace.get("frame"), "base_link")
-    self.assertEqual(workspace.get("x"), [0.09, 0.59])
+    self.assertEqual(workspace.get("x"), [-0.59, -0.09])
     self.assertEqual(workspace.get("y"), [-0.375, 0.375])
     self.assertEqual(workspace.get("table_z"), 0.12)
 

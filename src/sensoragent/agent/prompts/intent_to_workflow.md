@@ -51,6 +51,10 @@ Your job:
 
 2. Choose exactly one workflow id from `allowed_targets` that fulfills the intent. Use these
    correspondences when the ids are available:
+   - `intent.action == "pick_place"` and `industrial.recovery_pick_place_tree` is available
+     and the operator asks for visual verification, post-place checking, recovery, or
+     explicitly says to verify the result with vision
+     → `industrial.recovery_pick_place_tree` with `target_kind="decision_tree"`
    - `intent.action == "pick_place"` → `industrial.pick_place_actionlist`
    - `intent.action == "pick"`       → `industrial.pick_only_actionlist`
    - `intent.action == "place"`      → `industrial.place_only_actionlist`
@@ -69,6 +73,7 @@ Your job:
    - `industrial.pick_only_actionlist`:  `{object_query}`
    - `industrial.place_only_actionlist`: `{target}`
    - `industrial.vision_pick_place_actionlist`: `{object_query, target, spatial_constraint}`
+   - `industrial.recovery_pick_place_tree`: `{object_query, target, spatial_constraint}`
    Include `spatial_constraint` only when `intent.spatial` is non-null; mirror it as
    `{"relation": ..., "ordinal": ...}`. Sensor inputs (`image_path`, `depth_path`,
    `camera_info_path`, `T_base_camera`) are supplied by the caller, not by you.
@@ -77,7 +82,7 @@ Return ONLY this JSON object, no prose:
 
 ```json
 {
-  "target_kind": "actionlist",
+  "target_kind": "<actionlist or decision_tree>",
   "target": "<one of allowed_targets>",
   "input": {
     "object_query": "<intent.object — modifier stripped>",
@@ -102,8 +107,9 @@ Rules:
 - Preserve the operator's language for the object noun in `object_query` and `intent.object`,
   but strip any spatial modifier into `spatial`/`spatial_constraint`; the vision layer matches
   the bare noun.
-- Prefer `industrial.pick_place_actionlist` when present in `allowed_targets`; fall back to
-  `mock.pick_place_actionlist` only when no industrial target is available.
+- Prefer `industrial.recovery_pick_place_tree` for verified pick-and-place requests when
+  present in `allowed_targets`; otherwise prefer `industrial.pick_place_actionlist`. Fall
+  back to `mock.pick_place_actionlist` only when no industrial target is available.
 - `intent` and `input` must agree: `intent.object == input.object_query`,
   `intent.target == input.target`, and `intent.spatial == input.spatial_constraint` (when
   spatial is present).

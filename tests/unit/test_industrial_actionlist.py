@@ -15,6 +15,9 @@ if str(SRC) not in sys.path:
 from sensoragent.agent import LLMPlanner
 from sensoragent.schemas import PlanTargetKind, TraceContext
 from sensoragent.workflows.actionlists.industrial import build_industrial_pick_place_actionlist
+from sensoragent.workflows.actionlists.industrial_vision import (
+  build_industrial_vision_pick_place_actionlist,
+)
 from sensoragent.workflows.actionlists.runtime import ActionListRuntime
 
 
@@ -277,6 +280,76 @@ class LLMPlannerAllowedTargetsTest(TestCase):
     )
     with self.assertRaises(ValueError):
       planner.plan("do something unsafe", {})
+
+
+class IndustrialVisionActionListTest(TestCase):
+  def test_null_spatial_constraint_defaults_to_empty_object(self) -> None:
+    captured_detect_inputs: list[dict] = []
+
+    def detect(input_data):
+      captured_detect_inputs.append(input_data)
+      return {
+        "found": True,
+        "label": "roller",
+        "confidence": 0.9,
+        "object_id": "obj_1",
+        "pose_3d": [0.30, 0.10, 0.05],
+      }
+
+    tool_runtime = _StubRuntime({
+      "vision.open_vocab_detect": detect,
+      "robot.plan_top_down_pick": lambda _i: {
+        "plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}
+      },
+      "robot.resolve_place_target": lambda _i: {
+        "place_pose": {
+          "position": [0.4, 0.2, 0.05],
+          "orientation": [0, 1, 0, 0],
+          "frame_id": "base_link",
+        }
+      },
+      "robot.plan_place": lambda _i: {
+        "plan": {
+          "place": {
+            "position": [0.4, 0.2, 0.05],
+            "orientation": [0, 1, 0, 0],
+            "frame_id": "base_link",
+          },
+          "retreat": {
+            "position": [0.4, 0.2, 0.15],
+            "orientation": [0, 1, 0, 0],
+            "frame_id": "base_link",
+          },
+        }
+      },
+      "robot.move_pose": lambda _i: {"completed": True},
+      "robot.move_linear": lambda _i: {"completed": True},
+      "gripper.open": lambda _i: {"completed": True},
+    })
+    skill_runtime = _StubRuntime({
+      "robot.pick": lambda _i: {"picked": True},
+      "robot.verify_grasp": lambda _i: {"held": True},
+      "robot.verify_place": lambda _i: {"released": True},
+    })
+    runtime = ActionListRuntime(tool_runtime, skill_runtime, _NullLogger())
+
+    result = runtime.run(
+      build_industrial_vision_pick_place_actionlist(),
+      {
+        "object_query": "roller",
+        "target": "bin_cell_3",
+        "image_path": "rgb.npy",
+        "depth_path": "depth.npy",
+        "camera_info_path": "camera_info.json",
+        "T_base_camera": [],
+        "T_world_camera": [],
+        "spatial_constraint": None,
+      },
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(captured_detect_inputs[0]["spatial_constraint"], {})
 
 
 class IndustrialPickOnlyTest(TestCase):

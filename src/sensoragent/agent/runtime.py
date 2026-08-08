@@ -10,12 +10,38 @@ from sensoragent.schemas import (
   PlanTargetKind,
   TraceContext,
 )
+from sensoragent.agent.llm_planner import LLMPlanner
 from sensoragent.agent.planner import Planner, StaticPlanner
 from sensoragent.agent.selector import IdentityWorkflowSelector, WorkflowSelector
 from sensoragent.skills import SkillRuntime
 from sensoragent.state import InMemoryEventStream, InMemoryTaskStore, TaskState, TaskStatus
+from sensoragent.schemas import AgentPlan
 from sensoragent.workflows import ActionListRuntime
 from sensoragent.workflows.decision_trees import DecisionTreeRuntime
+
+
+def _validate_required_workflow_inputs(plan: AgentPlan, merged_input: dict) -> str | None:
+  """Return a validation error when a selected workflow is missing critical input."""
+
+  requirements = {
+    "industrial.pick_place_actionlist": ("object_query", "target"),
+    "industrial.vision_pick_place_actionlist": ("object_query", "target"),
+    "industrial.recovery_pick_place_tree": ("object_query", "target"),
+    "industrial.pick_only_actionlist": ("object_query",),
+    "industrial.place_only_actionlist": ("target",),
+    "mock.pick_place_actionlist": ("object_query", "target"),
+  }
+  missing = [
+    key
+    for key in requirements.get(plan.target, ())
+    if not str(merged_input.get(key, "")).strip()
+  ]
+  if not missing:
+    return None
+  return (
+    f"Planner selected {plan.target} but missing required input(s): "
+    f"{', '.join(missing)}"
+  )
 
 
 class AgentRuntime:
@@ -200,15 +226,39 @@ class AgentRuntime:
     task = self.create_task(user_input, input_data)
     task.mark(TaskStatus.RUNNING)
     self._event_stream.publish("task_started", task.trace, {})
+    self._logger.log(
+      "task_started", task.trace, {"user_input": user_input, "task_id": task.task_id}
+    )
 
+    is_llm_planner = isinstance(self._planner, LLMPlanner)
+    if is_llm_planner:
+      self._logger.log("llm_plan_started", task.trace, {"user_input": user_input})
     plan = self._selector.select(self._planner.plan(user_input, task.input))
+    if is_llm_planner:
+      self._logger.log(
+        "llm_plan_finished",
+        task.trace,
+        {"target": plan.target, "target_kind": str(plan.target_kind)},
+      )
     task.plan = plan
     self._event_stream.publish("task_planned", task.trace, {"plan": plan.to_dict()})
+    self._logger.log(
+      "task_planned", task.trace, {"plan": plan.to_dict(), "task_id": task.task_id}
+    )
 
     # Merge caller-provided task inputs with the planner's extracted inputs.
-    # plan.input (LLM-extracted object_query/target/spatial_constraint) wins on
-    # conflict; task.input supplies scene defaults like image_path/depth_path.
+    # Planner output wins on conflict so incomplete ASR/LLM extraction fails
+    # explicitly instead of silently executing with fallback object/target data.
     merged_input = {**task.input, **plan.input}
+    validation_error = _validate_required_workflow_inputs(plan, merged_input)
+    if validation_error is not None:
+      task.mark(TaskStatus.FAILED, error=validation_error)
+      self._event_stream.publish("task_failed", task.trace, {"error": task.error})
+      self._logger.log(
+        "task_failed", task.trace, {"error": task.error, "task_id": task.task_id}
+      )
+      self._task_store.save(task)
+      return task
     if plan.target_kind == PlanTargetKind.SKILL:
       request = AgentRequest(skill=plan.target, input=merged_input, trace=task.trace)
     elif plan.target_kind == PlanTargetKind.ACTIONLIST:
@@ -221,8 +271,14 @@ class AgentRuntime:
     if response.success:
       task.mark(TaskStatus.SUCCEEDED)
       self._event_stream.publish("task_succeeded", task.trace, {"result": task.result})
+      self._logger.log(
+        "task_succeeded", task.trace, {"result": task.result, "task_id": task.task_id}
+      )
     else:
       task.mark(TaskStatus.FAILED, error=response.error)
       self._event_stream.publish("task_failed", task.trace, {"error": task.error})
+      self._logger.log(
+        "task_failed", task.trace, {"error": task.error, "task_id": task.task_id}
+      )
     self._task_store.save(task)
     return task

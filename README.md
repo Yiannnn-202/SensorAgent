@@ -41,6 +41,12 @@ SensorAgent is not responsible for:
 
 ## Current Status
 
+As of 2026-08-05, the repository is beyond framework scaffolding and has a
+working simulation-oriented prototype. The Agent and workflow framework is at
+an integration-ready level, while competition acceptance is still limited by
+repeatable Gazebo testing, measured vision quality, unified world state, and the
+absence of physical-robot integration.
+
 | Area | Status |
 | --- | --- |
 | Agent, Tool, Skill, ActionList, and DecisionTree runtimes | Implemented |
@@ -52,7 +58,13 @@ SensorAgent is not responsible for:
 | SensorAgent-to-Gazebo/MoveIt HTTP bridge | Implemented and used by Gazebo test scripts; automated ROS acceptance is not in the default suite |
 | Industrial config-detect pick/place ActionLists | Implemented for the current tabletop world |
 | Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
-| Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow; Gazebo acceptance pending |
+| Gazebo RGB-D frame capture Tool (`vision.capture_frame`) | Implemented; requires a ROS 2 Python interpreter on Ubuntu |
+| Strict Grounding DINO + SAM 2 Tool (`vision.grounded_sam2`) | Implemented with a pretrained baseline and a local single-class `red_block_v0` fine-tuning run; multi-class and industrial acceptance remain pending |
+| Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
+| Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
+| Unified competition world state | Partial; task lifecycle and workflow context exist, but there is no durable object/robot/bin world-state model yet |
+| Batch simulation evaluation and repeatable scene reset | Not implemented |
+| HTTP/WebSocket/MCP service entry points | Not implemented; only the CLI exists |
 | Physical robot connection | Not connected |
 | Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
 | Gymnasium RL environment | Not implemented |
@@ -66,38 +78,87 @@ place targets, optional open-vocabulary vision, visual verification, recovery
 classification tools, and `industrial.recovery_pick_place_tree`. The physical
 robot is not connected.
 
+## Quick Start
+
+Python 3.12 is required for the Agent package.
+
+```powershell
+python -m pip install -r requirements.txt          # core runtime + local audio
+python -m pip install -r requirements-vision.txt   # only for the vision model path
+python -m pip install onnxruntime pytest           # Silero VAD and the pytest-based tests
+```
+
+Runtime configuration is resolved in this order: an explicit `--config` path,
+`SENSORAGENT_CONFIG`, `SENSORAGENT_ENV` mapped to `configs/<env>.yaml`, then
+`configs/mock.yaml`. Copy `.env.example` to an ignored `.env` for LLM
+credentials and logging overrides. Other recognized variables are
+`SENSORAGENT_ROS_PYTHON` (ROS 2 interpreter used by RGB-D capture),
+`SENSORAGENT_GROUNDING_DINO_MODEL`, and `SENSORAGENT_SAM2_WEIGHTS`.
+
+Run the default offline test suite:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+See the [testing guide](docs/guides/operations/testing.md) for the suite's scope and its
+current known issues.
+
 ## Repository Layout
 
 ```text
 sensoragent/
 ├── configs/                 # Project-level configuration files
+├── contracts/               # Language-neutral cross-module JSON contracts
 ├── docs/                    # Architecture, team documents, and guides
-├── scripts/                 # Project-level startup and maintenance scripts
+├── logs/                    # Ignored task logs, traces, audio, and captures
+├── models/                  # Ignored local ASR, TTS, and vision weights
+├── scripts/                 # Windows mock runner, vision evaluation, Linux Gazebo runners
 ├── ros2_ws/                 # Local ROS 2 simulation workspace
 │   └── src/
 │       ├── rm_description/                  # Locally imported RM65-B model
 │       ├── rm_gazebo/                       # Locally imported arm-only Gazebo stack
 │       ├── rm_65_config/                    # Locally imported arm-only MoveIt config
 │       ├── robotiq_description/             # Vendored Robotiq 2F-85 model
-│       ├── sensoragent_rm65_b_bringup/      # Combined arm/gripper stack
-│       └── sensoragent_robot_bridge/         # HTTP-to-ROS 2 simulation bridge
-├── simulation/              # Gazebo worlds, models, and scenarios
+│       ├── sensoragent_rm65_b_bringup/      # Combined arm/gripper stack, worlds, models
+│       ├── sensoragent_robot_bridge/        # HTTP-to-ROS 2 simulation bridge
+│       └── sensoragent_rm65_b_{description,gazebo,moveit_config}/  # Reserved, empty
+├── simulation/              # Reserved Gazebo worlds, models, and scenarios
 ├── reinforcement_learning/  # Future RL environments and policies
 ├── src/
 │   └── sensoragent/
 │       ├── agent/           # Agent loop, planning, orchestration
-│       ├── mcp/             # MCP-style contracts and helpers
-│       ├── skills/          # High-level reusable capabilities
-│       ├── tools/           # Atomic tool adapters
-│       ├── workflows/       # ActionList and DecisionTree workflows
-│       ├── logger/          # Structured agent logging
-│       ├── state/           # Agent state and task context
-│       ├── integrations/    # External service adapters
-│       ├── schemas/         # Shared schemas
 │       ├── config/          # Configuration loading code
-│       └── services/        # API and CLI entry points
+│       ├── contracts/       # JSON contract validation helpers
+│       ├── evaluation/      # Offline vision dataset evaluation
+│       ├── integrations/    # External and local service adapters
+│       ├── logger/          # Structured agent logging
+│       ├── mcp/             # MCP-style contracts and helpers
+│       ├── recovery/        # Failure evidence, classification, recovery planning
+│       ├── schemas/         # Shared schemas
+│       ├── services/        # CLI entry point and reserved API package
+│       ├── skills/          # High-level reusable capabilities
+│       ├── state/           # Agent state and task context
+│       ├── tools/           # Atomic tool adapters
+│       └── workflows/       # ActionList and DecisionTree workflows
 └── tests/                   # Unit and integration tests
 ```
+
+## Command-line Surface
+
+`python -m sensoragent.services.cli.main` (or the installed `sensoragent`
+script) currently exposes:
+
+| Command | Purpose |
+| --- | --- |
+| `mock-pick-place` | Run the mock skill chain end to end |
+| `run-task` | Run a natural-language task through the static or LLM planner |
+| `listen-task` | Record one utterance, transcribe it, and plan from the transcript |
+| `vision-detect` | Run open-vocabulary detection on one RGB(-D) image and print the Tool result |
+
+Gazebo workflows are driven by `scripts/linux/` runners instead of CLI
+subcommands. See the [testing guide](docs/guides/operations/testing.md) for the full list.
 
 ## Documentation
 
@@ -107,25 +168,30 @@ Start from the documentation index:
 
 Key SensorAgent documents:
 
-- [Architecture](docs/architecture.md)
-- [Competition technical plan](COMPETITION_TECHNICAL_PLAN_CN.md)
+- [Architecture (single source)](architecture.md)
+- [Competition technical plan](docs/planning/competition-plan.md)
+- [Competition schedule and progress](docs/planning/schedule.md)
 - [Development backlog](TODO.md)
-- [Testing guide](docs/guides/testing.md)
-- [Audio guide](docs/guides/audio.md)
-- [RM65-B Gazebo quickstart](docs/guides/rm65_b_gazebo_quickstart_cn.md)
-- [RM65-B named joint pose tuning](docs/guides/rm65_b_named_joint_poses.md)
-- [Simulation robot HTTP bridge](docs/guides/robot_sim_bridge_cn.md)
-- [Industrial intent to ActionList guide](docs/guides/intent_to_actionlist_cn.md)
-- [Failure detection and recovery guide](docs/guides/failure_recovery_cn.md)
-- [Gazebo failure recovery demo](docs/guides/gazebo_recovery_demo_cn.md)
-- [Open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
-- [Gazebo RGB-D vision ActionList test](docs/guides/gazebo_vision_actionlist_test.md)
+- [Documentation index](docs/README.md)
+- [Terminal progress logging convention](TERMINAL_PROGRESS_LOGGING.md)
+- [Testing guide](docs/guides/operations/testing.md)
+- [Audio guide](docs/guides/audio/local-audio.md)
+- [RM65-B Gazebo quickstart](docs/guides/simulation/rm65b-quickstart.md)
+- [Simulation robot HTTP bridge](docs/guides/simulation/robot-bridge.md)
+- [Industrial intent to ActionList guide](docs/guides/workflows/intent-to-actionlist.md)
+- [Failure detection and recovery guide](docs/guides/workflows/failure-recovery.md)
+- [Open-vocabulary vision guide](docs/guides/vision/open-vocabulary.md)
+- [Grounded SAM 2 strict Tool and red-block evaluation](docs/guides/vision/grounded-sam2-tool-cn.md)
+- [Team conventions](docs/team/convention.md)
 
-## Vision Model Evaluation
+## Vision Model Training and Evaluation
 
-The open-vocabulary model path uses `vision.open_vocab_detect` for both the
-temporary YOLOE baseline and the Grounding DINO + SAM 2 teacher model. Validate a
-portable dataset manifest before running a long evaluation:
+The generic open-vocabulary path uses `vision.open_vocab_detect` for the
+temporary YOLOE baseline and configurable experimental backends. The strict
+`vision.grounded_sam2` Tool fixes the detector to Grounding DINO, always invokes
+SAM 2, and fails instead of silently falling back to a detector box when mask
+generation fails. Validate a portable dataset manifest before running a long
+evaluation:
 
 ```powershell
 python scripts\vision_eval.py validate `
@@ -138,7 +204,8 @@ Run a labeled local dataset with one persistent model instance:
 ```powershell
 python scripts\vision_eval.py run `
   --manifest data\vision\competition_test.jsonl `
-  --config configs\vision_grounding_dino.yaml `
+  --config configs\vision_grounded_sam2.yaml `
+  --tool vision.grounded_sam2 `
   --output-dir runs\vision\competition_test `
   --device 0 `
   --require-masks `
@@ -147,9 +214,64 @@ python scripts\vision_eval.py run `
 
 The runner saves per-sample JSONL, aggregate metrics, Tool logs, and optional
 overlays. Dataset images, model weights, caches, and `runs/` outputs remain local.
-See the [Chinese open-vocabulary vision guide](docs/guides/vision_open_vocab_cn.md)
-for the manifest contract, data-source plan, evaluation metrics, and teacher to
-student optimization route.
+
+Roboflow-style COCO segmentation exports can be converted without adding a
+runtime dependency on `pycocotools`:
+
+```powershell
+python scripts\vision_coco_segmentation_to_eval.py `
+  --source-root "..\red block.v2i.coco-segmentation" `
+  --output-root data\vision\team\red_block_v2 `
+  --sample-prefix red_block_v2 `
+  --query "red block" `
+  --category-name "red-block" `
+  --dataset-name "Roboflow red block v2" `
+  --source-url "https://universe.roboflow.com/yiannnn202s-workspace/red-block" `
+  --source-license "CC BY 4.0"
+```
+
+The current first training target is Grounding DINO itself. Its JSONL manifest
+keeps text class names, absolute `bbox_xyxy` targets, provenance, and scene-level
+splits. Validate the complete dataset before allocating GPU time:
+
+```powershell
+python scripts\vision_train_grounding_dino.py `
+  --config configs\vision_train_grounding_dino.example.yaml `
+  --manifest data\vision\competition_train.jsonl `
+  --dry-run
+```
+
+After the prompt order, scene-level splits, and detection boxes are reviewed,
+start direct full-parameter fine-tuning with:
+
+```powershell
+python scripts\vision_train_grounding_dino.py `
+  --config configs\vision_train_grounding_dino.example.yaml `
+  --manifest data\vision\competition_train.jsonl `
+  --device cuda:0
+```
+
+`configs/vision_train_grounding_dino.example.yaml` records the proposed prompt
+order and reproducible training parameters. `class_labels` are indexes into
+that exact text list; they are not an independent YOLO class map. SAM 2 masks
+remain useful annotations, but Grounding DINO is optimized on text-grounded
+boxes. YOLO11n-seg and `scripts/vision_train.py` remain historical experiment
+support and are outside the current 2026-08-10 delivery path.
+
+The templates are not checked-in training data. A local single-class
+`red_block_v0` run has been completed for training and Tool-chain validation;
+its checkpoint, dataset, caches, and run outputs stay outside Git. See the
+[red_block_v0 training handoff](docs/guides/vision/grounding-dino-red-block-v0-cn.md)
+for the recorded configuration, hashes, metrics, and remaining work.
+See the [open-vocabulary vision guide](docs/guides/vision/open-vocabulary.md)
+for the manifest contract, data-source plan, evaluation metrics, and current
+Grounding DINO + SAM2 delivery route.
+The [strict Tool guide](docs/guides/vision/grounded-sam2-tool-cn.md) documents
+the fixed Tool contract, COCO conversion workflow, red-block data audit, and
+the measured 2026-08-01 pretrained baseline.
+The [SAM3 assessment](docs/guides/vision/sam3-assessment.md) records why SAM3
+is a later same-split comparison instead of a drop-in replacement for the current
+Grounding DINO + SAM2 delivery.
 
 ## RM65-B and Robotiq Simulation
 
@@ -179,7 +301,7 @@ bash scripts/linux/run_rm65_b_sim.sh
 ```
 
 An optional shell alias reduces this to `sensoragent-sim`; see the
-[full Ubuntu guide](docs/guides/rm65_b_gazebo_quickstart_cn.md).
+[full Ubuntu guide](docs/guides/simulation/rm65b-quickstart.md).
 
 To start Gazebo without MoveIt and RViz:
 
@@ -190,7 +312,7 @@ bash scripts/linux/run_rm65_b_sim.sh start_moveit:=false
 The combined model, arm motion, and gripper opening/closing have been manually
 exercised on Ubuntu. Repeatable object-contact and grasp-stability acceptance
 remain before this simulation should be used for reinforcement learning. See the
-[full Ubuntu guide](docs/guides/rm65_b_gazebo_quickstart_cn.md).
+[full Ubuntu guide](docs/guides/simulation/rm65b-quickstart.md).
 
 ## Local Voice Command Pipeline
 
@@ -212,7 +334,7 @@ python -m pip install -r requirements.txt
 ```
 
 Place local model assets under the ignored `models/` directory as described in
-the [audio guide](docs/guides/audio.md), configure the LLM credentials in an
+the [audio guide](docs/guides/audio/local-audio.md), configure the LLM credentials in an
 ignored `.env`, and run:
 
 ```bash
@@ -329,11 +451,18 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_gazebo_recovery_demo.py \
 
 ## Current Development Priorities
 
-1. Add automated ROS 2/Gazebo acceptance tests and repeatable scene reset.
-2. Connect recognized voice commands to approved robot workflows.
-3. Broaden industrial object/bin coverage with recovery branches.
-4. Define the Gymnasium observation, action, reward, and termination contract.
-5. Add service entry points and a physical robot adapter.
+1. Establish a clean offline test baseline and automated ROS 2/Gazebo acceptance.
+2. Add repeatable scene reset, batch execution, and report-ready metrics.
+3. Freeze the competition object classes, validation data, camera contract, and
+   physical-robot access plan.
+4. Complete measured RGB-D perception and recovery acceptance on the minimum
+   competition scene.
+5. Define the unified world-state contract needed by perception, planning,
+   execution, and replay.
+
+Service entry points, broader object coverage, and reinforcement learning remain
+outside the critical path until the repeatable simulation loop passes its first
+stage gate.
 
 The Python Agent package currently declares Python 3.12, while Ubuntu 22.04 and
 ROS 2 Humble normally use Python 3.10. The implemented design keeps them in

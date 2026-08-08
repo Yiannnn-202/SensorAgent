@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sensoragent.integrations import AudioClient, AudioError, MicrophoneError
@@ -11,7 +11,7 @@ from sensoragent.schemas import ToolCall, ToolResult, ToolSpec
 
 
 def _default_recording_path() -> str:
-  timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+  timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
   return str(Path("logs") / "audio" / f"listen_{timestamp}.wav")
 
 

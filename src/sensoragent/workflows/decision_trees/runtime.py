@@ -22,6 +22,18 @@ from sensoragent.workflows.actionlists.runtime import _render_value, _resolve_pa
 from sensoragent.workflows.errors import WorkflowExecutionError
 
 
+_DEFAULT_MAX_RECOVERY_ATTEMPTS = 2
+
+
+def _recovery_attempt_limit(context: dict[str, Any]) -> int:
+  """Resolve the global recovery-attempt budget from the tree context."""
+
+  value = context.get("max_recovery_attempts")
+  if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+    return value
+  return _DEFAULT_MAX_RECOVERY_ATTEMPTS
+
+
 class DecisionTreeRuntime:
   """Executes DecisionTree nodes until a terminal result is reached."""
 
@@ -76,6 +88,9 @@ class DecisionTreeRuntime:
     rendered_input = _render_value(node.input, context)
     if not isinstance(rendered_input, dict):
       raise WorkflowExecutionError(f"Node input must render to object: {node.name}")
+    # Optional inputs use None defaults so templates resolve without sending
+    # null into tool contracts that require a concrete typed value.
+    rendered_input = {key: value for key, value in rendered_input.items() if value is not None}
 
     last_result = None
     attempts = max(0, node.max_retries) + 1
@@ -122,7 +137,9 @@ class DecisionTreeRuntime:
         error=f"Unknown start node: {tree.start}",
       )
 
-    context: dict[str, Any] = dict(input_data)
+    context: dict[str, Any] = {**tree.input_defaults, **input_data}
+    max_recovery_attempts = _recovery_attempt_limit(context)
+    recovery_attempts = 0
     results: list[DecisionNodeResult] = []
     current_name: str | None = tree.start
     self._logger.log("decision_tree_started", trace, {"decision_tree": tree.name})
@@ -158,6 +175,34 @@ class DecisionTreeRuntime:
         )
         return final
 
+      # Global recovery budget: each entry into recovery.classify_failure counts
+      # as one recovery attempt; short-circuit to failure once the configured
+      # limit is exceeded, complementing the max_decision_nodes hard cap.
+      if (
+        node.kind == DecisionNodeKind.TOOL
+        and node.target == "recovery.classify_failure"
+      ):
+        recovery_attempts += 1
+        if recovery_attempts > max_recovery_attempts:
+          final = DecisionTreeResult(
+            tree.name,
+            False,
+            results,
+            context,
+            f"DecisionTree exceeded max_recovery_attempts={max_recovery_attempts}",
+          )
+          self._logger.log(
+            "decision_tree_finished",
+            trace,
+            {"decision_tree": tree.name, "success": False, "error": final.error},
+          )
+          return final
+        # Mirror the counter into the context so result.output records how many
+        # recoveries actually ran; the exceeded limit is reported in the error.
+        # Set after the budget check so a short-circuit leaves the count at the
+        # recoveries that ran rather than the one that was refused.
+        context["recovery_attempts"] = recovery_attempts
+
       self._logger.log(
         "decision_node_started",
         trace,
@@ -191,7 +236,32 @@ class DecisionTreeRuntime:
       results.append(result)
       if node.save_as and result.success:
         context[node.save_as] = result.output
-      if not result.success:
+      # Accumulate per-attempt recovery evidence for offline metrics.
+      # classify_failure opens a new attempt record; plan_recovery backfills
+      # the chosen strategy on the most recent attempt. recovery_attempts and
+      # last_failure are left untouched so existing observers keep working.
+      if result.success and node.target == "recovery.classify_failure":
+        classification = context.get("classification") or {}
+        context.setdefault("recovery_history", []).append(
+          {
+            "attempt": recovery_attempts,
+            "failure_type": classification.get("failure_type"),
+            "phase": classification.get("phase"),
+            "retryable": classification.get("retryable"),
+            "confidence": classification.get("confidence"),
+            "reason": classification.get("reason"),
+            "strategy": None,
+            "next_step": None,
+            "node": node.name,
+          }
+        )
+      elif result.success and node.target == "recovery.plan":
+        recovery_plan = context.get("recovery") or {}
+        history = context.get("recovery_history")
+        if history:
+          history[-1]["strategy"] = recovery_plan.get("strategy")
+          history[-1]["next_step"] = recovery_plan.get("next_step")
+      if not result.success and node.kind != DecisionNodeKind.TERMINAL:
         context["last_failure"] = {
           "node": node.name,
           "failed_step": node.name,

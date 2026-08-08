@@ -66,6 +66,7 @@ def load_config(path: str | Path) -> SensorAgentConfig:
       task_dir=Path(str(logging.get("task_dir", "logs/tasks"))),
       trace_dir=Path(str(logging.get("trace_dir", "logs/traces"))),
       error_dir=Path(str(logging.get("error_dir", "logs/errors"))),
+      progress_dir=Path(str(logging.get("progress_dir", "logs/runs"))),
     ),
     integrations=SensorAgentIntegrationsConfig(
       audio=_as_mapping(integrations.get("audio"), "integrations.audio"),

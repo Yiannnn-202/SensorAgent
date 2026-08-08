@@ -21,11 +21,18 @@ if str(SRC) not in sys.path:
 
 from sensoragent.schemas import ToolCall, TraceContext
 from sensoragent.tools.vision import VisionCaptureFrameTool
+from sensoragent.tools.vision.capture import _discover_ros_setup
 
 _T_BASE_CAMERA = [
   [0.0, -1.0, 0.0, 0.34],
   [-1.0, 0.0, 0.0, 0.0],
   [0.0, 0.0, -1.0, 0.88],
+  [0.0, 0.0, 0.0, 1.0],
+]
+_T_WORLD_CAMERA = [
+  [0.0, -1.0, 0.0, 0.34],
+  [-1.0, 0.0, 0.0, 0.0],
+  [0.0, 0.0, -1.0, 1.06],
   [0.0, 0.0, 0.0, 1.0],
 ]
 
@@ -37,14 +44,18 @@ class _Completed:
   stderr: str = ""
 
 
-def _manifest(out_dir: Path, t_base_camera=_T_BASE_CAMERA) -> dict:
+def _manifest(
+  out_dir: Path,
+  t_base_camera=_T_BASE_CAMERA,
+  t_world_camera=None,
+) -> dict:
   return {
     "image_path": str(out_dir / "rgb.npy"),
     "depth_path": str(out_dir / "depth.npy"),
     "camera_info_path": str(out_dir / "camera_info.json"),
     "camera_frame": "camera_color_optical_frame",
     "T_base_camera": t_base_camera,
-    "T_world_camera": None,
+    "T_world_camera": t_world_camera,
   }
 
 
@@ -58,9 +69,16 @@ class VisionCaptureFrameToolTest(TestCase):
     defaults = {
       "script": "scripts/linux/capture_gazebo_rgbd_frame.py",
       "ros_python": "/usr/bin/python3",
+      # Pin discovery off by default so tests do not depend on a local ROS install.
+      "ros_setup": None,
       "out_dir": str(self.out_dir),
     }
-    return VisionCaptureFrameTool(**{**defaults, **kwargs})
+    merged = {**defaults, **kwargs}
+    tool = VisionCaptureFrameTool(**merged)
+    if merged.get("ros_setup") is None:
+      # Force the unwrapped form unless a test asks for the sourcing wrapper.
+      tool._setup_script = lambda: None  # noqa: SLF001
+    return tool
 
   def _call(self, **input_data) -> ToolCall:
     return ToolCall(tool="vision.capture_frame", input=input_data, trace=TraceContext())
@@ -136,10 +154,15 @@ class VisionCaptureFrameToolTest(TestCase):
     self.assertTrue(result.output["image_path"].startswith(str(override)))
 
   def test_missing_transform_falls_back_to_configured_matrix(self) -> None:
-    tool = self._tool(fallback_t_base_camera=_T_BASE_CAMERA)
+    tool = self._tool(
+      fallback_t_base_camera=_T_BASE_CAMERA,
+      fallback_t_world_camera=_T_WORLD_CAMERA,
+    )
 
     def fake_run(argv, **_kwargs):
-      self._write_manifest(_manifest(self.out_dir, t_base_camera=None))
+      self._write_manifest(
+        _manifest(self.out_dir, t_base_camera=None, t_world_camera=None)
+      )
       return _Completed()
 
     with mock.patch("subprocess.run", side_effect=fake_run):
@@ -147,6 +170,7 @@ class VisionCaptureFrameToolTest(TestCase):
 
     self.assertTrue(result.success, msg=result.error)
     self.assertEqual(result.output["T_base_camera"], _T_BASE_CAMERA)
+    self.assertEqual(result.output["T_world_camera"], _T_WORLD_CAMERA)
 
   def test_non_zero_exit_reports_stderr(self) -> None:
     tool = self._tool()
@@ -201,3 +225,79 @@ class VisionCaptureFrameToolTest(TestCase):
 
     self.assertFalse(result.success)
     self.assertIn("CAPTURE_FAILED", result.error)
+
+
+class RosSetupSourcingTest(TestCase):
+  """rclpy needs the paths the ROS setup script exports, so it must be sourced.
+
+  Without this the capture subprocess inherits the agent virtualenv, where
+  importing rclpy fails even though ROS is installed.
+  """
+
+  def setUp(self) -> None:
+    self._temp = tempfile.TemporaryDirectory()
+    self.out_dir = Path(self._temp.name) / "frame"
+    self.setup_path = Path(self._temp.name) / "setup.bash"
+    self.setup_path.write_text("# stub ROS setup\n", encoding="utf-8")
+    self.addCleanup(self._temp.cleanup)
+
+  def _call(self, **input_data) -> ToolCall:
+    return ToolCall(tool="vision.capture_frame", input=input_data, trace=TraceContext())
+
+  def test_command_sources_setup_and_clears_agent_pythonpath(self) -> None:
+    tool = VisionCaptureFrameTool(
+      out_dir=str(self.out_dir),
+      ros_setup=str(self.setup_path),
+    )
+
+    def fake_run(command, **_kwargs):
+      self.out_dir.mkdir(parents=True, exist_ok=True)
+      (self.out_dir / "manifest.json").write_text(
+        json.dumps(_manifest(self.out_dir)), encoding="utf-8"
+      )
+      fake_run.command = command
+      return _Completed()
+
+    with mock.patch("subprocess.run", side_effect=fake_run):
+      result = tool.run(self._call())
+
+    self.assertTrue(result.success, msg=result.error)
+    command = fake_run.command
+    self.assertEqual(command[:2], ["bash", "-c"])
+    script = command[2]
+    self.assertIn(f". {self.setup_path}", script)
+    # The agent's PYTHONPATH points at src/ and would shadow the ROS packages.
+    self.assertIn("unset PYTHONHOME PYTHONPATH", script)
+    self.assertIn("capture_gazebo_rgbd_frame.py", script)
+    self.assertIn("--image-topic", script)
+
+  def test_configured_setup_path_wins_over_discovery(self) -> None:
+    tool = VisionCaptureFrameTool(ros_setup=str(self.setup_path))
+
+    self.assertEqual(tool._setup_script(), str(self.setup_path))  # noqa: SLF001
+
+  def test_inherited_ament_prefix_path_does_not_skip_sourcing(self) -> None:
+    # AMENT_PREFIX_PATH often survives into environments where rclpy is still
+    # unimportable, so it must not be taken as "ROS already usable".
+    with mock.patch.dict(
+      "os.environ",
+      {"AMENT_PREFIX_PATH": "/opt/ros/humble", "SENSORAGENT_ROS_SETUP": str(self.setup_path)},
+      clear=False,
+    ):
+      self.assertEqual(_discover_ros_setup(), str(self.setup_path))
+
+  def test_setup_override_env_var_is_used(self) -> None:
+    with mock.patch.dict(
+      "os.environ",
+      {"SENSORAGENT_ROS_SETUP": str(self.setup_path)},
+      clear=False,
+    ):
+      self.assertEqual(_discover_ros_setup(), str(self.setup_path))
+
+  def test_nonexistent_setup_override_falls_back_to_no_wrapper(self) -> None:
+    with mock.patch.dict(
+      "os.environ",
+      {"SENSORAGENT_ROS_SETUP": str(self.setup_path) + ".missing"},
+      clear=False,
+    ):
+      self.assertIsNone(_discover_ros_setup())

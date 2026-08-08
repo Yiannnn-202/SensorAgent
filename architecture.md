@@ -1,5 +1,10 @@
 # SensorAgent Technical Architecture
 
+This is the single source of truth for repository architecture, ownership
+boundaries, runtime structure, and deployment design. Operational procedures
+belong under `docs/guides/`; schedules and competition plans belong under
+`docs/planning/`.
+
 SensorAgent is an embodied-agent orchestration repository for an RM65-B robotic
 arm system with local speech input, open-vocabulary perception, task planning,
 workflow execution, and ROS 2 simulation integration. The system is organized as
@@ -52,7 +57,7 @@ flowchart TB
   vad --> asr["SenseVoice ASR"]
   asr --> text["Command text"]
 
-  rgbd["RGB-D frame"] --> det["Optimized Grounded SAM2 target stack"]
+  rgbd["RGB-D frame"] --> det["Strict Grounded SAM2 Tool"]
   det --> geom["Depth and camera geometry"]
   geom --> pose["Object pose in base_link"]
 
@@ -83,30 +88,41 @@ than playing audio automatically.
 
 ### Vision perception
 
-The target vision stack uses the team's optimized **Grounded SAM2** pipeline for
-open-vocabulary detection, segmentation, and RGB-D object localization. In the
-architecture, this stack provides text-prompted object candidates, mask
-refinement, mask-aware spatial selection, and a stable object pose for grasp
-planning.
+The target vision stack uses Grounding DINO for text-prompted detection and SAM 2
+for box-prompted mask refinement. The repository now exposes this composition as
+the strict `vision.grounded_sam2` Tool: callers cannot disable SAM 2, and a
+detected object without a usable mask is a failed call rather than a silent
+box-only fallback. The checked-in adapter is implemented; the current default
+weights are pretrained baselines, not team-optimized competition checkpoints.
 
-The current repository already has the abstraction needed for this path:
-`vision.open_vocab_detect` supports open-vocabulary detector backends, optional
-mask refinement, RGB-D geometry, workspace filtering, and spatial constraints
-such as left, right, nearest, farthest, largest, and smallest. Existing config
-hooks include:
+The generic `vision.open_vocab_detect` Tool remains available for YOLOE and
+configurable experiments. Both paths reuse RGB-D geometry, workspace filtering,
+mask-aware spatial selection, and constraints such as left, right, nearest,
+farthest, largest, and smallest. The strict Tool uses:
 
 ```yaml
 integrations:
   vision:
-    backend: grounding_dino
     grounding_dino_model: IDEA-Research/grounding-dino-tiny
     sam2_model_path: models/vision/sam2_t.pt
-    refine_masks: true
 ```
 
 For deterministic simulation and tests, `vision.config_detect` reads object
 poses directly from `scene.objects` in the runtime configuration. This provides a
 stable baseline when perception model weights or camera capture are not needed.
+
+In Gazebo, `vision.capture_frame` produces the RGB-D input for the model path.
+It runs `scripts/linux/capture_gazebo_rgbd_frame.py` in the ROS 2 Python
+interpreter (probed through `SENSORAGENT_ROS_PYTHON`, `ROS_PYTHON`, then
+`python3`), subscribes to the industrial camera topics, resolves the camera
+transform through TF with a configured fallback, and writes an image, depth,
+camera-info, and transform manifest under `logs/vision/`.
+
+Model quality is measured offline instead of by single-image confidence.
+`src/sensoragent/evaluation/` and `scripts/vision_eval.py` validate a portable
+JSONL dataset manifest, run either `vision.open_vocab_detect` or
+`vision.grounded_sam2` over the dataset with one persistent model instance, and
+write per-sample results, aggregate metrics, Tool logs, and optional overlays.
 
 ### Visual verification
 
@@ -157,7 +173,10 @@ and place-only workflows. They are defined in
 DecisionTrees add conditional branches, retries, and recovery. The current
 industrial recovery tree classifies failures from perception, pick, place,
 release, wrong-bin verification, or bridge calls, then rejoins the main flow
-through bounded local recovery branches.
+through bounded local recovery branches. With
+`integrations.vision.recovery_live_detect: true` the tree is rebuilt around live
+RGB-D capture and open-vocabulary re-detection, so a wrong bin is observed
+rather than inferred from the commanded release pose.
 
 ### Failure handling
 
@@ -190,7 +209,8 @@ flowchart LR
 Skills compose reusable behavior such as `robot.pick`, `robot.place`,
 `robot.verify_grasp`, `robot.verify_place`, `audio.listen_command`, and
 `audio.announce`. Tools are atomic capabilities such as `robot.move_pose`,
-`gripper.close`, `vision.open_vocab_detect`, or `recovery.plan`.
+`gripper.close`, `vision.open_vocab_detect`, `vision.grounded_sam2`, or
+`recovery.plan`.
 
 The Tool runtime validates calls against shared schemas where available, applies
 timeouts and error handling, and writes structured logs. The separation keeps
@@ -246,6 +266,11 @@ without becoming part of the source tree.
 
 ## Current implementation status
 
+As of 2026-08-01, the decision and execution framework is integrated, but the
+competition system has not passed repeatable end-to-end acceptance. The
+deterministic industrial ActionList uses configured object poses; the separate
+vision ActionList and live recovery-tree mode provide the actual RGB-D path.
+
 Implemented in the repository:
 
 - Agent runtime, task lifecycle, static planner, OpenAI-compatible LLM planner,
@@ -253,6 +278,11 @@ Implemented in the repository:
 - Local Silero VAD, SenseVoice ASR, and file-based TTS integration.
 - Open-vocabulary vision tool abstraction with RGB-D geometry, spatial
   selection, and Grounding DINO/SAM2 configuration hooks.
+- Strict `vision.grounded_sam2` composition adapter, external Tool contract,
+  single-image CLI route, and selectable offline evaluation route.
+- COCO segmentation export conversion with decoded mask ground truth,
+  positive/negative preservation, and scene-split leakage checks.
+- Gazebo RGB-D capture tool and an offline dataset evaluation harness.
 - Config-based deterministic object detection for simulation baselines.
 - Robot tools, pick/place skills, named place target resolution, and verification
   tools.
@@ -261,12 +291,23 @@ Implemented in the repository:
 
 Planned or environment-dependent:
 
-- Team-optimized Grounded SAM2 as the primary production vision backend.
+- Team-fine-tuned Grounding DINO checkpoint and industrial validation of the
+  Grounded SAM2 stack on frozen competition-camera data.
 - Automated Gazebo acceptance tests and repeatable scene reset.
+- A unified world-state model for object instances, robot/gripper state, target
+  areas, source timestamps, and replay.
+- Batch experiment execution and report-ready task/recovery metrics.
 - Physical robot adapter and hardware safety integration.
 - A larger selectable scene library for demo comparison and benchmark coverage.
 - Reinforcement-learning environment, reward definition, and evaluation harness.
 - External service API and MCP-style integration beyond the local CLI paths.
+
+Current maturity is approximately **core software L2- and overall system L1+**.
+Model training entry points and evaluation harnesses are implemented. A small
+red-block simulation export has been used for local pipeline validation, but it
+is not a competition-scale dataset or an industrial acceptance result. No
+fine-tuned result, physical-camera localization-error report, or ablation should
+be inferred from the presence of these scripts.
 
 ## Deployment boundary
 

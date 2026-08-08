@@ -57,6 +57,200 @@ class FailureDetectorTest(TestCase):
     self.assertEqual(result.failure_type, FailureType.WRONG_BIN)
     self.assertEqual(result.recommended_strategy, RecoveryStrategy.REPICK_FROM_OBSERVED_POSE)
 
+  def test_classifies_low_confidence(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "detect_object",
+      "output": {"found": True, "label": "roller", "confidence": 0.10},
+    })
+
+    self.assertEqual(result.failure_type, FailureType.LOW_CONFIDENCE)
+    self.assertEqual(result.phase, "perception")
+    self.assertTrue(result.retryable)
+    self.assertEqual(
+      result.recommended_strategy, RecoveryStrategy.RETRY_WITH_EXPANDED_VISION
+    )
+
+  def test_classifies_pose_invalid_from_bad_position(self) -> None:
+    # A non-finite depth-derived position must be rejected as a bad pose.
+    result = FailureDetector().classify({
+      "failed_step": "detect_object",
+      "output": {"found": True, "confidence": 0.9, "pose_3d": [0.2, 0.1, float("nan")]},
+    })
+
+    self.assertEqual(result.failure_type, FailureType.POSE_INVALID)
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.RETRY_WITH_EXPANDED_VISION)
+
+  def test_classifies_pose_invalid_from_error_token(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "detect_object",
+      "output": {"found": True, "confidence": 0.9},
+      "error": "VISION_DEPTH_ERROR: depth window returned no samples",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.POSE_INVALID)
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.RETRY_WITH_EXPANDED_VISION)
+
+  def test_classifies_target_not_found(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "resolve_place_target",
+      "error": "TARGET_NOT_FOUND: bin_cell_9 is not registered",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.TARGET_NOT_FOUND)
+    self.assertFalse(result.retryable)
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.FAIL_FAST)
+
+  def test_classifies_robot_not_ready(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "robot.move_joints",
+      "error": "ROBOT_NOT_READY: action server not ready",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.ROBOT_NOT_READY)
+    self.assertEqual(result.phase, "robot")
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.CHECK_BRIDGE_AND_RESET)
+
+  def test_classifies_bridge_error(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "robot.move_joints",
+      "error": "ROBOT_BRIDGE_TIMEOUT: HTTP 504 from /move_joints",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.BRIDGE_ERROR)
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.CHECK_BRIDGE_AND_RESET)
+
+  def test_classifies_pick_plan_failed(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "plan_pick",
+      "error": "IK failed for top-down approach",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.PICK_PLAN_FAILED)
+    self.assertEqual(result.phase, "pick")
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.RETRY_PICK_ORIENTED)
+
+  def test_classifies_place_plan_failed(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "plan_place",
+      "error": "PLACE_PLAN failed for bin_cell_3",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.PLACE_PLAN_FAILED)
+    self.assertEqual(result.phase, "place")
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.RETRY_PLACE_CANDIDATES)
+
+  def test_classifies_dropped_object_from_lift_check(self) -> None:
+    # The post-grasp lift verification reports the object never rose, so the
+    # transport-phase drop classification must fire. Pins the branch added
+    # alongside verify_object_lifted so a later refactor cannot silently
+    # reclassify it.
+    result = FailureDetector().classify({
+      "failed_step": "verify_object_lifted",
+      "output": {"lifted": False, "before_pose": [0.24, 0.23, 0.142], "after_pose": [0.24, 0.23, 0.145]},
+      "error": "DROPPED_OBJECT: object did not rise after grasp",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.DROPPED_OBJECT)
+    self.assertEqual(result.phase, "transport")
+    self.assertTrue(result.retryable)
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.REPICK_FROM_OBSERVED_POSE)
+
+  def test_classifies_release_failed(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "verify_place",
+      "output": {"released": False, "opening": 0.03},
+      "error": "PLACE NOT CONFIRMED: gripper still closed",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.RELEASE_FAILED)
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.RETRY_OPEN_GRIPPER)
+
+  def test_classifies_gripper_failed(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "gripper.open",
+      "error": "gripper command returned timeout",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.GRIPPER_FAILED)
+    self.assertEqual(result.phase, "robot")
+    # An open-gripper step routes to retry-open; other gripper steps reset.
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.RETRY_OPEN_GRIPPER)
+
+  def test_classifies_motion_failed(self) -> None:
+    # A move step that is neither pick- nor place-phased falls back to a
+    # generic motion failure routed through the bridge reset path.
+    result = FailureDetector().classify({
+      "failed_step": "robot.move_pose",
+      "error": "motion aborted",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.MOTION_FAILED)
+    self.assertEqual(
+      result.recommended_strategy, RecoveryStrategy.CHECK_BRIDGE_AND_RESET
+    )
+
+  def test_classifies_place_lift_clearance_as_recoverable_motion(self) -> None:
+    # The runtime's last_failure carries both the node name (failed_step) and
+    # the invoked tool target, so the detector must classify motion failures via
+    # the tool target when the node name is not itself a tool name. place_lift_clearance
+    # is a robot.move_linear lift step; a motion failure there is recoverable and
+    # must NOT fall through to UNKNOWN (which fail-fasts).
+    result = FailureDetector().classify({
+      "failed_step": "place_lift_clearance",
+      "target": "robot.move_linear",
+      "error": "motion aborted during lift clearance",
+    })
+
+    self.assertNotEqual(result.failure_type, FailureType.UNKNOWN)
+    self.assertTrue(result.retryable)
+    self.assertEqual(result.failure_type, FailureType.PLACE_EXEC_FAILED)
+
+  def test_classifies_staging_move_failure_as_recoverable_motion(self) -> None:
+    # Staging move nodes target robot.move_joints at a fixed configured pose; a
+    # failure there is almost certainly a bridge/readiness fault, not an
+    # unreachable pose, so it must classify as recoverable MOTION_FAILED (routed
+    # to recover_bridge), not fall through to UNKNOWN.
+    result = FailureDetector().classify({
+      "failed_step": "carry_joints",
+      "target": "robot.move_joints",
+      "error": "motion aborted during carry",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.MOTION_FAILED)
+    self.assertTrue(result.retryable)
+
+  def test_classifies_pick_exec_failed(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "pick",
+      "error": "pick action did not complete",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.PICK_EXEC_FAILED)
+    self.assertEqual(
+      result.recommended_strategy, RecoveryStrategy.RECOVER_TO_STAGING_AND_REPLAN_PICK
+    )
+
+  def test_classifies_vision_model_not_ready(self) -> None:
+    result = FailureDetector().classify({
+      "failed_step": "detect_object",
+      "error": "VISION_MODEL_NOT_READY: missing models/vision/yoloe.pt",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.VISION_MODEL_NOT_READY)
+    self.assertFalse(result.retryable)
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.FAIL_FAST)
+
+  def test_classifies_unknown_fallback(self) -> None:
+    # Evidence that matches no rule must land on UNKNOWN and fail fast.
+    result = FailureDetector().classify({
+      "failed_step": "mystery_step",
+      "error": "something unexpected happened",
+    })
+
+    self.assertEqual(result.failure_type, FailureType.UNKNOWN)
+    self.assertFalse(result.retryable)
+    self.assertEqual(result.recommended_strategy, RecoveryStrategy.FAIL_FAST)
+
 
 class RecoveryPlannerTest(TestCase):
   def test_pick_plan_failure_switches_to_oriented_pick(self) -> None:
@@ -82,6 +276,84 @@ class RecoveryPlannerTest(TestCase):
 
     self.assertEqual(plan.strategy, RecoveryStrategy.FAIL_FAST)
     self.assertFalse(plan.retryable)
+
+  def test_low_confidence_retries_with_expanded_vision(self) -> None:
+    classification = FailureDetector().classify({
+      "failed_step": "detect_object",
+      "output": {"found": True, "confidence": 0.10},
+    })
+
+    plan = RecoveryPlanner().plan(classification, {"max_recovery_attempts": 2})
+
+    self.assertEqual(plan.strategy, RecoveryStrategy.RETRY_WITH_EXPANDED_VISION)
+    self.assertEqual(plan.next_step, "detect_object")
+    self.assertTrue(plan.updated_input["recapture_frame"])
+    # Relax perception-side sampling only, never the task target.
+    self.assertNotIn("preserve_target", plan.updated_input)
+
+  def test_dropped_object_repicks_from_observed_pose(self) -> None:
+    classification = FailureDetector().classify({
+      "failed_step": "verify_object_lifted",
+      "error": "DROPPED_OBJECT: object did not rise after grasp",
+    })
+
+    plan = RecoveryPlanner().plan(classification)
+
+    self.assertEqual(plan.strategy, RecoveryStrategy.REPICK_FROM_OBSERVED_POSE)
+    self.assertEqual(plan.next_step, "detect_object")
+    self.assertTrue(plan.updated_input["use_observed_pose_as_new_pick_target"])
+
+  def test_wrong_bin_repick_preserves_the_target(self) -> None:
+    classification = FailureDetector().classify({
+      "failed_step": "verify_object_in_bin",
+      "output": {"in_target": False, "distance_xy": 0.3},
+      "error": "WRONG_BIN: object outside requested cell",
+    })
+
+    plan = RecoveryPlanner().plan(classification)
+
+    self.assertEqual(plan.strategy, RecoveryStrategy.REPICK_FROM_OBSERVED_POSE)
+    self.assertEqual(plan.next_step, "detect_object")
+    self.assertTrue(plan.updated_input["use_observed_pose_as_new_pick_target"])
+    # Re-pick from the wrong-bin pose, but keep re-placing into the same cell.
+    self.assertTrue(plan.updated_input["preserve_target"])
+
+  def test_bridge_error_resets_via_health_check(self) -> None:
+    classification = FailureDetector().classify({
+      "failed_step": "robot.move_joints",
+      "error": "ROBOT_BRIDGE_TIMEOUT: HTTP 504",
+    })
+
+    plan = RecoveryPlanner().plan(classification)
+
+    self.assertEqual(plan.strategy, RecoveryStrategy.CHECK_BRIDGE_AND_RESET)
+    self.assertEqual(plan.next_step, "robot_health_check")
+    self.assertTrue(plan.updated_input["call_stop"])
+
+  def test_release_failed_retries_opening_the_gripper(self) -> None:
+    classification = FailureDetector().classify({
+      "failed_step": "verify_place",
+      "error": "PLACE NOT CONFIRMED: gripper still closed",
+    })
+
+    plan = RecoveryPlanner().plan(classification)
+
+    self.assertEqual(plan.strategy, RecoveryStrategy.RETRY_OPEN_GRIPPER)
+    self.assertEqual(plan.next_step, "place_open_gripper")
+    self.assertEqual(plan.updated_input["opening"], 0.0848)
+
+  def test_unknown_failure_fails_fast_with_zero_attempts(self) -> None:
+    classification = FailureDetector().classify({
+      "failed_step": "mystery_step",
+      "error": "something unexpected",
+    })
+
+    plan = RecoveryPlanner().plan(classification, {"max_recovery_attempts": 3})
+
+    self.assertEqual(plan.strategy, RecoveryStrategy.FAIL_FAST)
+    self.assertFalse(plan.retryable)
+    self.assertEqual(plan.max_attempts, 0)
+    self.assertIsNone(plan.next_step)
 
 
 class RecoveryToolTest(TestCase):
@@ -180,7 +452,10 @@ class DecisionTreeLastFailureTest(TestCase):
 
     self.assertFalse(result.success)
     self.assertIn("last_failure", result.output)
-    self.assertEqual(result.output["last_failure"]["failed_step"], "not_found")
+    # last_failure records the last non-terminal failing node; the terminal
+    # `not_found` node is intentionally not written back (pinned by
+    # test_terminal_failure_result_serializes_without_recursion).
+    self.assertEqual(result.output["last_failure"]["failed_step"], "found_check")
 
 
 def _call(tool: str, input_data: dict, trace: TraceContext):
