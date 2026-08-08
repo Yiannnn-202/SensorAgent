@@ -49,3 +49,27 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_voice_si
 ```bash
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_voice_sim.py --text "把方块放到1号格"
 ```
+
+## 常驻分拣会话
+
+如果希望更接近完整 Agent 工作方式，不要每条指令都重启一次脚本。启动仿真和桥接后，可以运行常驻会话入口，让 Agent 只初始化一次，然后循环等待、解析和执行多条分拣指令：
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_session.py --mode voice --execute --duration 15
+```
+
+开发和调试时可先使用文本循环，不需要麦克风、ASR/VAD 模型或 Gazebo 执行：
+
+```bash
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_session.py --mode text
+```
+
+会话启动后输入：
+
+```text
+把方块放到1号格
+将短螺栓放到六号格
+退出
+```
+
+`--execute` 会连接 `http://127.0.0.1:8765` 的 Gazebo/MoveIt 机器人桥；不加 `--execute` 时自动切换到 fake robot backend 做干跑。单条指令失败不会结束会话，Agent 会打印该轮 JSON 结果并继续等待下一条指令。`退出`、`exit` 或 `quit` 用于结束会话。
