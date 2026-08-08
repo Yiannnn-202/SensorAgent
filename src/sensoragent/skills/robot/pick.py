@@ -77,7 +77,7 @@ class RobotPickSkill:
             }
           )
           result = state_result
-      if not result.success and step_name == "lift" and tool_name == "robot.move_linear":
+      if not result.success and step_name in {"move_pregrasp", "lift"} and tool_name == "robot.move_linear":
         result = context.tool_runtime.invoke("robot.move_pose", input_data, call.trace)
       stage_results.append(
         {
