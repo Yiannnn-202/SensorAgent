@@ -32,7 +32,9 @@ class RobotVerifyGraspSkill:
     ok, opening, error = _read_gripper_opening(context, call)
     if not ok:
       return SkillResult(skill=self.spec.name, success=False, error=error)
-    held = min_opening <= opening <= max_opening
+    state_result = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
+    state = (state_result.output or {}).get("state") if state_result.success else {}
+    held = state.get("grasped") is True or min_opening <= opening <= max_opening
     return SkillResult(
       skill=self.spec.name,
       success=held,
