@@ -13,5 +13,5 @@
   "evaluation_manifest": "",
   "evaluation_summary": "",
   "accepted_for": "",
-  "notes": "Template only. Fill this after same-split evaluation passes."
+  "notes": "Template for the future multi-class competition model. The local red_block_v0 record is separate and is not accepted as this artifact."
 }

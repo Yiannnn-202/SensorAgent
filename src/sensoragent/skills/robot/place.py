@@ -22,6 +22,7 @@ class RobotPlaceSkill:
     completed_steps: list[str] = []
     steps = []
     pre_approach_joints = call.input.get("pre_approach_joints")
+    retreat_joints = call.input.get("retreat_joints")
     if pre_approach_joints is not None:
       steps.append(
         (
@@ -41,11 +42,20 @@ class RobotPlaceSkill:
           "speed": call.input.get("gripper_speed", 0.5),
         },
       ),
-      ("retreat", "robot.move_linear", {"pose": plan.retreat.to_dict(), "speed": speed}),
     ])
+    if retreat_joints is None:
+      steps.append(("retreat", "robot.move_linear", {"pose": plan.retreat.to_dict(), "speed": speed}))
+    else:
+      steps.append(("retreat_joints", "robot.move_joints", {"joints": retreat_joints, "speed": speed}))
 
     for step_name, tool_name, input_data in steps:
       result = context.tool_runtime.invoke(tool_name, input_data, call.trace)
+      if not result.success and step_name == "open_gripper":
+        state_result = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
+        opening = (state_result.output or {}).get("state", {}).get("opening") if state_result.success else None
+        target_opening = float(input_data.get("opening", 0.0848))
+        if isinstance(opening, (int, float)) and float(opening) >= target_opening - 0.003:
+          result = state_result
       if not result.success:
         return SkillResult(
           skill=self.spec.name,

@@ -1,0 +1,44 @@
+scenarios:
+  - name: nominal
+    object_query: roller
+    target: bin_cell_3
+  - name: pick_plan_failed
+    object_query: roller
+    target: bin_cell_3
+    injections:
+      - tool: robot.plan_top_down_pick
+        results:
+          - success: false
+            error: "PLAN_TOP_DOWN_PICK failed: IK unreachable"
+  - name: place_plan_failed
+    object_query: roller
+    target: bin_cell_3
+    injections:
+      - tool: robot.plan_place
+        results:
+          - success: false
+            error: "PLACE_PLAN failed for bin_cell_3"
+  - name: object_not_found
+    object_query: roller
+    target: bin_cell_3
+    injections:
+      - tool: vision.config_detect
+        results:
+          - success: false
+            output: {found: false, confidence: 0.0}
+            error: "OBJECT_NOT_FOUND: no match for roller"
+          - success: false
+            output: {found: false, confidence: 0.0}
+            error: "OBJECT_NOT_FOUND: no match for roller"
+  - name: low_confidence
+    object_query: roller
+    target: bin_cell_3
+    injections:
+      - tool: vision.config_detect
+        results:
+          - success: false
+            output: {found: true, confidence: 0.10}
+            error: "LOW_CONFIDENCE: 0.010 below 0.350"
+          - success: false
+            output: {found: true, confidence: 0.10}
+            error: "LOW_CONFIDENCE: 0.010 below 0.350"

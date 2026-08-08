@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <sdf version="1.8">
   <world name="empty">
-    <physics name="1ms" type="ignored">
-      <max_step_size>0.001</max_step_size>
+    <physics name="2ms" type="ignored">
+      <max_step_size>0.002</max_step_size>
       <real_time_factor>1.0</real_time_factor>
       <dart>
         <solver>
@@ -21,7 +21,7 @@
     <scene>
       <ambient>0.42 0.42 0.42 1</ambient>
       <background>0.08 0.10 0.12 1</background>
-      <shadows>true</shadows>
+      <shadows>false</shadows>
     </scene>
     <light type="directional" name="sun">
       <cast_shadows>true</cast_shadows>
@@ -70,24 +70,35 @@
     <!-- Robot, workbench, and RGB-D rig deliberately match industrial_pgs.sdf. -->
     <include>
       <uri>model://sensoragent_robot_base_frame</uri>
+      <pose>0 0 0 0 0 0</pose>
     </include>
-    <include>
-      <uri>model://sensoragent_workbench</uri>
-      <pose>0.34 0 0 0 0 0</pose>
-    </include>
+    <model name="sorting_workbench">
+      <static>true</static><pose>0.42 0 0 0 0 0</pose><link name="workbench">
+        <collision name="top_collision"><pose>0 0 0.28 0 0 0</pose><geometry><box><size>0.65 0.90 0.04</size></box></geometry><surface><friction><ode><mu>20</mu><mu2>20</mu2></ode></friction></surface></collision>
+        <visual name="top_visual"><pose>0 0 0.28 0 0 0</pose><geometry><box><size>0.65 0.90 0.04</size></box></geometry><material><ambient>0.18 0.22 0.26 1</ambient><diffuse>0.24 0.30 0.36 1</diffuse><specular>0.35 0.35 0.35 1</specular></material></visual>
+        <collision name="leg_1"><pose>-0.275 -0.375 0.13 0 0 0</pose><geometry><box><size>0.06 0.06 0.26</size></box></geometry></collision>
+        <collision name="leg_2"><pose>-0.275 0.375 0.13 0 0 0</pose><geometry><box><size>0.06 0.06 0.26</size></box></geometry></collision>
+        <collision name="leg_3"><pose>0.275 -0.375 0.13 0 0 0</pose><geometry><box><size>0.06 0.06 0.26</size></box></geometry></collision>
+        <collision name="leg_4"><pose>0.275 0.375 0.13 0 0 0</pose><geometry><box><size>0.06 0.06 0.26</size></box></geometry></collision>
+        <visual name="leg_1"><pose>-0.275 -0.375 0.13 0 0 0</pose><geometry><box><size>0.06 0.06 0.26</size></box></geometry><material><diffuse>0.14 0.16 0.18 1</diffuse></material></visual>
+        <visual name="leg_2"><pose>-0.275 0.375 0.13 0 0 0</pose><geometry><box><size>0.06 0.06 0.26</size></box></geometry><material><diffuse>0.14 0.16 0.18 1</diffuse></material></visual>
+        <visual name="leg_3"><pose>0.275 -0.375 0.13 0 0 0</pose><geometry><box><size>0.06 0.06 0.26</size></box></geometry><material><diffuse>0.14 0.16 0.18 1</diffuse></material></visual>
+        <visual name="leg_4"><pose>0.275 0.375 0.13 0 0 0</pose><geometry><box><size>0.06 0.06 0.26</size></box></geometry><material><diffuse>0.14 0.16 0.18 1</diffuse></material></visual>
+      </link>
+    </model>
     <include>
       <uri>model://sensoragent_rgbd_rig</uri>
     </include>
-    <!-- A 3x3 destination tray with 128 mm clear cells for the Robotiq gripper. -->
+    <!-- A 3x3 destination tray with 105 mm clear cells for the Robotiq gripper. -->
     <model name="sorting_bin_3x3">
       <static>true</static>
-      <pose>0.34 0.155 0.30 0 0 0</pose>
+      <pose>0.28 0.16 0.30 0 0 0</pose>
       <link name="bin">
         <collision name="bottom">
           <pose>0 0 0.005 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.42 0.42 0.01</size>
+              <size>0.351 0.351 0.01</size>
             </box>
           </geometry>
         </collision>
@@ -95,7 +106,7 @@
           <pose>0 0 0.005 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.42 0.42 0.01</size>
+              <size>0.351 0.351 0.01</size>
             </box>
           </geometry>
           <material>
@@ -105,42 +116,42 @@
           </material>
         </visual>
         <collision name="wall_x_pos">
-          <pose>0.205 0 0.0325 0 0 0</pose>
+          <pose>0.1705 0 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.01 0.42 0.055</size>
+              <size>0.01 0.351 0.055</size>
             </box>
           </geometry>
         </collision>
         <collision name="wall_x_neg">
-          <pose>-0.205 0 0.0325 0 0 0</pose>
+          <pose>-0.1705 0 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.01 0.42 0.055</size>
+              <size>0.01 0.351 0.055</size>
             </box>
           </geometry>
         </collision>
         <collision name="wall_y_pos">
-          <pose>0 0.205 0.0325 0 0 0</pose>
+          <pose>0 0.1705 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.40 0.01 0.055</size>
+              <size>0.331 0.01 0.055</size>
             </box>
           </geometry>
         </collision>
         <collision name="wall_y_neg">
-          <pose>0 -0.205 0.0325 0 0 0</pose>
+          <pose>0 -0.1705 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.40 0.01 0.055</size>
+              <size>0.331 0.01 0.055</size>
             </box>
           </geometry>
         </collision>
         <visual name="wall_x_pos">
-          <pose>0.205 0 0.0325 0 0 0</pose>
+          <pose>0.178 0 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.01 0.42 0.055</size>
+              <size>0.01 0.366 0.055</size>
             </box>
           </geometry>
           <material>
@@ -149,10 +160,10 @@
           </material>
         </visual>
         <visual name="wall_x_neg">
-          <pose>-0.205 0 0.0325 0 0 0</pose>
+          <pose>-0.178 0 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.01 0.42 0.055</size>
+              <size>0.01 0.366 0.055</size>
             </box>
           </geometry>
           <material>
@@ -161,10 +172,10 @@
           </material>
         </visual>
         <visual name="wall_y_pos">
-          <pose>0 0.205 0.0325 0 0 0</pose>
+          <pose>0 0.178 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.40 0.01 0.055</size>
+              <size>0.346 0.01 0.055</size>
             </box>
           </geometry>
           <material>
@@ -173,10 +184,10 @@
           </material>
         </visual>
         <visual name="wall_y_neg">
-          <pose>0 -0.205 0.0325 0 0 0</pose>
+          <pose>0 -0.178 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.40 0.01 0.055</size>
+              <size>0.346 0.01 0.055</size>
             </box>
           </geometry>
           <material>
@@ -185,42 +196,42 @@
           </material>
         </visual>
         <collision name="divider_x_left">
-          <pose>-0.068 0 0.0325 0 0 0</pose>
+          <pose>-0.0565 0 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.008 0.40 0.050</size>
+              <size>0.008 0.331 0.050</size>
             </box>
           </geometry>
         </collision>
         <collision name="divider_x_right">
-          <pose>0.068 0 0.0325 0 0 0</pose>
+          <pose>0.0565 0 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.008 0.40 0.050</size>
+              <size>0.008 0.331 0.050</size>
             </box>
           </geometry>
         </collision>
         <collision name="divider_y_front">
-          <pose>0 -0.068 0.0325 0 0 0</pose>
+          <pose>0 -0.0565 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.40 0.008 0.050</size>
+              <size>0.331 0.008 0.050</size>
             </box>
           </geometry>
         </collision>
         <collision name="divider_y_back">
-          <pose>0 0.068 0.0325 0 0 0</pose>
+          <pose>0 0.0565 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.40 0.008 0.050</size>
+              <size>0.331 0.008 0.050</size>
             </box>
           </geometry>
         </collision>
         <visual name="divider_x_left">
-          <pose>-0.068 0 0.0325 0 0 0</pose>
+          <pose>-0.0565 0 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.008 0.40 0.050</size>
+              <size>0.008 0.331 0.050</size>
             </box>
           </geometry>
           <material>
@@ -228,10 +239,10 @@
           </material>
         </visual>
         <visual name="divider_x_right">
-          <pose>0.068 0 0.0325 0 0 0</pose>
+          <pose>0.0565 0 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.008 0.40 0.050</size>
+              <size>0.008 0.331 0.050</size>
             </box>
           </geometry>
           <material>
@@ -239,10 +250,10 @@
           </material>
         </visual>
         <visual name="divider_y_front">
-          <pose>0 -0.068 0.0325 0 0 0</pose>
+          <pose>0 -0.0565 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.40 0.008 0.050</size>
+              <size>0.331 0.008 0.050</size>
             </box>
           </geometry>
           <material>
@@ -250,10 +261,10 @@
           </material>
         </visual>
         <visual name="divider_y_back">
-          <pose>0 0.068 0.0325 0 0 0</pose>
+          <pose>0 0.0565 0.0325 0 0 0</pose>
           <geometry>
             <box>
-              <size>0.40 0.008 0.050</size>
+              <size>0.331 0.008 0.050</size>
             </box>
           </geometry>
           <material>
@@ -263,7 +274,7 @@
       </link>
     </model>
     <model name="metal_block_01">
-      <pose>0.180 -0.130 0.330 0 0 0</pose>
+      <pose>0.220 -0.120 0.330 0 0 0</pose>
       <link name="part">
         <inertial>
           <mass>0.20</mass>
@@ -303,7 +314,7 @@
       </link>
     </model>
     <model name="metal_stepped_shaft_01">
-      <pose>0.340 -0.170 0.325 0 1.570796 0</pose>
+      <pose>0.160 -0.170 0.325 0 1.570796 0</pose>
       <link name="part">
         <inertial>
           <mass>0.25</mass>
@@ -313,27 +324,14 @@
             <izz>0.0000633</izz>
           </inertia>
         </inertial>
-        <collision name="collision">
-          <geometry>
-            <cylinder>
-              <radius>0.025</radius>
-              <length>0.080</length>
-            </cylinder>
-          </geometry>
-          <surface>
-            <friction>
-              <ode>
-                <mu>1.2</mu>
-                <mu2>1.2</mu2>
-              </ode>
-            </friction>
-          </surface>
-        </collision>
+        <collision name="shaft"><geometry><cylinder><radius>0.012</radius><length>0.050</length></cylinder></geometry><surface><friction><ode><mu>1.2</mu><mu2>1.2</mu2></ode></friction></surface></collision>
+        <collision name="lower_shoulder"><pose>0 0 -0.014 0 0 0</pose><geometry><cylinder><radius>0.025</radius><length>0.018</length></cylinder></geometry><surface><friction><ode><mu>1.2</mu><mu2>1.2</mu2></ode></friction></surface></collision>
+        <collision name="upper_shoulder"><pose>0 0 0.014 0 0 0</pose><geometry><cylinder><radius>0.022</radius><length>0.018</length></cylinder></geometry><surface><friction><ode><mu>1.2</mu><mu2>1.2</mu2></ode></friction></surface></collision>
         <visual name="shaft">
           <geometry>
             <cylinder>
-              <radius>0.014</radius>
-              <length>0.080</length>
+            <radius>0.012</radius>
+            <length>0.050</length>
             </cylinder>
           </geometry>
           <material>
@@ -342,7 +340,7 @@
           </material>
         </visual>
         <visual name="lower_shoulder">
-          <pose>0 0 -0.025 0 0 0</pose>
+          <pose>0 0 -0.014 0 0 0</pose>
           <geometry>
             <cylinder>
               <radius>0.025</radius>
@@ -355,7 +353,7 @@
           </material>
         </visual>
         <visual name="upper_shoulder">
-          <pose>0 0 0.025 0 0 0</pose>
+          <pose>0 0 0.014 0 0 0</pose>
           <geometry>
             <cylinder>
               <radius>0.022</radius>
@@ -369,21 +367,30 @@
         </visual>
       </link>
     </model>
-    <model name="metal_hex_post_01">
-      <pose>0.500 -0.125 0.3325 0 0 0.261799</pose>
+    <model name="metal_hollow_sleeve_01">
+      <pose>0.160 -0.060 0.3225 0 0 0</pose>
       <link name="part">
-        <inertial><mass>0.24</mass><inertia><ixx>0.00010</ixx><iyy>0.00010</iyy><izz>0.00009</izz></inertia></inertial>
-        <collision name="collision"><geometry><cylinder><radius>0.030</radius><length>0.065</length></cylinder></geometry><surface><friction><ode><mu>12</mu><mu2>12</mu2></ode></friction></surface></collision>
-        <visual name="side_0"><pose>0.025 0 0 0 0 1.570796</pose><geometry><box><size>0.040 0.012 0.065</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
-        <visual name="side_1"><pose>0.0125 0.02165 0 0 0 2.617994</pose><geometry><box><size>0.040 0.012 0.065</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
-        <visual name="side_2"><pose>-0.0125 0.02165 0 0 0 3.665191</pose><geometry><box><size>0.040 0.012 0.065</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
-        <visual name="side_3"><pose>-0.025 0 0 0 0 4.712389</pose><geometry><box><size>0.040 0.012 0.065</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
-        <visual name="side_4"><pose>-0.0125 -0.02165 0 0 0 5.759587</pose><geometry><box><size>0.040 0.012 0.065</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
-        <visual name="side_5"><pose>0.0125 -0.02165 0 0 0 0.523599</pose><geometry><box><size>0.040 0.012 0.065</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
+        <inertial><mass>0.12</mass><inertia><ixx>0.00003</ixx><iyy>0.00003</iyy><izz>0.00004</izz></inertia></inertial>
+        <collision name="wall_0"><pose>0.016 0 0 0 0 0</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
+        <collision name="wall_1"><pose>0.01131 0.01131 0 0 0 0.785398</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
+        <collision name="wall_2"><pose>0 0.016 0 0 0 1.570796</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
+        <collision name="wall_3"><pose>-0.01131 0.01131 0 0 0 2.356194</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
+        <collision name="wall_4"><pose>-0.016 0 0 0 0 3.141593</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
+        <collision name="wall_5"><pose>-0.01131 -0.01131 0 0 0 3.926991</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
+        <collision name="wall_6"><pose>0 -0.016 0 0 0 4.712389</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
+        <collision name="wall_7"><pose>0.01131 -0.01131 0 0 0 5.497787</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
+        <visual name="wall_0"><pose>0.016 0 0 0 0 0</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
+        <visual name="wall_1"><pose>0.01131 0.01131 0 0 0 0.785398</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
+        <visual name="wall_2"><pose>0 0.016 0 0 0 1.570796</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
+        <visual name="wall_3"><pose>-0.01131 0.01131 0 0 0 2.356194</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
+        <visual name="wall_4"><pose>-0.016 0 0 0 0 3.141593</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
+        <visual name="wall_5"><pose>-0.01131 -0.01131 0 0 0 3.926991</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
+        <visual name="wall_6"><pose>0 -0.016 0 0 0 4.712389</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
+        <visual name="wall_7"><pose>0.01131 -0.01131 0 0 0 5.497787</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry><material><diffuse>0.30 0.38 0.48 1</diffuse><specular>0.82 0.88 0.92 1</specular></material></visual>
       </link>
     </model>
     <model name="metal_roller_01">
-      <pose>0.190 -0.260 0.320 0 1.570796 0</pose>
+      <pose>0.220 -0.270 0.320 0 1.570796 0</pose>
       <link name="part">
         <inertial>
           <mass>0.20</mass>
@@ -397,7 +404,7 @@
           <geometry>
             <cylinder>
               <radius>0.020</radius>
-              <length>0.080</length>
+              <length>0.050</length>
             </cylinder>
           </geometry>
           <surface>
@@ -413,7 +420,7 @@
           <geometry>
             <cylinder>
               <radius>0.020</radius>
-              <length>0.080</length>
+              <length>0.050</length>
             </cylinder>
           </geometry>
           <material>
@@ -425,7 +432,7 @@
       </link>
     </model>
     <model name="metal_hex_nut_01">
-      <pose>0.370 -0.270 0.3125 0 0 0.261799</pose>
+      <pose>0.300 -0.220 0.3125 0 0 0.261799</pose>
       <link name="part">
         <inertial>
           <mass>0.18</mass>
@@ -435,42 +442,22 @@
             <izz>0.0000940</izz>
           </inertia>
         </inertial>
-        <collision name="collision">
-          <geometry>
-            <cylinder>
-              <radius>0.025</radius>
-              <length>0.025</length>
-            </cylinder>
-          </geometry>
-        </collision>
-        <visual name="body">
-          <geometry>
-            <cylinder>
-              <radius>0.025</radius>
-              <length>0.025</length>
-            </cylinder>
-          </geometry>
-          <material>
-            <diffuse>0.20 0.22 0.24 1</diffuse>
-            <specular>0.70 0.72 0.75 1</specular>
-          </material>
-        </visual>
-        <visual name="bore">
-          <pose>0 0 0.013 0 0 0</pose>
-          <geometry>
-            <cylinder>
-              <radius>0.011</radius>
-              <length>0.001</length>
-            </cylinder>
-          </geometry>
-          <material>
-            <diffuse>0.02 0.02 0.02 1</diffuse>
-          </material>
-        </visual>
+        <collision name="side_0"><pose>0.0205 0 0 0 0 1.570796</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry></collision>
+        <collision name="side_1"><pose>0.01025 0.01775 0 0 0 2.617994</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry></collision>
+        <collision name="side_2"><pose>-0.01025 0.01775 0 0 0 3.665191</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry></collision>
+        <collision name="side_3"><pose>-0.0205 0 0 0 0 4.712389</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry></collision>
+        <collision name="side_4"><pose>-0.01025 -0.01775 0 0 0 5.759587</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry></collision>
+        <collision name="side_5"><pose>0.01025 -0.01775 0 0 0 0.523599</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry></collision>
+        <visual name="side_0"><pose>0.0205 0 0 0 0 1.570796</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
+        <visual name="side_1"><pose>0.01025 0.01775 0 0 0 2.617994</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
+        <visual name="side_2"><pose>-0.01025 0.01775 0 0 0 3.665191</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
+        <visual name="side_3"><pose>-0.0205 0 0 0 0 4.712389</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
+        <visual name="side_4"><pose>-0.01025 -0.01775 0 0 0 5.759587</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
+        <visual name="side_5"><pose>0.01025 -0.01775 0 0 0 0.523599</pose><geometry><box><size>0.034 0.008 0.025</size></box></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
       </link>
     </model>
     <model name="metal_short_bolt_01">
-      <pose>0.500 -0.275 0.325 0 1.570796 0</pose>
+      <pose>0.300 -0.060 0.3275 0 0 0</pose>
       <link name="part">
         <inertial>
           <mass>0.20</mass>
@@ -481,16 +468,16 @@
           </inertia>
         </inertial>
         <collision name="shaft">
-          <pose>0 0 -0.0075 0 0 0</pose>
+          <pose>0 0 -0.005 0 0 0</pose>
           <geometry>
             <cylinder>
               <radius>0.0125</radius>
-              <length>0.065</length>
+              <length>0.045</length>
             </cylinder>
           </geometry>
         </collision>
         <collision name="head">
-          <pose>0 0 0.0325 0 0 0</pose>
+          <pose>0 0 0.025 0 0 0</pose>
           <geometry>
             <cylinder>
               <radius>0.025</radius>
@@ -499,11 +486,11 @@
           </geometry>
         </collision>
         <visual name="shaft">
-          <pose>0 0 -0.0075 0 0 0</pose>
+          <pose>0 0 -0.005 0 0 0</pose>
           <geometry>
             <cylinder>
               <radius>0.0125</radius>
-              <length>0.065</length>
+              <length>0.045</length>
             </cylinder>
           </geometry>
           <material>
@@ -511,8 +498,15 @@
             <specular>0.85 0.85 0.85 1</specular>
           </material>
         </visual>
+        <visual name="thread_0"><pose>0 0 -0.022 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse></material></visual>
+        <visual name="thread_1"><pose>0 0 -0.017 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse></material></visual>
+        <visual name="thread_2"><pose>0 0 -0.012 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse></material></visual>
+        <visual name="thread_3"><pose>0 0 -0.007 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse></material></visual>
+        <visual name="thread_4"><pose>0 0 -0.002 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse></material></visual>
+        <visual name="thread_5"><pose>0 0 0.003 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse></material></visual>
+        <visual name="thread_6"><pose>0 0 0.008 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.20 0.22 0.24 1</diffuse></material></visual>
         <visual name="head">
-          <pose>0 0 0.0325 0 0 0</pose>
+          <pose>0 0 0.025 0 0 0</pose>
           <geometry>
             <cylinder>
               <radius>0.025</radius>
@@ -526,14 +520,18 @@
         </visual>
       </link>
     </model>
-    <model name="metal_shoulder_sleeve_01">
-      <pose>0.330 -0.345 0.334 0 1.570796 -0.174533</pose>
+    <model name="metal_flange_bushing_01">
+      <pose>0.300 -0.160 0.325 0 0 0</pose>
       <link name="part">
         <inertial><mass>0.26</mass><inertia><ixx>0.00015</ixx><iyy>0.00015</iyy><izz>0.00007</izz></inertia></inertial>
-        <collision name="collision"><geometry><cylinder><radius>0.034</radius><length>0.090</length></cylinder></geometry><surface><friction><ode><mu>8</mu><mu2>8</mu2></ode></friction></surface></collision>
-        <visual name="sleeve"><geometry><cylinder><radius>0.024</radius><length>0.090</length></cylinder></geometry><material><diffuse>0.32 0.34 0.36 1</diffuse><specular>0.90 0.90 0.90 1</specular></material></visual>
-        <visual name="left_shoulder"><pose>0 0 -0.030 0 0 0</pose><geometry><cylinder><radius>0.034</radius><length>0.018</length></cylinder></geometry><material><diffuse>0.18 0.20 0.22 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
-        <visual name="right_shoulder"><pose>0 0 0.030 0 0 0</pose><geometry><cylinder><radius>0.030</radius><length>0.018</length></cylinder></geometry><material><diffuse>0.18 0.20 0.22 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
+        <collision name="core"><geometry><cylinder><radius>0.022</radius><length>0.030</length></cylinder></geometry><surface><friction><ode><mu>8</mu><mu2>8</mu2></ode></friction></surface></collision>
+        <collision name="lower_flange"><pose>0 0 -0.012 0 0 0</pose><geometry><cylinder><radius>0.030</radius><length>0.012</length></cylinder></geometry><surface><friction><ode><mu>8</mu><mu2>8</mu2></ode></friction></surface></collision>
+        <collision name="upper_flange"><pose>0 0 0.012 0 0 0</pose><geometry><cylinder><radius>0.030</radius><length>0.012</length></cylinder></geometry><surface><friction><ode><mu>8</mu><mu2>8</mu2></ode></friction></surface></collision>
+        <visual name="bushing"><geometry><cylinder><radius>0.022</radius><length>0.030</length></cylinder></geometry><material><diffuse>0.32 0.34 0.36 1</diffuse><specular>0.90 0.90 0.90 1</specular></material></visual>
+        <visual name="lower_flange"><pose>0 0 -0.012 0 0 0</pose><geometry><cylinder><radius>0.030</radius><length>0.012</length></cylinder></geometry><material><diffuse>0.18 0.20 0.22 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
+        <visual name="upper_flange"><pose>0 0 0.012 0 0 0</pose><geometry><cylinder><radius>0.030</radius><length>0.012</length></cylinder></geometry><material><diffuse>0.18 0.20 0.22 1</diffuse><specular>0.70 0.72 0.75 1</specular></material></visual>
+        <visual name="upper_bore"><pose>0 0 0.0185 0 0 0</pose><geometry><cylinder><radius>0.010</radius><length>0.001</length></cylinder></geometry><material><diffuse>0.02 0.02 0.03 1</diffuse></material></visual>
+        <visual name="lower_bore"><pose>0 0 -0.0185 0 0 0</pose><geometry><cylinder><radius>0.010</radius><length>0.001</length></cylinder></geometry><material><diffuse>0.02 0.02 0.03 1</diffuse></material></visual>
       </link>
     </model>
   </world>
