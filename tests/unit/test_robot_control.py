@@ -99,8 +99,56 @@ class RobotControlTest(TestCase):
     self.assertTrue(pick_result.success)
     self.assertTrue(place_result.success)
     state = client.get_state().state
-    self.assertEqual(state["arm"]["pose"], build_place_plan(place).retreat.to_dict())
+    plan = build_place_plan(place)
+    lifted_z = max(plan.retreat.position[2], plan.place.position[2] + 0.06)
+    self.assertEqual(
+      state["arm"]["pose"],
+      RobotPose(
+        position=(plan.retreat.position[0], plan.retreat.position[1], lifted_z),
+        orientation=plan.retreat.orientation,
+        frame_id=plan.retreat.frame_id,
+      ).to_dict(),
+    )
     self.assertEqual(state["gripper"]["status"], "open")
+
+  def test_place_skill_lifts_before_retreating(self) -> None:
+    trace = TraceContext()
+    place = RobotPose(
+      position=(0.50, -0.20, 0.36),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_place_plan(place)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        return ToolResult(tool=name, success=True, output={"completed": True, "state": {"gripper": {"opening": 0.0848}}})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPlaceSkill().run(
+      call=Mock(
+        input={
+          "object_id": "roller_01",
+          "target": "bin_2_3",
+          "plan": plan.to_dict(),
+          "retreat_joints": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertGreaterEqual(len(tool_runtime.calls), 5)
+    self.assertEqual(tool_runtime.calls[2][0], "gripper.open")
+    self.assertEqual(tool_runtime.calls[3][0], "robot.move_linear")
+    lifted_pose = tool_runtime.calls[3][1]["pose"]
+    self.assertGreaterEqual(lifted_pose["position"][2], plan.place.position[2] + 0.06)
+    self.assertEqual(tool_runtime.calls[4][0], "robot.move_joints")
 
   def test_pick_skill_falls_back_to_planned_lift_when_cartesian_lift_fails(self) -> None:
     trace = TraceContext()
@@ -273,11 +321,21 @@ class RobotControlTest(TestCase):
         "move_approach",
         "move_place",
         "open_gripper",
+        "post_release_lift",
         "retreat",
       ],
     )
     state = client.get_state().state
-    self.assertEqual(state["arm"]["pose"], build_place_plan(place).retreat.to_dict())
+    plan = build_place_plan(place)
+    lifted_z = max(plan.retreat.position[2], plan.place.position[2] + 0.06)
+    self.assertEqual(
+      state["arm"]["pose"],
+      RobotPose(
+        position=(plan.retreat.position[0], plan.retreat.position[1], lifted_z),
+        orientation=plan.retreat.orientation,
+        frame_id=plan.retreat.frame_id,
+      ).to_dict(),
+    )
     self.assertEqual(state["arm"]["joints"], [0.2, 0.0, 0.0, 0.0, 0.0, 0.0])
 
   def test_http_backend_maps_pose_motion_to_bridge_request(self) -> None:
