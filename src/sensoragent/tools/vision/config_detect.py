@@ -21,8 +21,9 @@ class VisionConfigDetectTool:
     tags=("vision", "config"),
   )
 
-  def __init__(self, catalog: Mapping[str, list[float]] | None = None) -> None:
+  def __init__(self, catalog: Mapping[str, list[float]] | None = None, release_profiles: Mapping[str, Mapping[str, float]] | None = None) -> None:
     self._catalog: dict[str, list[float]] = {}
+    self._release_profiles = dict(release_profiles or {})
     for key, value in (catalog or {}).items():
       self._catalog[key] = [float(item) for item in value]
       lowered = key.lower()
@@ -60,6 +61,7 @@ class VisionConfigDetectTool:
         error=f"OBJECT_NOT_FOUND: no configured object matches '{query}'",
       )
     label, pose_3d = match
+    profile = self._release_profiles.get(label, self._release_profiles.get("default", {}))
     return ToolResult(
       tool=self.spec.name,
       success=True,
@@ -69,5 +71,7 @@ class VisionConfigDetectTool:
         "confidence": 1.0,
         "object_id": label,
         "pose_3d": pose_3d,
+        "release_opening": float(profile.get("opening", 0.0848)),
+        "release_z": float(profile.get("place_z", 0.25)),
       },
     )

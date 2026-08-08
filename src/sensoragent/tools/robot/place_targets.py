@@ -43,6 +43,16 @@ class RobotResolvePlaceTargetTool:
         success=False,
         error=f"unknown place target: {target}",
       )
+    release_z = call.input.get("release_z")
+    if release_z is not None:
+      try:
+        pose = RobotPose(
+          position=(pose.position[0], pose.position[1], float(release_z)),
+          orientation=pose.orientation,
+          frame_id=pose.frame_id,
+        )
+      except (TypeError, ValueError):
+        return ToolResult(tool=self.spec.name, success=False, error="release_z must be numeric")
     return ToolResult(
       tool=self.spec.name,
       success=True,

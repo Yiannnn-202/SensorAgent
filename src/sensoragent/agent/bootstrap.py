@@ -72,6 +72,7 @@ from sensoragent.workflows import (
   build_industrial_place_only_actionlist,
   build_industrial_vision_pick_place_actionlist,
   build_mock_pick_place_actionlist,
+  build_sorting_config_pick_place_actionlist,
   build_voice_command_ack_actionlist,
 )
 from sensoragent.workflows import DecisionTreeRuntime
@@ -128,7 +129,7 @@ def _build_recovery_tree(config: SensorAgentConfig):
 def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
   if tool_name == "vision.config_detect":
     catalog = config.scene.objects or {}
-    return VisionConfigDetectTool(catalog)
+    return VisionConfigDetectTool(catalog, config.scene.release_profiles)
   if tool_name in {"vision.grounded_sam2", "vision.open_vocab_detect"}:
     vision_config = config.integrations.vision
     common_settings = dict(
@@ -372,6 +373,7 @@ def build_agent(
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(joint_poses),
     "industrial.place_only_actionlist": build_industrial_place_only_actionlist(joint_poses),
     "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(joint_poses),
+    "industrial.sorting_config_pick_place_actionlist": build_sorting_config_pick_place_actionlist(joint_poses),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,
