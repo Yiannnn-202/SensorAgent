@@ -145,6 +145,45 @@ class RobotControlTest(TestCase):
     self.assertTrue(result.success, msg=result.error)
     self.assertIn(("robot.move_pose", {"pose": plan.lift.to_dict(), "speed": 0.2}), tool_runtime.calls)
 
+  def test_pick_skill_uses_configured_pre_approach_joints_before_opening(self) -> None:
+    trace = TraceContext()
+    grasp = RobotPose(
+      position=(0.42, 0.10, 0.32),
+      orientation=(0.70710678, 0.70710678, 0.0, 0.0),
+    )
+    plan = build_top_down_pick_plan(grasp)
+    staging_joints = [-0.625491, 0.049990, 1.435840, 0.0, 1.655755, 2.516105]
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPickSkill().run(
+      call=Mock(
+        input={
+          "object_id": "roller_01",
+          "plan": plan.to_dict(),
+          "pre_approach_joints": staging_joints,
+          "close_opening": 0.02,
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(
+      tool_runtime.calls[0],
+      ("robot.move_joints", {"joints": staging_joints, "speed": 0.2}),
+    )
+    self.assertEqual(tool_runtime.calls[1][0], "gripper.open")
+
   def test_pick_skill_falls_back_to_planned_waypoints_for_all_sorting_objects(self) -> None:
     trace = TraceContext()
     config = load_config(ROOT / "configs" / "robot_sorting_sim.yaml")
@@ -168,7 +207,7 @@ class RobotControlTest(TestCase):
           ),
           orientation=grasp_orientation,
         )
-        plan = build_top_down_pick_plan(grasp, pregrasp_distance=0.04)
+        plan = build_top_down_pick_plan(grasp, pregrasp_distance=0.08)
 
         class StubToolRuntime:
           def __init__(self) -> None:
@@ -385,7 +424,12 @@ class RobotControlTest(TestCase):
     session.request.assert_called_once_with(
       "POST",
       "http://bridge:8765/move-linear",
-      json={"pose": pose.to_dict(), "speed": 0.3, "wait": True},
+      json={
+        "pose": pose.to_dict(),
+        "speed": 0.3,
+        "wait": True,
+        "avoid_collisions": True,
+      },
       timeout=10.0,
     )
 

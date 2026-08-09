@@ -4,7 +4,13 @@ from collections.abc import Mapping
 from typing import Any
 
 from sensoragent.schemas import ActionList, ActionStep, ActionStepKind
+from sensoragent.workflows.actionlists.industrial import optional_move_joints_step
 from sensoragent.tools.robot.joint_poses import optional_configured_joint_pose
+
+
+SORTING_SPEED = 0.35
+PICK_LIFT_HEIGHT = 0.18
+PLACE_CLEARANCE = 0.12
 
 
 def build_sorting_config_pick_place_actionlist(
@@ -13,6 +19,7 @@ def build_sorting_config_pick_place_actionlist(
   """Build the verified config-detection route for the sorting scene."""
   pick_staging = optional_configured_joint_pose(joint_poses, "pick_staging_joints")
   place_staging = optional_configured_joint_pose(joint_poses, "place_staging_joints")
+  observe = optional_configured_joint_pose(joint_poses, "observe_joints")
 
   return ActionList(
     name="industrial.sorting_config_pick_place_actionlist",
@@ -37,8 +44,8 @@ def build_sorting_config_pick_place_actionlist(
           # Keep the gripper fingers clear of the tabletop in Gazebo.
           "position_offset": [0.0, 0.0, "{{ object.pick_offset_z }}"],
           "approach_distance": 0.10,
-          "pregrasp_distance": 0.04,
-          "lift_height": 0.12,
+          "pregrasp_distance": 0.08,
+          "lift_height": PICK_LIFT_HEIGHT,
         },
         save_as="pick_plan",
       ),
@@ -50,10 +57,11 @@ def build_sorting_config_pick_place_actionlist(
           "plan": "{{ pick_plan.plan }}",
           "object_id": "{{ object.object_id }}",
           "pre_approach_joints": pick_staging,
-          "speed": 0.35,
+          "speed": SORTING_SPEED,
           "descent_speed": 0.25,
           "open_opening": "{{ object.release_opening }}",
           "close_opening": 0.032,
+          "grasp_avoid_collisions": False,
           "gripper_force": 1.0,
         },
         save_as="pick_result",
@@ -77,7 +85,7 @@ def build_sorting_config_pick_place_actionlist(
         target="robot.plan_place",
         input={
           "place_pose": "{{ place_target.place_pose }}",
-          "clearance": 0.04,
+          "clearance": PLACE_CLEARANCE,
         },
         save_as="place_plan",
       ),
@@ -92,12 +100,13 @@ def build_sorting_config_pick_place_actionlist(
           "pre_approach_joints": place_staging,
           "retreat_joints": place_staging,
           "linear_approach": False,
-          "speed": 0.35,
+          "speed": SORTING_SPEED,
           "open_opening": "{{ object.release_opening }}",
           "gripper_speed": 0.5,
         },
         save_as="place_result",
       ),
+      *optional_move_joints_step("observe_after_place", observe, SORTING_SPEED),
       ActionStep(
         name="verify_place",
         kind=ActionStepKind.SKILL,

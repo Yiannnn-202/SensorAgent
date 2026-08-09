@@ -95,7 +95,7 @@ class RobotBridgeNode(Node):
         self.declare_parameter("cartesian_max_step", 0.01)
         self.declare_parameter("cartesian_min_fraction", 0.98)
         self.declare_parameter("position_tolerance", 0.005)
-        self.declare_parameter("orientation_tolerance", 0.20)
+        self.declare_parameter("orientation_tolerance", 0.50)
 
         self._bind_host = str(self.get_parameter("bind_host").value)
         self._bind_port = int(self.get_parameter("bind_port").value)
@@ -573,10 +573,13 @@ class RobotBridgeNode(Node):
         pose, frame_id = self._pose_from_payload(payload.get("pose"))
         speed = self._speed(payload.get("speed", 0.2))
         wait = payload.get("wait", True)
+        avoid_collisions = payload.get("avoid_collisions", True)
         if not isinstance(wait, bool):
             raise ValueError("wait must be boolean")
         if not wait:
             raise ValueError("wait=false is not supported by the simulation bridge")
+        if not isinstance(avoid_collisions, bool):
+            raise ValueError("avoid_collisions must be boolean")
 
         if not self._command_lock.acquire(blocking=False):
             return _response(False, error_code="ROBOT_BUSY", message="Robot is busy.")
@@ -604,7 +607,7 @@ class RobotBridgeNode(Node):
             request.jump_threshold = 0.0
             request.prismatic_jump_threshold = 0.0
             request.revolute_jump_threshold = 0.0
-            request.avoid_collisions = True
+            request.avoid_collisions = avoid_collisions
 
             self._publish_static_obstacles()
             self._set_arm_status("planning")

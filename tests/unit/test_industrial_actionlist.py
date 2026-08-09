@@ -262,14 +262,40 @@ class SortingConfigActionListTest(TestCase):
       plan_pick_step.input["orientation"],
       "{{ object.grasp_orientation }}",
     )
+    self.assertEqual(plan_pick_step.input["pregrasp_distance"], 0.08)
+    self.assertEqual(plan_pick_step.input["lift_height"], 0.18)
     self.assertEqual(pick_step.input["open_opening"], "{{ object.release_opening }}")
     self.assertEqual(pick_step.input["close_opening"], 0.032)
+    self.assertFalse(pick_step.input["grasp_avoid_collisions"])
 
   def test_place_uses_same_object_safe_opening_for_release(self) -> None:
     actionlist = build_sorting_config_pick_place_actionlist()
     place_step = next(step for step in actionlist.steps if step.name == "place")
+    plan_place_step = next(step for step in actionlist.steps if step.name == "plan_place")
 
+    self.assertEqual(plan_place_step.input["clearance"], 0.12)
     self.assertEqual(place_step.input["open_opening"], "{{ object.release_opening }}")
+
+  def test_configured_observation_joints_run_after_place(self) -> None:
+    observe_joints = [0.0, 0.1, -0.2, 0.3, -0.4, 0.5]
+    actionlist = build_sorting_config_pick_place_actionlist(
+      {"observe_joints": observe_joints}
+    )
+
+    step_names = [step.name for step in actionlist.steps]
+    self.assertIn("observe_after_place", step_names)
+    self.assertLess(
+      step_names.index("place"),
+      step_names.index("observe_after_place"),
+    )
+    self.assertLess(
+      step_names.index("observe_after_place"),
+      step_names.index("verify_place"),
+    )
+    observe_step = next(step for step in actionlist.steps if step.name == "observe_after_place")
+    self.assertEqual(observe_step.target, "robot.move_joints")
+    self.assertEqual(observe_step.input["joints"], observe_joints)
+    self.assertEqual(observe_step.input["speed"], 0.35)
 
   def test_config_detect_merges_default_pick_offset_into_object_profiles(self) -> None:
     long_axis_grasp = [0.70710678, 0.70710678, 0.0, 0.0]

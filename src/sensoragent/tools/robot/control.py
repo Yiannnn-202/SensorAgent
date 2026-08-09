@@ -89,6 +89,7 @@ class _RobotMovePoseTool:
       speed=_number(call.input.get("speed"), "speed", 0.2),
       linear=self.linear,
       wait=bool(call.input.get("wait", True)),
+      avoid_collisions=bool(call.input.get("avoid_collisions", True)),
     )
     return _result(self.spec.name, result)
 

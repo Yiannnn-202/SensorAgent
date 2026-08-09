@@ -45,20 +45,20 @@ def camera_rig_collision_objects(*, frame_id: str = "base_link") -> list[Collisi
     return [
         box_collision_object(
             "sensoragent_camera_left_post",
-            center=(-0.34, -0.42, 0.39),
+            center=(-0.34, -0.50, 0.39),
             size=(0.24, 0.24, 1.32),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_camera_right_post",
-            center=(-0.34, 0.42, 0.39),
+            center=(-0.34, 0.50, 0.39),
             size=(0.24, 0.24, 1.32),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_camera_crossbar",
             center=(-0.34, 0.0, 0.94),
-            size=(0.22, 1.08, 0.22),
+            size=(0.22, 1.24, 0.22),
             frame_id=frame_id,
         ),
         box_collision_object(
@@ -125,55 +125,55 @@ def sorting_bin_collision_objects(
     return [
         box_collision_object(
             "sensoragent_sorting_bin_bottom",
-            center=(-0.28, -0.16, 0.125),
+            center=(-0.28, -0.21, 0.125),
             size=(0.351, 0.351, 0.01),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_sorting_bin_wall_x_pos",
-            center=(-0.4505, -0.16, 0.1525),
+            center=(-0.4505, -0.21, 0.1525),
             size=(0.01, 0.351, 0.055),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_sorting_bin_wall_x_neg",
-            center=(-0.1095, -0.16, 0.1525),
+            center=(-0.1095, -0.21, 0.1525),
             size=(0.01, 0.351, 0.055),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_sorting_bin_wall_y_pos",
-            center=(-0.28, -0.3305, 0.1525),
+            center=(-0.28, -0.3805, 0.1525),
             size=(0.331, 0.01, 0.055),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_sorting_bin_wall_y_neg",
-            center=(-0.28, 0.0105, 0.1525),
+            center=(-0.28, -0.0395, 0.1525),
             size=(0.331, 0.01, 0.055),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_sorting_bin_divider_x_left",
-            center=(-0.2235, -0.16, 0.1525),
+            center=(-0.2235, -0.21, 0.1525),
             size=(0.008, 0.331, 0.050),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_sorting_bin_divider_x_right",
-            center=(-0.3365, -0.16, 0.1525),
+            center=(-0.3365, -0.21, 0.1525),
             size=(0.008, 0.331, 0.050),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_sorting_bin_divider_y_front",
-            center=(-0.28, -0.1035, 0.1525),
+            center=(-0.28, -0.1535, 0.1525),
             size=(0.331, 0.008, 0.050),
             frame_id=frame_id,
         ),
         box_collision_object(
             "sensoragent_sorting_bin_divider_y_back",
-            center=(-0.28, -0.2165, 0.1525),
+            center=(-0.28, -0.2665, 0.1525),
             size=(0.331, 0.008, 0.050),
             frame_id=frame_id,
         ),
