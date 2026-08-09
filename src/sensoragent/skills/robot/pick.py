@@ -23,7 +23,17 @@ class RobotPickSkill:
     completed_steps: list[str] = []
     stage_results: list[dict] = []
     plan_output = plan.to_dict()
-    steps = [
+    steps = []
+    pre_approach_joints = call.input.get("pre_approach_joints")
+    if pre_approach_joints is not None:
+      steps.append(
+        (
+          "move_pre_approach_joints",
+          "robot.move_joints",
+          {"joints": pre_approach_joints, "speed": speed},
+        )
+      )
+    steps.extend([
       (
         "open_gripper",
         "gripper.open",
@@ -38,7 +48,15 @@ class RobotPickSkill:
         "robot.move_linear",
         {"pose": plan.pregrasp.to_dict(), "speed": descent_speed},
       ),
-      ("move_grasp", "robot.move_linear", {"pose": plan.grasp.to_dict(), "speed": descent_speed}),
+      (
+        "move_grasp",
+        "robot.move_linear",
+        {
+          "pose": plan.grasp.to_dict(),
+          "speed": descent_speed,
+          "avoid_collisions": bool(call.input.get("grasp_avoid_collisions", True)),
+        },
+      ),
       (
         "close_gripper",
         "gripper.close",
@@ -49,7 +67,7 @@ class RobotPickSkill:
         },
       ),
       ("lift", "robot.move_linear", {"pose": plan.lift.to_dict(), "speed": speed}),
-    ]
+    ])
 
     for step_name, tool_name, input_data in steps:
       result = context.tool_runtime.invoke(tool_name, input_data, call.trace)
@@ -77,12 +95,26 @@ class RobotPickSkill:
             }
           )
           result = state_result
-      if not result.success and step_name == "lift" and tool_name == "robot.move_linear":
+      if (
+        not result.success
+        and step_name in {"move_pregrasp", "move_grasp", "lift"}
+        and tool_name == "robot.move_linear"
+      ):
+        stage_results.append(
+          {
+            "step": f"{step_name}_cartesian",
+            "tool": tool_name,
+            "input": input_data,
+            "success": False,
+            "output": result.output,
+            "error": result.error,
+          }
+        )
         result = context.tool_runtime.invoke("robot.move_pose", input_data, call.trace)
       stage_results.append(
         {
           "step": step_name,
-          "tool": tool_name,
+          "tool": result.tool,
           "input": input_data,
           "success": result.success,
           "output": result.output,

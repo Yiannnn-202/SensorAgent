@@ -16,7 +16,8 @@
         }
       },
       "speed": {"type": "number"},
-      "wait": {"type": "boolean"}
+      "wait": {"type": "boolean"},
+      "avoid_collisions": {"type": "boolean"}
     }
   },
   "output_schema": {

@@ -92,7 +92,7 @@
     <!-- A 3x3 destination tray with 105 mm clear cells for the Robotiq gripper. -->
     <model name="sorting_bin_3x3">
       <static>true</static>
-      <pose>0.28 0.16 0.30 0 0 0</pose>
+      <pose>0.28 0.21 0.30 0 0 0</pose>
       <link name="bin">
         <collision name="bottom">
           <pose>0 0 0.005 0 0 0</pose>
@@ -274,7 +274,7 @@
       </link>
     </model>
     <model name="metal_block_01">
-      <pose>0.220 -0.120 0.330 0 0 0</pose>
+      <pose>0.220 -0.070 0.330 0 0 0</pose>
       <link name="part">
         <inertial>
           <mass>0.20</mass>
@@ -314,7 +314,7 @@
       </link>
     </model>
     <model name="metal_stepped_shaft_01">
-      <pose>0.160 -0.170 0.325 0 1.570796 0</pose>
+      <pose>0.160 -0.120 0.325 0 1.570796 0</pose>
       <link name="part">
         <inertial>
           <mass>0.25</mass>
@@ -368,7 +368,7 @@
       </link>
     </model>
     <model name="metal_hollow_sleeve_01">
-      <pose>0.160 -0.060 0.3225 0 0 0</pose>
+      <pose>0.160 -0.010 0.3225 0 0 0</pose>
       <link name="part">
         <inertial><mass>0.12</mass><inertia><ixx>0.00003</ixx><iyy>0.00003</iyy><izz>0.00004</izz></inertia></inertial>
         <collision name="wall_0"><pose>0.016 0 0 0 0 0</pose><geometry><box><size>0.012 0.014 0.045</size></box></geometry></collision>
@@ -390,7 +390,7 @@
       </link>
     </model>
     <model name="metal_roller_01">
-      <pose>0.220 -0.270 0.320 0 1.570796 0</pose>
+      <pose>0.220 -0.220 0.320 0 1.570796 0</pose>
       <link name="part">
         <inertial>
           <mass>0.20</mass>
@@ -432,7 +432,7 @@
       </link>
     </model>
     <model name="metal_hex_nut_01">
-      <pose>0.300 -0.220 0.3125 0 0 0.261799</pose>
+      <pose>0.300 -0.170 0.3125 0 0 0.261799</pose>
       <link name="part">
         <inertial>
           <mass>0.18</mass>
@@ -457,7 +457,7 @@
       </link>
     </model>
     <model name="metal_short_bolt_01">
-      <pose>0.300 -0.060 0.3275 0 0 0</pose>
+      <pose>0.300 -0.010 0.3275 0 0 0</pose>
       <link name="part">
         <inertial>
           <mass>0.20</mass>
@@ -521,7 +521,7 @@
       </link>
     </model>
     <model name="metal_flange_bushing_01">
-      <pose>0.300 -0.160 0.325 0 0 0</pose>
+      <pose>0.300 -0.110 0.325 0 0 0</pose>
       <link name="part">
         <inertial><mass>0.26</mass><inertia><ixx>0.00015</ixx><iyy>0.00015</iyy><izz>0.00007</izz></inertia></inertial>
         <collision name="core"><geometry><cylinder><radius>0.022</radius><length>0.030</length></cylinder></geometry><surface><friction><ode><mu>8</mu><mu2>8</mu2></ode></friction></surface></collision>

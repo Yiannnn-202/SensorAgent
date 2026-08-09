@@ -42,6 +42,7 @@ class RobotControlClient(Protocol):
     speed: float,
     linear: bool,
     wait: bool,
+    avoid_collisions: bool = True,
   ) -> RobotCommandResult:
     """Move to an absolute Cartesian target."""
 
@@ -173,11 +174,15 @@ class HttpRobotControlClient:
     speed: float,
     linear: bool,
     wait: bool,
+    avoid_collisions: bool = True,
   ) -> RobotCommandResult:
+    payload = {"pose": pose.to_dict(), "speed": speed, "wait": wait}
+    if linear:
+      payload["avoid_collisions"] = avoid_collisions
     return self._request(
       "POST",
       "/move-linear" if linear else "/move-pose",
-      {"pose": pose.to_dict(), "speed": speed, "wait": wait},
+      payload,
       timeout_seconds=110.0,
       stop_on_timeout=True,
     )
@@ -271,8 +276,9 @@ class FakeRobotControlClient:
     speed: float,
     linear: bool,
     wait: bool,
+    avoid_collisions: bool = True,
   ) -> RobotCommandResult:
-    del speed, linear, wait
+    del speed, linear, wait, avoid_collisions
     self._pose = pose
     self._arm_status = "idle"
     return RobotCommandResult(success=True, state=self._state())

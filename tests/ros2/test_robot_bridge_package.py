@@ -78,16 +78,17 @@ class RobotBridgePackageTest(TestCase):
     )
     self.assertIn('tip_link="robotiq_85_tcp"', srdf)
     self.assertIn('end_effector_link: "robotiq_85_tcp"', bridge_config)
-    self.assertIn("orientation_tolerance: 0.20", bridge_config)
+    self.assertIn("orientation_tolerance: 0.50", bridge_config)
     self.assertIn("position_tolerance: 0.005", bridge_config)
 
-  def test_bridge_adds_camera_rig_to_planning_scene(self) -> None:
+  def test_bridge_adds_static_obstacles_to_planning_scene(self) -> None:
     bridge_source = (
       BRIDGE_ROOT / "sensoragent_robot_bridge" / "bridge_node.py"
     ).read_text(encoding="utf-8")
 
     self.assertIn("PlanningScene", bridge_source)
     self.assertIn("planning_scene_diff.world.collision_objects", bridge_source)
+    self.assertIn("static_scene_collision_objects", bridge_source)
 
     obstacle_source = (
       BRIDGE_ROOT / "sensoragent_robot_bridge" / "scene_obstacles.py"
@@ -106,13 +107,21 @@ class RobotBridgePackageTest(TestCase):
     self.assertIn("sensoragent_camera_right_post", obstacle_source)
     self.assertIn("sensoragent_camera_crossbar", obstacle_source)
     self.assertIn("sensoragent_camera_body", obstacle_source)
-    self.assertIn("center=(-0.34, -0.42, 0.39)", obstacle_source)
-    self.assertIn("center=(-0.34, 0.42, 0.39)", obstacle_source)
+    self.assertIn("sensoragent_sorting_workbench_top", obstacle_source)
+    self.assertIn("sensoragent_sorting_bin_bottom", obstacle_source)
+    self.assertIn("sensoragent_sorting_bin_wall_x_pos", obstacle_source)
+    self.assertIn("sensoragent_sorting_bin_divider_y_back", obstacle_source)
+    self.assertIn("center=(-0.34, -0.50, 0.39)", obstacle_source)
+    self.assertIn("center=(-0.34, 0.50, 0.39)", obstacle_source)
     self.assertIn("center=(-0.34, 0.0, 0.94)", obstacle_source)
     self.assertIn("center=(-0.34, 0.0, 0.90)", obstacle_source)
+    self.assertIn("center=(-0.42, 0.0, 0.085)", obstacle_source)
+    self.assertIn("center=(-0.28, -0.21, 0.125)", obstacle_source)
     self.assertIn("size=(0.24, 0.24, 1.32)", obstacle_source)
-    self.assertIn("size=(0.22, 1.08, 0.22)", obstacle_source)
+    self.assertIn("size=(0.22, 1.24, 0.22)", obstacle_source)
     self.assertIn("size=(0.26, 0.22, 0.20)", obstacle_source)
+    self.assertIn("size=(0.65, 0.90, 0.03)", obstacle_source)
+    self.assertIn("size=(0.351, 0.351, 0.01)", obstacle_source)
     self.assertIn("TRANSIENT_LOCAL", bridge_source)
     self.assertIn("/scene/obstacles", bridge_source)
     self.assertIn("static_scene_publisher", setup_source)

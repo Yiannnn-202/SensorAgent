@@ -45,7 +45,7 @@ integrations:
     listen_language: zh
     vad_model_path: models/asr/vad/silero_vad.onnx
     vad_threshold: 0.35
-    vad_min_rms: 0.025
+    vad_min_rms: 0.0
     vad_min_speech_windows: 2
     vad_pre_roll_ms: 120
     vad_post_roll_ms: 2500
@@ -58,34 +58,37 @@ scene:
   robot_joint_order: [joint1, joint2, joint3, joint4, joint5, joint6]
   joint_poses:
     # Select the short, table-clear inverse-kinematics branch from the home pose.
+    observe_joints: [-0.000033, -1.039069, 1.044687, 0.000004, 1.575183, -0.000097]
     pick_staging_joints: [-0.625491, 0.049990, 1.435840, 0.0, 1.655755, 2.516105]
     place_staging_joints: [-0.625491, 0.049990, 1.435840, 0.0, 1.655755, 2.516105]
   objects:
-    block: [-0.22, 0.12, 0.15, 0.0, 0.0, 0.0]
-    metal_block_01: [-0.22, 0.12, 0.15, 0.0, 0.0, 0.0]
-    方块: [-0.22, 0.12, 0.15, 0.0, 0.0, 0.0]
-    stepped_shaft: [-0.16, 0.17, 0.145, 0.0, 0.0, 0.0]
-    阶梯轴: [-0.16, 0.17, 0.145, 0.0, 0.0, 0.0]
-    hollow_sleeve: [-0.16, 0.06, 0.1425, 0.0, 0.0, 0.0]
-    中空圆套: [-0.16, 0.06, 0.1425, 0.0, 0.0, 0.0]
-    roller: [-0.22, 0.27, 0.14, 0.0, 0.0, 0.0]
-    滚轮: [-0.22, 0.27, 0.14, 0.0, 0.0, 0.0]
-    hex_nut: [-0.30, 0.22, 0.1325, 0.0, 0.0, 0.0]
-    六角螺母: [-0.30, 0.22, 0.1325, 0.0, 0.0, 0.0]
-    short_bolt: [-0.30, 0.06, 0.1475, 0.0, 0.0, 0.0]
-    短螺栓: [-0.30, 0.06, 0.1475, 0.0, 0.0, 0.0]
-    flange_bushing: [-0.30, 0.16, 0.145, 0.0, 0.0, 0.0]
-    法兰套: [-0.30, 0.16, 0.145, 0.0, 0.0, 0.0]
+    block: [-0.22, 0.07, 0.15, 0.0, 0.0, 0.0]
+    metal_block_01: [-0.22, 0.07, 0.15, 0.0, 0.0, 0.0]
+    方块: [-0.22, 0.07, 0.15, 0.0, 0.0, 0.0]
+    stepped_shaft: [-0.16, 0.12, 0.145, 0.0, 0.0, 0.0]
+    阶梯轴: [-0.16, 0.12, 0.145, 0.0, 0.0, 0.0]
+    hollow_sleeve: [-0.16, 0.01, 0.1425, 0.0, 0.0, 0.0]
+    中空圆套: [-0.16, 0.01, 0.1425, 0.0, 0.0, 0.0]
+    roller: [-0.22, 0.22, 0.14, 0.0, 0.0, 0.0]
+    滚轮: [-0.22, 0.22, 0.14, 0.0, 0.0, 0.0]
+    hex_nut: [-0.30, 0.17, 0.1325, 0.0, 0.0, 0.0]
+    六角螺母: [-0.30, 0.17, 0.1325, 0.0, 0.0, 0.0]
+    short_bolt: [-0.30, 0.01, 0.1475, 0.0, 0.0, 0.0]
+    短螺栓: [-0.30, 0.01, 0.1475, 0.0, 0.0, 0.0]
+    flange_bushing: [-0.30, 0.11, 0.145, 0.0, 0.0, 0.0]
+    法兰套: [-0.30, 0.11, 0.145, 0.0, 0.0, 0.0]
   release_profiles:
-    default: {opening: 0.0848, place_z: 0.25}
+    default: {opening: 0.0848, place_z: 0.25, pick_offset_z: 0.04, grasp_orientation: [0.0, 1.0, 0.0, 0.0]}
+    # For horizontal long parts whose long axis is along base_link X, rotate the
+    # top-down gripper 90 degrees so the fingers close across the short width.
     # Open only enough to release each part while keeping the fingers below the bin walls.
     block: {opening: 0.055, place_z: 0.21}
     metal_block_01: {opening: 0.055, place_z: 0.21}
     方块: {opening: 0.055, place_z: 0.21}
-    roller: {opening: 0.063, place_z: 0.22}
-    滚轮: {opening: 0.063, place_z: 0.22}
-    stepped_shaft: {opening: 0.063, place_z: 0.22}
-    阶梯轴: {opening: 0.063, place_z: 0.22}
+    roller: {opening: 0.063, place_z: 0.22, grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]}
+    滚轮: {opening: 0.063, place_z: 0.22, grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]}
+    stepped_shaft: {opening: 0.063, place_z: 0.22, grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]}
+    阶梯轴: {opening: 0.063, place_z: 0.22, grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]}
     hex_nut: {opening: 0.063, place_z: 0.22}
     六角螺母: {opening: 0.063, place_z: 0.22}
     short_bolt: {opening: 0.063, place_z: 0.24}
@@ -95,17 +98,17 @@ scene:
     flange_bushing: {opening: 0.078, place_z: 0.24}
     法兰套: {opening: 0.078, place_z: 0.24}
   place_targets:
-    bin_cell_1: {position: [-0.167, -0.047, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
-    bin_cell_2: {position: [-0.280, -0.047, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
-    bin_cell_3: {position: [-0.393, -0.047, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
-    bin_cell_4: {position: [-0.167, -0.160, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+    bin_cell_1: {position: [-0.167, -0.097, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+    bin_cell_2: {position: [-0.280, -0.097, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+    bin_cell_3: {position: [-0.393, -0.097, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+    bin_cell_4: {position: [-0.167, -0.210, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
     bin_cell_5:
-      position: [-0.280, -0.160, 0.25]
+      position: [-0.280, -0.210, 0.25]
       orientation: [0.0, 1.0, 0.0, 0.0]
       frame_id: base_link
-    bin_cell_6: {position: [-0.360, -0.160, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
-    bin_cell_7: {position: [-0.167, -0.273, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
-    bin_cell_8: {position: [-0.280, -0.273, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+    bin_cell_6: {position: [-0.360, -0.210, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+    bin_cell_7: {position: [-0.167, -0.323, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+    bin_cell_8: {position: [-0.280, -0.323, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
   workspace:
     frame: base_link
     x: [-0.59, -0.09]

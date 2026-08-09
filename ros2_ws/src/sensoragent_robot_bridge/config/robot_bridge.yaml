@@ -23,4 +23,4 @@ sensoragent_robot_bridge:
     cartesian_max_step: 0.01
     cartesian_min_fraction: 0.98
     position_tolerance: 0.005
-    orientation_tolerance: 0.20
+    orientation_tolerance: 0.50
