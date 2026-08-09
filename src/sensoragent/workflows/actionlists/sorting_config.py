@@ -33,6 +33,7 @@ def build_sorting_config_pick_place_actionlist(
         target="robot.plan_top_down_pick",
         input={
           "pose_3d": "{{ object.pose_3d }}",
+          "orientation": "{{ object.grasp_orientation }}",
           # Keep the gripper fingers clear of the tabletop in Gazebo.
           "position_offset": [0.0, 0.0, "{{ object.pick_offset_z }}"],
           "approach_distance": 0.10,

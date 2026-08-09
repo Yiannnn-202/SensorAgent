@@ -7,6 +7,27 @@ from typing import Mapping
 from sensoragent.schemas import ToolCall, ToolResult, ToolSpec
 
 
+DEFAULT_GRASP_ORIENTATION = [0.0, 1.0, 0.0, 0.0]
+
+
+def _profile_float(profile: Mapping[str, object], key: str, default: float) -> float:
+  value = profile.get(key, default)
+  if not isinstance(value, (int, float)) or isinstance(value, bool):
+    raise ValueError(f"release_profiles.{key} must be numeric")
+  return float(value)
+
+
+def _profile_orientation(profile: Mapping[str, object]) -> list[float]:
+  value = profile.get("grasp_orientation", DEFAULT_GRASP_ORIENTATION)
+  if (
+    not isinstance(value, (list, tuple))
+    or len(value) != 4
+    or not all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in value)
+  ):
+    raise ValueError("release_profiles.grasp_orientation must contain four numbers")
+  return [float(item) for item in value]
+
+
 class VisionConfigDetectTool:
   """Return a preconfigured object pose keyed by the operator's query string.
 
@@ -21,7 +42,7 @@ class VisionConfigDetectTool:
     tags=("vision", "config"),
   )
 
-  def __init__(self, catalog: Mapping[str, list[float]] | None = None, release_profiles: Mapping[str, Mapping[str, float]] | None = None) -> None:
+  def __init__(self, catalog: Mapping[str, list[float]] | None = None, release_profiles: Mapping[str, Mapping[str, object]] | None = None) -> None:
     self._catalog: dict[str, list[float]] = {}
     self._release_profiles = dict(release_profiles or {})
     for key, value in (catalog or {}).items():
@@ -74,8 +95,9 @@ class VisionConfigDetectTool:
         "confidence": 1.0,
         "object_id": label,
         "pose_3d": pose_3d,
-        "release_opening": float(profile.get("opening", 0.0848)),
-        "release_z": float(profile.get("place_z", 0.25)),
-        "pick_offset_z": float(profile.get("pick_offset_z", 0.04)),
+        "release_opening": _profile_float(profile, "opening", 0.0848),
+        "release_z": _profile_float(profile, "place_z", 0.25),
+        "pick_offset_z": _profile_float(profile, "pick_offset_z", 0.04),
+        "grasp_orientation": _profile_orientation(profile),
       },
     )

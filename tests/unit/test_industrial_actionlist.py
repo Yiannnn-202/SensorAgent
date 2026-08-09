@@ -258,6 +258,10 @@ class SortingConfigActionListTest(TestCase):
       plan_pick_step.input["position_offset"],
       [0.0, 0.0, "{{ object.pick_offset_z }}"],
     )
+    self.assertEqual(
+      plan_pick_step.input["orientation"],
+      "{{ object.grasp_orientation }}",
+    )
     self.assertEqual(pick_step.input["open_opening"], "{{ object.release_opening }}")
     self.assertEqual(pick_step.input["close_opening"], 0.032)
 
@@ -268,11 +272,21 @@ class SortingConfigActionListTest(TestCase):
     self.assertEqual(place_step.input["open_opening"], "{{ object.release_opening }}")
 
   def test_config_detect_merges_default_pick_offset_into_object_profiles(self) -> None:
+    long_axis_grasp = [0.70710678, 0.70710678, 0.0, 0.0]
     tool = VisionConfigDetectTool(
       catalog={"滚轮": [-0.22, 0.27, 0.14, 0.0, 0.0, 0.0]},
       release_profiles={
-        "default": {"opening": 0.0848, "place_z": 0.25, "pick_offset_z": 0.04},
-        "滚轮": {"opening": 0.063, "place_z": 0.22},
+        "default": {
+          "opening": 0.0848,
+          "place_z": 0.25,
+          "pick_offset_z": 0.04,
+          "grasp_orientation": [0.0, 1.0, 0.0, 0.0],
+        },
+        "滚轮": {
+          "opening": 0.063,
+          "place_z": 0.22,
+          "grasp_orientation": long_axis_grasp,
+        },
       },
     )
 
@@ -288,6 +302,7 @@ class SortingConfigActionListTest(TestCase):
     self.assertEqual(result.output["release_opening"], 0.063)
     self.assertEqual(result.output["release_z"], 0.22)
     self.assertEqual(result.output["pick_offset_z"], 0.04)
+    self.assertEqual(result.output["grasp_orientation"], long_axis_grasp)
 
 
 class LLMPlannerAllowedTargetsTest(TestCase):

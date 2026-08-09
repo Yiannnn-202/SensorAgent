@@ -77,15 +77,17 @@ scene:
     flange_bushing: [-0.30, 0.16, 0.145, 0.0, 0.0, 0.0]
     法兰套: [-0.30, 0.16, 0.145, 0.0, 0.0, 0.0]
   release_profiles:
-    default: {opening: 0.0848, place_z: 0.25, pick_offset_z: 0.04}
+    default: {opening: 0.0848, place_z: 0.25, pick_offset_z: 0.04, grasp_orientation: [0.0, 1.0, 0.0, 0.0]}
+    # For horizontal long parts whose long axis is along base_link X, rotate the
+    # top-down gripper 90 degrees so the fingers close across the short width.
     # Open only enough to release each part while keeping the fingers below the bin walls.
     block: {opening: 0.055, place_z: 0.21}
     metal_block_01: {opening: 0.055, place_z: 0.21}
     方块: {opening: 0.055, place_z: 0.21}
-    roller: {opening: 0.063, place_z: 0.22}
-    滚轮: {opening: 0.063, place_z: 0.22}
-    stepped_shaft: {opening: 0.063, place_z: 0.22}
-    阶梯轴: {opening: 0.063, place_z: 0.22}
+    roller: {opening: 0.063, place_z: 0.22, grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]}
+    滚轮: {opening: 0.063, place_z: 0.22, grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]}
+    stepped_shaft: {opening: 0.063, place_z: 0.22, grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]}
+    阶梯轴: {opening: 0.063, place_z: 0.22, grasp_orientation: [0.70710678, 0.70710678, 0.0, 0.0]}
     hex_nut: {opening: 0.063, place_z: 0.22}
     六角螺母: {opening: 0.063, place_z: 0.22}
     short_bolt: {opening: 0.063, place_z: 0.24}

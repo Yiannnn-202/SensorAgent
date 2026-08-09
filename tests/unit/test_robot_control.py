@@ -156,13 +156,17 @@ class RobotControlTest(TestCase):
           **config.scene.release_profiles.get(object_name, {}),
         }
         pick_offset_z = float(profile.get("pick_offset_z", 0.04))
+        grasp_orientation = tuple(
+          float(value)
+          for value in profile.get("grasp_orientation", [0.0, 1.0, 0.0, 0.0])
+        )
         grasp = RobotPose(
           position=(
             float(pose_3d[0]),
             float(pose_3d[1]),
             float(pose_3d[2]) + pick_offset_z,
           ),
-          orientation=(0.0, 1.0, 0.0, 0.0),
+          orientation=grasp_orientation,
         )
         plan = build_top_down_pick_plan(grasp, pregrasp_distance=0.04)
 
