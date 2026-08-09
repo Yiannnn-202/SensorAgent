@@ -163,6 +163,21 @@ def _print_json(value: dict, stream: TextIO) -> None:
   stream.flush()
 
 
+def build_vad_input(config: SensorAgentConfig) -> dict:
+  """Return explicit VAD settings for the listen tool."""
+
+  audio_config = config.integrations.audio
+  return {
+    "threshold": float(audio_config.get("vad_threshold", 0.35)),
+    "min_rms": float(audio_config.get("vad_min_rms", 0.0)),
+    "min_speech_windows": int(audio_config.get("vad_min_speech_windows", 2)),
+    "pre_roll_ms": int(audio_config.get("vad_pre_roll_ms", 120)),
+    "post_roll_ms": int(audio_config.get("vad_post_roll_ms", 1800)),
+    "tail_padding_ms": int(audio_config.get("vad_tail_padding_ms", 700)),
+    "max_utterance_sec": float(audio_config.get("vad_max_utterance_sec", 15.0)),
+  }
+
+
 def run_text_loop(
   bundle: AgentBundle,
   *,
@@ -208,6 +223,7 @@ def run_voice_loop(
   *,
   duration_seconds: float,
   language: str,
+  vad: dict | None = None,
   output_stream: TextIO = sys.stdout,
   prompt_stream: TextIO = sys.stderr,
   max_turns: int | None = None,
@@ -227,9 +243,12 @@ def run_voice_loop(
       flush=True,
     )
     trace = TraceContext()
+    listen_input = {"duration_seconds": duration_seconds, "language": language}
+    if vad is not None:
+      listen_input["vad"] = dict(vad)
     transcript = bundle.tool_runtime.invoke(
       "audio.listen_vad_transcribe",
-      {"duration_seconds": duration_seconds, "language": language},
+      listen_input,
       trace,
     )
     if not transcript.success or not transcript.output:
@@ -293,6 +312,36 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--language", default=None)
   parser.add_argument("--log-path", type=Path, default=None)
   parser.add_argument(
+    "--vad-threshold",
+    type=float,
+    default=None,
+    help="Optional VAD speech threshold override for voice mode.",
+  )
+  parser.add_argument(
+    "--vad-min-rms",
+    type=float,
+    default=None,
+    help="Optional VAD minimum RMS gate override for voice mode.",
+  )
+  parser.add_argument(
+    "--vad-pre-roll-ms",
+    type=int,
+    default=None,
+    help="Optional VAD pre-speech audio buffer override in milliseconds.",
+  )
+  parser.add_argument(
+    "--vad-post-roll-ms",
+    type=int,
+    default=None,
+    help="Optional VAD silence tail wait override in milliseconds.",
+  )
+  parser.add_argument(
+    "--vad-tail-padding-ms",
+    type=int,
+    default=None,
+    help="Optional VAD trailing silence padding override in milliseconds.",
+  )
+  parser.add_argument(
     "--max-turns",
     type=int,
     default=None,
@@ -330,10 +379,22 @@ def main() -> int:
       if args.language is not None
       else config.integrations.audio.get("listen_language", "zh")
     )
+    vad_input = build_vad_input(config)
+    if args.vad_threshold is not None:
+      vad_input["threshold"] = args.vad_threshold
+    if args.vad_min_rms is not None:
+      vad_input["min_rms"] = args.vad_min_rms
+    if args.vad_pre_roll_ms is not None:
+      vad_input["pre_roll_ms"] = args.vad_pre_roll_ms
+    if args.vad_post_roll_ms is not None:
+      vad_input["post_roll_ms"] = args.vad_post_roll_ms
+    if args.vad_tail_padding_ms is not None:
+      vad_input["tail_padding_ms"] = args.vad_tail_padding_ms
     return run_voice_loop(
       bundle,
       duration_seconds=args.duration,
       language=language,
+      vad=vad_input,
       max_turns=args.max_turns,
     )
   return run_text_loop(bundle, max_turns=args.max_turns)

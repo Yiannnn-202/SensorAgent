@@ -45,7 +45,7 @@ integrations:
     listen_language: zh
     vad_model_path: models/asr/vad/silero_vad.onnx
     vad_threshold: 0.35
-    vad_min_rms: 0.025
+    vad_min_rms: 0.0
     vad_min_speech_windows: 2
     vad_pre_roll_ms: 120
     vad_post_roll_ms: 2500
@@ -77,7 +77,7 @@ scene:
     flange_bushing: [-0.30, 0.16, 0.145, 0.0, 0.0, 0.0]
     法兰套: [-0.30, 0.16, 0.145, 0.0, 0.0, 0.0]
   release_profiles:
-    default: {opening: 0.0848, place_z: 0.25}
+    default: {opening: 0.0848, place_z: 0.25, pick_offset_z: 0.04}
     # Open only enough to release each part while keeping the fingers below the bin walls.
     block: {opening: 0.055, place_z: 0.21}
     metal_block_01: {opening: 0.055, place_z: 0.21}

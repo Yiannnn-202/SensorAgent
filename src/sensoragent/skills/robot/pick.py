@@ -77,12 +77,26 @@ class RobotPickSkill:
             }
           )
           result = state_result
-      if not result.success and step_name == "lift" and tool_name == "robot.move_linear":
+      if (
+        not result.success
+        and step_name in {"move_pregrasp", "move_grasp", "lift"}
+        and tool_name == "robot.move_linear"
+      ):
+        stage_results.append(
+          {
+            "step": f"{step_name}_cartesian",
+            "tool": tool_name,
+            "input": input_data,
+            "success": False,
+            "output": result.output,
+            "error": result.error,
+          }
+        )
         result = context.tool_runtime.invoke("robot.move_pose", input_data, call.trace)
       stage_results.append(
         {
           "step": step_name,
-          "tool": tool_name,
+          "tool": result.tool,
           "input": input_data,
           "success": result.success,
           "output": result.output,

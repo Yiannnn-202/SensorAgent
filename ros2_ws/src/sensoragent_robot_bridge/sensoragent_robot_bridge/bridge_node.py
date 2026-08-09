@@ -38,7 +38,7 @@ from sensoragent_robot_bridge.gripper_mapping import (
     closure_to_opening,
     opening_to_closure,
 )
-from sensoragent_robot_bridge.scene_obstacles import camera_rig_collision_objects
+from sensoragent_robot_bridge.scene_obstacles import static_scene_collision_objects
 from sensoragent_robot_bridge.trajectory_scaling import (
     MAX_SPEED,
     scale_joint_trajectory_speed,
@@ -381,12 +381,12 @@ class RobotBridgeNode(Node):
             raise ValueError(f"speed must be greater than 0 and at most {MAX_SPEED:g}")
         return speed
 
-    def _camera_rig_collision_objects(self) -> list[CollisionObject]:
-        return camera_rig_collision_objects(frame_id=self._base_frame)
+    def _static_scene_collision_objects(self) -> list[CollisionObject]:
+        return static_scene_collision_objects(frame_id=self._base_frame)
 
     def get_scene_obstacles(self) -> dict:
         objects = []
-        for collision in self._camera_rig_collision_objects():
+        for collision in self._static_scene_collision_objects():
             primitive = collision.primitives[0]
             pose = collision.primitive_poses[0]
             objects.append(
@@ -410,7 +410,7 @@ class RobotBridgeNode(Node):
     def _publish_static_obstacles(self) -> None:
         scene = PlanningScene()
         scene.is_diff = True
-        scene.world.collision_objects = self._camera_rig_collision_objects()
+        scene.world.collision_objects = self._static_scene_collision_objects()
         self._planning_scene_pub.publish(scene)
 
     def _move_group_goal(
@@ -434,7 +434,7 @@ class RobotBridgeNode(Node):
         goal.planning_options.planning_scene_diff.is_diff = True
         goal.planning_options.planning_scene_diff.robot_state.is_diff = True
         goal.planning_options.planning_scene_diff.world.collision_objects = (
-            self._camera_rig_collision_objects()
+            self._static_scene_collision_objects()
         )
         return goal
 

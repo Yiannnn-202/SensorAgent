@@ -68,3 +68,126 @@ def camera_rig_collision_objects(*, frame_id: str = "base_link") -> list[Collisi
             frame_id=frame_id,
         ),
     ]
+
+
+def sorting_workbench_collision_objects(
+    *,
+    frame_id: str = "base_link",
+) -> list[CollisionObject]:
+    """Collision objects for the metal sorting scene workbench.
+
+    Gazebo has its own SDF collision geometry, but MoveIt only avoids objects
+    explicitly added to its planning scene. The metal sorting world mounts the
+    robot at world z=0.18 with 180-degree yaw, so world coordinates are converted
+    to base_link by negating x/y and subtracting 0.18 from z.
+    """
+
+    return [
+        box_collision_object(
+            "sensoragent_sorting_workbench_top",
+            center=(-0.42, 0.0, 0.085),
+            size=(0.65, 0.90, 0.03),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_workbench_leg_1",
+            center=(-0.145, 0.375, -0.05),
+            size=(0.06, 0.06, 0.26),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_workbench_leg_2",
+            center=(-0.145, -0.375, -0.05),
+            size=(0.06, 0.06, 0.26),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_workbench_leg_3",
+            center=(-0.695, 0.375, -0.05),
+            size=(0.06, 0.06, 0.26),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_workbench_leg_4",
+            center=(-0.695, -0.375, -0.05),
+            size=(0.06, 0.06, 0.26),
+            frame_id=frame_id,
+        ),
+    ]
+
+
+def sorting_bin_collision_objects(
+    *,
+    frame_id: str = "base_link",
+) -> list[CollisionObject]:
+    """Collision objects for the 3x3 placement tray in the sorting scene."""
+
+    return [
+        box_collision_object(
+            "sensoragent_sorting_bin_bottom",
+            center=(-0.28, -0.16, 0.125),
+            size=(0.351, 0.351, 0.01),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_bin_wall_x_pos",
+            center=(-0.4505, -0.16, 0.1525),
+            size=(0.01, 0.351, 0.055),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_bin_wall_x_neg",
+            center=(-0.1095, -0.16, 0.1525),
+            size=(0.01, 0.351, 0.055),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_bin_wall_y_pos",
+            center=(-0.28, -0.3305, 0.1525),
+            size=(0.331, 0.01, 0.055),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_bin_wall_y_neg",
+            center=(-0.28, 0.0105, 0.1525),
+            size=(0.331, 0.01, 0.055),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_bin_divider_x_left",
+            center=(-0.2235, -0.16, 0.1525),
+            size=(0.008, 0.331, 0.050),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_bin_divider_x_right",
+            center=(-0.3365, -0.16, 0.1525),
+            size=(0.008, 0.331, 0.050),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_bin_divider_y_front",
+            center=(-0.28, -0.1035, 0.1525),
+            size=(0.331, 0.008, 0.050),
+            frame_id=frame_id,
+        ),
+        box_collision_object(
+            "sensoragent_sorting_bin_divider_y_back",
+            center=(-0.28, -0.2165, 0.1525),
+            size=(0.331, 0.008, 0.050),
+            frame_id=frame_id,
+        ),
+    ]
+
+
+def static_scene_collision_objects(
+    *,
+    frame_id: str = "base_link",
+) -> list[CollisionObject]:
+    """Return all static scene obstacles that MoveIt should avoid."""
+
+    return [
+        *camera_rig_collision_objects(frame_id=frame_id),
+        *sorting_workbench_collision_objects(frame_id=frame_id),
+        *sorting_bin_collision_objects(frame_id=frame_id),
+    ]

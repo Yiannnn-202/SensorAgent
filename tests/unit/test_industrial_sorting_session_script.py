@@ -6,7 +6,9 @@ import importlib.util
 from dataclasses import replace
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import Mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -91,3 +93,44 @@ class IndustrialSortingSessionScriptTest(TestCase):
     rendered = output.getvalue()
     self.assertIn('"type": "command"', rendered)
     self.assertIn('"type": "exit"', rendered)
+
+  def test_voice_loop_passes_explicit_vad_settings(self) -> None:
+    module = _load_module()
+    output = StringIO()
+    bundle = SimpleNamespace(
+      tool_runtime=SimpleNamespace(
+        invoke=Mock(
+          return_value=SimpleNamespace(
+            success=False,
+            output=None,
+            error="NO_SPEECH_DETECTED",
+          )
+        )
+      )
+    )
+    vad = {
+      "threshold": 0.2,
+      "min_rms": 0.0,
+      "min_speech_windows": 2,
+      "pre_roll_ms": 600,
+      "post_roll_ms": 1000,
+      "tail_padding_ms": 700,
+      "max_utterance_sec": 15.0,
+    }
+
+    code = module.run_voice_loop(
+      bundle,
+      duration_seconds=15,
+      language="zh",
+      vad=vad,
+      output_stream=output,
+      prompt_stream=StringIO(),
+      max_turns=1,
+    )
+
+    self.assertEqual(code, 0)
+    listen_input = bundle.tool_runtime.invoke.call_args.args[1]
+    self.assertEqual(listen_input["duration_seconds"], 15)
+    self.assertEqual(listen_input["language"], "zh")
+    self.assertEqual(listen_input["vad"], vad)
+    self.assertIn('"error": "NO_SPEECH_DETECTED"', output.getvalue())

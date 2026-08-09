@@ -14,9 +14,13 @@ if str(SRC) not in sys.path:
 
 from sensoragent.agent import LLMPlanner
 from sensoragent.schemas import PlanTargetKind, TraceContext
+from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 from sensoragent.workflows.actionlists.industrial import build_industrial_pick_place_actionlist
 from sensoragent.workflows.actionlists.industrial_vision import (
   build_industrial_vision_pick_place_actionlist,
+)
+from sensoragent.workflows.actionlists.sorting_config import (
+  build_sorting_config_pick_place_actionlist,
 )
 from sensoragent.workflows.actionlists.runtime import ActionListRuntime
 
@@ -242,6 +246,48 @@ class IndustrialActionListTest(TestCase):
     self.assertEqual(inputs["pick_staging_joints"]["joints"], joint_poses["pick_staging_joints"])
     self.assertEqual(inputs["carry_joints"]["joints"], joint_poses["carry_joints"])
     self.assertEqual(inputs["place_pre_approach_joints"]["joints"], joint_poses["place_staging_joints"])
+
+
+class SortingConfigActionListTest(TestCase):
+  def test_pick_uses_object_safe_opening(self) -> None:
+    actionlist = build_sorting_config_pick_place_actionlist()
+    pick_step = next(step for step in actionlist.steps if step.name == "pick")
+    plan_pick_step = next(step for step in actionlist.steps if step.name == "plan_pick")
+
+    self.assertEqual(
+      plan_pick_step.input["position_offset"],
+      [0.0, 0.0, "{{ object.pick_offset_z }}"],
+    )
+    self.assertEqual(pick_step.input["open_opening"], "{{ object.release_opening }}")
+    self.assertEqual(pick_step.input["close_opening"], 0.032)
+
+  def test_place_uses_same_object_safe_opening_for_release(self) -> None:
+    actionlist = build_sorting_config_pick_place_actionlist()
+    place_step = next(step for step in actionlist.steps if step.name == "place")
+
+    self.assertEqual(place_step.input["open_opening"], "{{ object.release_opening }}")
+
+  def test_config_detect_merges_default_pick_offset_into_object_profiles(self) -> None:
+    tool = VisionConfigDetectTool(
+      catalog={"滚轮": [-0.22, 0.27, 0.14, 0.0, 0.0, 0.0]},
+      release_profiles={
+        "default": {"opening": 0.0848, "place_z": 0.25, "pick_offset_z": 0.04},
+        "滚轮": {"opening": 0.063, "place_z": 0.22},
+      },
+    )
+
+    result = tool.run(
+      type(
+        "Call",
+        (),
+        {"input": {"query": "滚轮"}},
+      )()
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(result.output["release_opening"], 0.063)
+    self.assertEqual(result.output["release_z"], 0.22)
+    self.assertEqual(result.output["pick_offset_z"], 0.04)
 
 
 class LLMPlannerAllowedTargetsTest(TestCase):

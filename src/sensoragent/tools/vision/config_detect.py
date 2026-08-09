@@ -61,7 +61,10 @@ class VisionConfigDetectTool:
         error=f"OBJECT_NOT_FOUND: no configured object matches '{query}'",
       )
     label, pose_3d = match
-    profile = self._release_profiles.get(label, self._release_profiles.get("default", {}))
+    profile = {
+      **self._release_profiles.get("default", {}),
+      **self._release_profiles.get(label, {}),
+    }
     return ToolResult(
       tool=self.spec.name,
       success=True,
@@ -73,5 +76,6 @@ class VisionConfigDetectTool:
         "pose_3d": pose_3d,
         "release_opening": float(profile.get("opening", 0.0848)),
         "release_z": float(profile.get("place_z", 0.25)),
+        "pick_offset_z": float(profile.get("pick_offset_z", 0.04)),
       },
     )

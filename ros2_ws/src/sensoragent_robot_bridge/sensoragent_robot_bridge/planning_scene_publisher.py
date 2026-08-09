@@ -8,7 +8,7 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile
 
-from sensoragent_robot_bridge.scene_obstacles import camera_rig_collision_objects
+from sensoragent_robot_bridge.scene_obstacles import static_scene_collision_objects
 
 
 class StaticScenePublisher(Node):
@@ -27,7 +27,7 @@ class StaticScenePublisher(Node):
     def publish_scene(self) -> None:
         scene = PlanningScene()
         scene.is_diff = True
-        scene.world.collision_objects = camera_rig_collision_objects(
+        scene.world.collision_objects = static_scene_collision_objects(
             frame_id=self._base_frame,
         )
         self._publisher.publish(scene)

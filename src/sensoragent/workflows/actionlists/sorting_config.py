@@ -34,7 +34,7 @@ def build_sorting_config_pick_place_actionlist(
         input={
           "pose_3d": "{{ object.pose_3d }}",
           # Keep the gripper fingers clear of the tabletop in Gazebo.
-          "position_offset": [0.0, 0.0, 0.04],
+          "position_offset": [0.0, 0.0, "{{ object.pick_offset_z }}"],
           "approach_distance": 0.10,
           "pregrasp_distance": 0.04,
           "lift_height": 0.12,
@@ -51,6 +51,7 @@ def build_sorting_config_pick_place_actionlist(
           "pre_approach_joints": pick_staging,
           "speed": 0.35,
           "descent_speed": 0.25,
+          "open_opening": "{{ object.release_opening }}",
           "close_opening": 0.032,
           "gripper_force": 1.0,
         },
