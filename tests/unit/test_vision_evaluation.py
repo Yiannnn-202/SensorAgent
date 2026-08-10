@@ -195,6 +195,44 @@ def test_evaluate_manifest_writes_rows_and_summary(tmp_path: Path) -> None:
   assert (output_dir / "results.jsonl").is_file()
   assert (output_dir / "summary.json").is_file()
   assert len((output_dir / "results.jsonl").read_text(encoding="utf-8").splitlines()) == 3
+  assert evaluation.summary["ap50"] == pytest.approx(1.0, abs=1e-6)
+  assert evaluation.summary["map50_95"] == pytest.approx(0.7, abs=1e-6)
+
+
+def test_evaluate_manifest_reports_ranked_ap_at_multiple_iou_thresholds(
+  tmp_path: Path,
+) -> None:
+  for name in ("good", "borderline", "negative"):
+    (tmp_path / f"{name}.jpg").write_bytes(b"fixture-" + name.encode())
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(
+    manifest,
+    [
+      _sample("good", query="gear", expected={"found": True, "bbox_2d": [0, 0, 10, 10]}),
+      _sample(
+        "borderline",
+        query="gear",
+        expected={"found": True, "bbox_2d": [0, 0, 10, 10]},
+      ),
+      _sample("negative", query="gear", expected={"found": False}),
+    ],
+  )
+
+  predictions = {
+    "good": ([0, 0, 10, 10], 0.95),
+    "borderline": ([0, 0, 6, 10], 0.90),
+    "negative": ([0, 0, 10, 10], 0.85),
+  }
+
+  def runner(input_data: dict[str, object]) -> dict[str, object]:
+    bbox, confidence = predictions[Path(str(input_data["image_path"])).stem]
+    return {"success": True, "output": {"found": True, "bbox_2d": bbox, "confidence": confidence}}
+
+  evaluation = evaluate_manifest(manifest, runner=runner, output_dir=tmp_path / "out")
+
+  assert evaluation.summary["ap50"] > evaluation.summary["ap75"]
+  assert evaluation.summary["map50_95"] < evaluation.summary["ap50"]
+  assert evaluation.summary["ap_protocol"]["name"] == "query_level_single_best_box"
 
 
 def test_evaluate_manifest_records_runner_failure(tmp_path: Path) -> None:
@@ -234,16 +272,18 @@ def test_check_acceptance_fails_unavailable_or_out_of_range_metrics() -> None:
       min_recall=0.6,
       min_box_iou=0.5,
       min_mask_iou=0.5,
+      min_map50_95=0.9,
       max_center_error_px=10.0,
       max_warm_p95_ms=800.0,
     ),
   )
 
-  assert len(failures) == 4
+  assert len(failures) == 5
   assert any("precision" in failure for failure in failures)
   assert any("mean_box_iou is unavailable" in failure for failure in failures)
   assert any("mean_center_error_px" in failure for failure in failures)
   assert any("warm_p95" in failure for failure in failures)
+  assert any("map50_95" in failure for failure in failures)
 
 
 def test_evaluate_mask_iou_from_polygon(tmp_path: Path) -> None:

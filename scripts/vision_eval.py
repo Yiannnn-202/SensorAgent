@@ -73,6 +73,7 @@ def _parser() -> argparse.ArgumentParser:
   run.add_argument("--min-recall", type=float, default=None)
   run.add_argument("--min-box-iou", type=float, default=None)
   run.add_argument("--min-mask-iou", type=float, default=None)
+  run.add_argument("--min-map50-95", type=float, default=None)
   run.add_argument("--max-center-error-px", type=float, default=None)
   run.add_argument("--max-warm-p95-ms", type=float, default=None)
   return parser
@@ -101,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     min_recall=args.min_recall,
     min_box_iou=args.min_box_iou,
     min_mask_iou=args.min_mask_iou,
+    min_map50_95=args.min_map50_95,
     max_center_error_px=args.max_center_error_px,
     max_warm_p95_ms=args.max_warm_p95_ms,
   )

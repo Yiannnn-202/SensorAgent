@@ -59,6 +59,7 @@ class AcceptanceThresholds:
   min_recall: float | None = None
   min_box_iou: float | None = None
   min_mask_iou: float | None = None
+  min_map50_95: float | None = None
   max_center_error_px: float | None = None
   max_warm_p95_ms: float | None = None
 
@@ -433,6 +434,81 @@ def _mean(values: Sequence[float]) -> float | None:
   return round(float(np.mean(np.asarray(values))), 6) if values else None
 
 
+def _average_precision(rows: Sequence[dict[str, object]], iou_threshold: float) -> float | None:
+  """Compute single-query 101-point interpolated AP from persisted rows.
+
+  The current Tool returns one best candidate for one text query. This is a
+  deliberately explicit query-level protocol: one row is one image/query,
+  positives contain at most one expected box, and confidence ranks returned
+  candidates. It is not a replacement for COCO multi-instance mAP.
+  """
+
+  positives = sum(bool(row["expected"].get("found", False)) for row in rows)
+  if positives == 0:
+    return None
+  predictions = [
+    row
+    for row in rows
+    if bool(row["prediction"].get("found", False))
+  ]
+  predictions.sort(
+    key=lambda row: float(row["prediction"].get("confidence", 0.0) or 0.0),
+    reverse=True,
+  )
+  true_positive: list[float] = []
+  false_positive: list[float] = []
+  for row in predictions:
+    expected = row["expected"]
+    prediction = row["prediction"]
+    expected_box = expected.get("bbox_2d")
+    predicted_box = prediction.get("bbox_2d")
+    matched = (
+      bool(expected.get("found", False))
+      and _number_list(expected_box, 4)
+      and _number_list(predicted_box, 4)
+      and box_iou(expected_box, predicted_box) >= iou_threshold
+    )
+    true_positive.append(1.0 if matched else 0.0)
+    false_positive.append(0.0 if matched else 1.0)
+  if not true_positive:
+    return 0.0
+  cumulative_tp = np.cumsum(np.asarray(true_positive))
+  cumulative_fp = np.cumsum(np.asarray(false_positive))
+  recalls = cumulative_tp / float(positives)
+  precisions = cumulative_tp / np.maximum(cumulative_tp + cumulative_fp, 1e-12)
+  interpolated = []
+  for recall_level in np.linspace(0.0, 1.0, 101):
+    available = precisions[recalls >= recall_level]
+    interpolated.append(float(np.max(available)) if available.size else 0.0)
+  return round(float(np.mean(interpolated)), 6)
+
+
+def _average_precision_by_query(
+  rows: Sequence[dict[str, object]],
+  iou_threshold: float,
+) -> float | None:
+  """Average AP over text queries that have at least one positive sample."""
+
+  grouped: dict[str, list[dict[str, object]]] = {}
+  for row in rows:
+    grouped.setdefault(str(row["query"]), []).append(row)
+  values = [
+    score
+    for query_rows in grouped.values()
+    if (score := _average_precision(query_rows, iou_threshold)) is not None
+  ]
+  return _mean(values)
+
+
+def _average_precision_50_95(rows: Sequence[dict[str, object]]) -> float | None:
+  values = [
+    score
+    for threshold in np.arange(0.50, 0.951, 0.05)
+    if (score := _average_precision_by_query(rows, round(float(threshold), 2))) is not None
+  ]
+  return _mean(values)
+
+
 def _build_tool_input(
   sample: dict[str, object],
   *,
@@ -561,6 +637,15 @@ def _summary(rows: Sequence[dict[str, object]], warmup_runs: int) -> dict[str, o
     "mask_iou_sample_count": len(metric_values["mask_iou"]),
     "mean_center_error_px": _mean(metric_values["center_error_px"]),
     "center_error_sample_count": len(metric_values["center_error_px"]),
+    "ap50": _average_precision_by_query(rows, 0.50),
+    "ap75": _average_precision_by_query(rows, 0.75),
+    "map50_95": _average_precision_50_95(rows),
+    "ap_protocol": {
+      "name": "query_level_single_best_box",
+      "iou_thresholds": [round(float(value), 2) for value in np.arange(0.50, 0.951, 0.05)],
+      "interpolation": "101_point",
+      "warning": "Not COCO multi-instance mAP; preserve all candidates for that protocol.",
+    },
     "mask_output_rate": round(len(mask_outputs) / len(rows), 6) if rows else None,
     "latency_ms": {
       "warmup_runs_excluded": min(max(0, warmup_runs), len(rows)),
@@ -605,6 +690,12 @@ def check_acceptance(
       failures.append(
         f"latency_ms.warm_p95={value} is above {thresholds.max_warm_p95_ms}"
       )
+  if thresholds.min_map50_95 is not None:
+    value = summary.get("map50_95")
+    if value is None:
+      failures.append("map50_95 is unavailable but a threshold was requested")
+    elif float(value) < thresholds.min_map50_95:
+      failures.append(f"map50_95={value} is below {thresholds.min_map50_95}")
   execution_errors = int(summary.get("execution_error_count", 0))
   if execution_errors:
     failures.append(f"{execution_errors} sample(s) failed during model execution")
