@@ -19,6 +19,7 @@ class RobotPlaceSkill:
   def run(self, call: SkillCall, context: SkillContext) -> SkillResult:
     plan = PlacePlan.from_dict(call.input.get("plan"))
     speed = call.input.get("speed", 0.2)
+    post_release_lift = float(call.input.get("post_release_lift", 0.06))
     completed_steps: list[str] = []
     steps = []
     pre_approach_joints = call.input.get("pre_approach_joints")
@@ -43,8 +44,20 @@ class RobotPlaceSkill:
         },
       ),
     ])
+    lifted_retreat = plan.retreat
+    if post_release_lift > 0.0:
+      lifted_retreat = type(lifted_retreat)(
+        position=(
+          lifted_retreat.position[0],
+          lifted_retreat.position[1],
+          max(lifted_retreat.position[2], plan.place.position[2] + post_release_lift),
+        ),
+        orientation=lifted_retreat.orientation,
+        frame_id=lifted_retreat.frame_id,
+      )
+      steps.append(("post_release_lift", "robot.move_linear", {"pose": lifted_retreat.to_dict(), "speed": speed}))
     if retreat_joints is None:
-      steps.append(("retreat", "robot.move_linear", {"pose": plan.retreat.to_dict(), "speed": speed}))
+      steps.append(("retreat", "robot.move_linear", {"pose": lifted_retreat.to_dict(), "speed": speed}))
     else:
       steps.append(("retreat_joints", "robot.move_joints", {"joints": retreat_joints, "speed": speed}))
 

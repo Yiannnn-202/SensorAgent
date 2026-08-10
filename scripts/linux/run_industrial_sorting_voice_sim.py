@@ -50,6 +50,15 @@ def parse_sorting_command(text: str) -> dict[str, str]:
   return {"object_query": object_query, "target": f"bin_cell_{target_match.group(1)}"}
 
 
+def _text_mode_config(config):
+  tool_names = [
+    name
+    for name in config.tools.enabled
+    if not str(name).startswith("audio.listen")
+  ]
+  return replace(config, tools=replace(config.tools, enabled=tool_names))
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(description="Listen for one Chinese industrial sorting command.")
   parser.add_argument("--config", type=Path, default=ROOT / "configs" / "robot_sorting_sim.yaml")
@@ -70,6 +79,8 @@ def main() -> int:
     robot = dict(config.integrations.robot)
     robot["backend"] = "fake"
     active_config = replace(config, integrations=replace(config.integrations, robot=robot))
+  if args.text is not None:
+    active_config = _text_mode_config(active_config)
 
   bundle = build_agent(active_config)
   trace = TraceContext()
