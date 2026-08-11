@@ -78,6 +78,7 @@ the same status or design.
 - [视觉模块交接](team/vision_handoff_cn.md)
 - [视频文案用视觉模块单页](team/vision_video_slide_cn.md)
 - [8 月 5 日讨论后视觉任务闭环](team/vision_aug5_task_closure_cn.md)
+- [视觉场景化创新与队长汇报稿](team/vision_scene_aware_captain_brief_cn.md)
 
 ## Archive and assets
 
