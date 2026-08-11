@@ -62,6 +62,8 @@ class AcceptanceThresholds:
   min_map50_95: float | None = None
   max_center_error_px: float | None = None
   max_warm_p95_ms: float | None = None
+  max_scene_rejection_rate: float | None = None
+  max_ambiguity_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -519,6 +521,8 @@ def _build_tool_input(
   box_threshold: float | None,
   text_threshold: float | None,
   overlay_path: Path | None,
+  candidate_policy: str | None,
+  scene_profile: dict[str, object] | None,
 ) -> dict[str, object]:
   input_data: dict[str, object] = {
     "query": str(sample["query"]),
@@ -541,6 +545,10 @@ def _build_tool_input(
     "overlay_path": str(overlay_path) if overlay_path is not None else None,
   }
   input_data.update({key: value for key, value in optional.items() if value is not None})
+  if candidate_policy is not None:
+    input_data["candidate_policy"] = candidate_policy
+  if scene_profile is not None:
+    input_data["scene_profile"] = scene_profile
   return input_data
 
 
@@ -583,7 +591,12 @@ def _evaluate_row(
 
   inference_error = result.get("error")
   execution_ok = bool(result.get("success")) or (
-    not predicted_found and inference_error == "OBJECT_NOT_FOUND"
+    not predicted_found
+    and (
+      inference_error == "OBJECT_NOT_FOUND"
+      or str(inference_error or "").startswith("OBJECT_AMBIGUOUS")
+      or str(inference_error or "").startswith("OBJECT_NOT_FOUND:")
+    )
   )
   return {
     "sample_id": sample["sample_id"],
@@ -624,6 +637,36 @@ def _summary(rows: Sequence[dict[str, object]], warmup_runs: int) -> dict[str, o
   mask_outputs = [
     row for row in rows if row["prediction"].get("mask_polygons")
   ]
+  scene_rows = [
+    row
+    for row in rows
+    if row["prediction"].get("candidate_policy") == "scene_aware"
+  ]
+  scene_candidates: list[dict[str, object]] = []
+  for row in scene_rows:
+    prediction = row["prediction"]
+    if prediction.get("bbox_2d") is not None or prediction.get("scene_score") is not None:
+      scene_candidates.append(prediction)
+    alternatives = prediction.get("candidates")
+    if isinstance(alternatives, list):
+      scene_candidates.extend(
+        candidate for candidate in alternatives if isinstance(candidate, dict)
+      )
+  rejected_candidates = [
+    candidate for candidate in scene_candidates if candidate.get("rejection_reason")
+  ]
+  ambiguous_rows = [
+    row
+    for row in scene_rows
+    if isinstance(row["prediction"].get("ambiguity"), dict)
+    and bool(row["prediction"]["ambiguity"].get("is_ambiguous", False))
+  ]
+  scene_policy_times = [
+    float(row["prediction"]["timing_ms"]["scene_policy"])
+    for row in scene_rows
+    if isinstance(row["prediction"].get("timing_ms"), dict)
+    and row["prediction"]["timing_ms"].get("scene_policy") is not None
+  ]
   return {
     "sample_count": len(rows),
     "execution_error_count": sum(not row["execution_ok"] for row in rows),
@@ -647,6 +690,23 @@ def _summary(rows: Sequence[dict[str, object]], warmup_runs: int) -> dict[str, o
       "warning": "Not COCO multi-instance mAP; preserve all candidates for that protocol.",
     },
     "mask_output_rate": round(len(mask_outputs) / len(rows), 6) if rows else None,
+    "scene_aware": {
+      "sample_count": len(scene_rows),
+      "candidate_count": len(scene_candidates),
+      "scene_rejection_rate": (
+        round(len(rejected_candidates) / len(scene_candidates), 6)
+        if scene_candidates
+        else None
+      ),
+      "ambiguity_rate": (
+        round(len(ambiguous_rows) / len(scene_rows), 6) if scene_rows else None
+      ),
+      "policy_latency_ms": {
+        "mean": _mean(scene_policy_times),
+        "p50": _percentile(scene_policy_times, 50),
+        "p95": _percentile(scene_policy_times, 95),
+      },
+    },
     "latency_ms": {
       "warmup_runs_excluded": min(max(0, warmup_runs), len(rows)),
       "cold_first": wall_times[0] if wall_times else None,
@@ -696,6 +756,26 @@ def check_acceptance(
       failures.append("map50_95 is unavailable but a threshold was requested")
     elif float(value) < thresholds.min_map50_95:
       failures.append(f"map50_95={value} is below {thresholds.min_map50_95}")
+  scene_summary = summary.get("scene_aware") or {}
+  if thresholds.max_scene_rejection_rate is not None:
+    value = scene_summary.get("scene_rejection_rate")
+    if value is None:
+      failures.append(
+        "scene_rejection_rate is unavailable but a threshold was requested"
+      )
+    elif float(value) > thresholds.max_scene_rejection_rate:
+      failures.append(
+        "scene_rejection_rate="
+        f"{value} is above {thresholds.max_scene_rejection_rate}"
+      )
+  if thresholds.max_ambiguity_rate is not None:
+    value = scene_summary.get("ambiguity_rate")
+    if value is None:
+      failures.append("ambiguity_rate is unavailable but a threshold was requested")
+    elif float(value) > thresholds.max_ambiguity_rate:
+      failures.append(
+        f"ambiguity_rate={value} is above {thresholds.max_ambiguity_rate}"
+      )
   execution_errors = int(summary.get("execution_error_count", 0))
   if execution_errors:
     failures.append(f"{execution_errors} sample(s) failed during model execution")
@@ -716,6 +796,8 @@ def evaluate_manifest(
   warmup_runs: int = 1,
   thresholds: AcceptanceThresholds | None = None,
   tool_name: str = "vision.open_vocab_detect",
+  candidate_policy: str | None = None,
+  scene_profile: dict[str, object] | None = None,
 ) -> EvaluationRun:
   """Validate a manifest, run one persistent backend, and save report artifacts."""
 
@@ -743,6 +825,8 @@ def evaluate_manifest(
       box_threshold=box_threshold,
       text_threshold=text_threshold,
       overlay_path=overlay_path,
+      candidate_policy=candidate_policy,
+      scene_profile=scene_profile,
     )
     started = time.perf_counter()
     try:

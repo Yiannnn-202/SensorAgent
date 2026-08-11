@@ -734,6 +734,184 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertEqual(_grounding_prompt("第二个滚柱"), "roller")
     self.assertEqual(_grounding_prompt("扳手"), "wrench")
 
+  def test_scene_aware_policy_reranks_into_tabletop_roi(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.95, [160.0, 20.0, 190.0, 50.0]),
+        ("wrench", 0.62, [20.0, 20.0, 50.0, 50.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "wrench",
+          "candidate_policy": "scene_aware",
+          "scene_profile": {
+            "name": "competition_tabletop_test",
+            "workspace_roi": [0.0, 0.0, 120.0, 100.0],
+            "image_size": [200.0, 100.0],
+            "min_scene_score": 0.05,
+          },
+        },
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [20.0, 20.0, 50.0, 50.0])
+    self.assertEqual(result.output["candidate_policy"], "scene_aware")
+    self.assertEqual(result.output["scene_profile"], "competition_tabletop_test")
+    self.assertGreater(result.output["scene_score"], 0.0)
+    self.assertTrue(
+      result.output["candidates"][0]["rejection_reason"].startswith(
+        "outside_workspace_roi"
+      )
+    )
+    ContractValidator(ROOT / "contracts").validate_tool_output(
+      "vision.open_vocab_detect", result.output
+    )
+
+  def test_scene_aware_policy_rejects_forbidden_region(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("gear", 0.96, [5.0, 5.0, 35.0, 35.0]),
+        ("gear", 0.61, [70.0, 50.0, 100.0, 80.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "gear",
+          "candidate_policy": "scene_aware",
+          "scene_profile": {
+            "workspace_roi": [0.0, 0.0, 120.0, 100.0],
+            "forbidden_rois": [[0.0, 0.0, 45.0, 45.0]],
+          },
+        },
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [70.0, 50.0, 100.0, 80.0])
+    self.assertEqual(
+      result.output["candidates"][0]["rejection_reason"],
+      "forbidden_roi_overlap",
+    )
+
+  def test_scene_aware_policy_penalizes_boundary_clipping(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("gear", 0.95, [-20.0, 20.0, 20.0, 60.0]),
+        ("gear", 0.65, [50.0, 20.0, 80.0, 50.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "gear",
+          "candidate_policy": "scene_aware",
+          "scene_profile": {
+            "image_size": [100.0, 100.0],
+            "min_boundary_coverage": 0.90,
+          },
+        },
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [50.0, 20.0, 80.0, 50.0])
+    self.assertIn(
+      "boundary_clipped",
+      result.output["candidates"][0]["rejection_reason"],
+    )
+
+  def test_scene_aware_policy_rejects_duplicate_overlapping_candidates(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("gear", 0.90, [20.0, 20.0, 60.0, 60.0]),
+        ("gear", 0.88, [22.0, 22.0, 62.0, 62.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "gear",
+          "candidate_policy": "scene_aware",
+          "scene_profile": {"max_candidate_iou": 0.50},
+        },
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("OBJECT_NOT_FOUND", result.error or "")
+    self.assertEqual(len(result.output["candidates"]), 2)
+    self.assertTrue(
+      all(
+        "duplicate_candidate_overlap" in candidate["rejection_reason"]
+        for candidate in result.output["candidates"]
+      )
+    )
+
+  def test_scene_aware_policy_rejects_ambiguous_score_margin(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("roller", 0.72, [20.0, 20.0, 50.0, 50.0]),
+        ("roller", 0.70, [80.0, 20.0, 110.0, 50.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "roller",
+          "candidate_policy": "scene_aware",
+          "scene_profile": {
+            "workspace_roi": [0.0, 0.0, 140.0, 100.0],
+            "ambiguity_margin": 0.10,
+          },
+        },
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("OBJECT_AMBIGUOUS", result.error or "")
+    self.assertTrue(result.output["ambiguity"]["is_ambiguous"])
+    self.assertEqual(len(result.output["candidates"]), 2)
+
+  def test_baseline_policy_keeps_highest_detector_confidence(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("bolt", 0.95, [160.0, 20.0, 190.0, 50.0]),
+        ("bolt", 0.62, [20.0, 20.0, 50.0, 50.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "bolt",
+          "candidate_policy": "baseline",
+          "scene_profile": {
+            "workspace_roi": [0.0, 0.0, 120.0, 100.0],
+          },
+        },
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [160.0, 20.0, 190.0, 50.0])
+    self.assertNotIn("scene_score", result.output)
+    self.assertNotIn("candidates", result.output)
+
   def test_oserror_from_detector_maps_to_backend_error(self) -> None:
     result = VisionOpenVocabularyDetectTool(
       detector=_FakeRaisingBackend(OSError("connection timed out"))

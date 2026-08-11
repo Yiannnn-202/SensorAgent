@@ -235,6 +235,96 @@ def test_evaluate_manifest_reports_ranked_ap_at_multiple_iou_thresholds(
   assert evaluation.summary["ap_protocol"]["name"] == "query_level_single_best_box"
 
 
+def test_evaluate_manifest_reports_scene_aware_rejection_and_ambiguity_metrics(
+  tmp_path: Path,
+) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(
+    manifest,
+    [_sample("sample", expected={"found": True, "bbox_2d": [2, 2, 8, 8]})],
+  )
+
+  def runner(input_data: dict[str, object]) -> dict[str, object]:
+    assert input_data["candidate_policy"] == "scene_aware"
+    assert input_data["scene_profile"] == {"name": "competition_tabletop_v1"}
+    return {
+      "success": True,
+      "output": {
+        "found": True,
+        "confidence": 0.9,
+        "bbox_2d": [2, 2, 8, 8],
+        "candidate_policy": "scene_aware",
+        "scene_score": 0.82,
+        "ambiguity": {
+          "is_ambiguous": False,
+          "score_margin": 0.2,
+          "required_margin": 0.03,
+        },
+        "timing_ms": {"scene_policy": 2.5},
+        "candidates": [
+          {
+            "found": True,
+            "confidence": 0.95,
+            "bbox_2d": [90, 90, 100, 100],
+            "rejection_reason": "outside_workspace_roi",
+          }
+        ],
+      },
+    }
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=runner,
+    output_dir=tmp_path / "out",
+    candidate_policy="scene_aware",
+    scene_profile={"name": "competition_tabletop_v1"},
+  )
+
+  scene_summary = evaluation.summary["scene_aware"]
+  assert scene_summary["sample_count"] == 1
+  assert scene_summary["candidate_count"] == 2
+  assert scene_summary["scene_rejection_rate"] == 0.5
+  assert scene_summary["ambiguity_rate"] == 0.0
+  assert scene_summary["policy_latency_ms"]["p50"] == 2.5
+
+
+def test_scene_aware_ambiguity_is_a_measured_rejection_not_execution_error(
+  tmp_path: Path,
+) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(manifest, [_sample("sample")])
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=lambda _: {
+      "success": False,
+      "output": {
+        "found": False,
+        "confidence": 0.0,
+        "candidate_policy": "scene_aware",
+        "ambiguity": {
+          "is_ambiguous": True,
+          "score_margin": 0.01,
+          "required_margin": 0.03,
+        },
+        "timing_ms": {"scene_policy": 1.2},
+        "candidates": [
+          {"found": True, "confidence": 0.80, "scene_score": 0.70},
+          {"found": True, "confidence": 0.79, "scene_score": 0.69},
+        ],
+      },
+      "error": "OBJECT_AMBIGUOUS: two candidates are too close",
+    },
+    output_dir=tmp_path / "out",
+  )
+
+  assert evaluation.summary["execution_error_count"] == 0
+  assert evaluation.summary["scene_aware"]["ambiguity_rate"] == 1.0
+  assert evaluation.summary["scene_aware"]["candidate_count"] == 2
+
+
 def test_evaluate_manifest_records_runner_failure(tmp_path: Path) -> None:
   (tmp_path / "sample.jpg").write_bytes(b"fixture")
   manifest = tmp_path / "dataset.jsonl"

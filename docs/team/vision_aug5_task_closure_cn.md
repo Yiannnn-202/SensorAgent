@@ -14,8 +14,12 @@
 | 整理公开数据集与训练证据 | 已核对 Mechanical Parts Dataset 2022 的 2024 张图片、9497 个框、四个宽类别、许可证和中间 checkpoint 边界 | `docs/guides/vision/competition-evaluation-framework-cn.md` |
 | 配合视频文案包装 | 已整理单页内容，并生成可编辑原生 PPTX；真实指标、能力边界和 35 秒讲解词分别放在页面与演讲者备注 | `docs/team/vision_video_slide_cn.md`、本地 PPTX 交付物 |
 | 验证现有训练入口 | `red_block_v2` 训练预检通过，48 张 train + 4 张 val、20 个场景，无场景泄漏 | 本地 `--dry-run` 结果 |
+| 面向比赛桌面的模块创新 | 已实现可选 `scene_aware` 候选重排：工作区 ROI、禁抓区、边界裁切、尺寸/长宽比先验、候选重叠和歧义停机；baseline 默认行为不变 | `src/sensoragent/tools/vision/open_vocab.py`、`configs/vision_scene_aware.example.yaml`、`tests/unit/test_vision_open_vocab.py` |
+| 创新模块评估接口 | 已在评估摘要增加 `scene_rejection_rate`、`ambiguity_rate`、`policy_latency_ms`，支持同一 test 的 baseline/scene-aware 对照 | `src/sensoragent/evaluation/vision.py`、`scripts/vision_eval.py`、`tests/unit/test_vision_evaluation.py` |
 
 当前评估代码的 AP/mAP 是适配现有 Tool 的 query 级单目标协议。它不会冒充 COCO 多实例 mAP；最终多物体场景需要保存每个 query 的全部候选框后再补标准 COCO 评测。
+
+新增的桌面场景创新是二维候选选择和风险输出，不是 RGB-D 定位或机械臂抓取规划。示例 profile 的 424x240 相机尺寸和 ROI 需要在最终比赛场景冻结后重新测量；当前没有把它们当成最终比赛指标。
 
 ## 收到场景数据后我立即执行
 
@@ -26,6 +30,7 @@
 5. 只在 val 选择 checkpoint、box threshold 和 text threshold。
 6. 在固定 test 输出 precision、recall、AP/mAP、box/mask IoU、中心误差、P50/P95 延迟、失败样本和 overlay。
 7. 交付完整 checkpoint、配置、manifest/checkpoint 哈希、用途说明和限制说明。
+8. 在同一固定 test 上分别运行 baseline 和 scene-aware，比较精度/召回/AP、IoU、总耗时，以及场景拒绝率、歧义率和策略额外延迟。
 
 没有新数据时，我不会重复增加 `red-block` epoch，也不会提前添加未确认的 `wrench` 或 `screwdriver` 类别。
 

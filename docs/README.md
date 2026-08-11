@@ -37,6 +37,7 @@ the same status or design.
 - [Open-vocabulary vision](guides/vision/open-vocabulary.md)
 - [Public datasets and licenses](guides/vision/public-datasets.md)
 - [Competition vision evaluation and data handoff](guides/vision/competition-evaluation-framework-cn.md)
+- [Tabletop scene-aware candidate policy](guides/vision/scene-aware-candidate-policy-cn.md)
 - [SAM3 suitability assessment](guides/vision/sam3-assessment.md)
 - [Gazebo vision VM setup](guides/vision/gazebo-vm-setup.md)
 - [Gazebo RGB-D ActionList test](guides/vision/gazebo-actionlist-test.md)

@@ -35,6 +35,47 @@ class _BoxDetector:
       source="fake_grounding_dino",
     )
 
+  def detect_all(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+  ) -> list[VisionDetection]:
+    return [
+      self.detect(
+        query=query,
+        image_path=image_path,
+        depth_path=depth_path,
+        options=options,
+      )
+    ]
+
+
+class _SceneDetector:
+  def detect_all(self, **kwargs) -> list[VisionDetection]:
+    del kwargs
+    return [
+      VisionDetection(
+        found=True,
+        label="red block",
+        confidence=0.95,
+        bbox_2d=[80.0, 1.0, 95.0, 16.0],
+        source="fake_grounding_dino",
+      ),
+      VisionDetection(
+        found=True,
+        label="red block",
+        confidence=0.70,
+        bbox_2d=[10.0, 10.0, 30.0, 30.0],
+        source="fake_grounding_dino",
+      ),
+    ]
+
+  def detect(self, **kwargs) -> VisionDetection:
+    return self.detect_all(**kwargs)[0]
+
 
 class _MaskRefiner:
   def segment(self, *, image_path: str, bbox_2d, device: str | None):
@@ -131,3 +172,33 @@ def test_grounded_sam2_config_registers_without_loading_models() -> None:
   bundle = build_agent_from_config(ROOT / "configs" / "vision_grounded_sam2.yaml")
 
   assert bundle.tool_registry.names() == ["vision.grounded_sam2"]
+
+
+def test_scene_aware_example_config_reaches_the_tool() -> None:
+  bundle = build_agent_from_config(
+    ROOT / "configs" / "vision_scene_aware.example.yaml"
+  )
+  tool = bundle.tool_registry.get("vision.grounded_sam2")
+
+  assert tool._candidate_policy == "scene_aware"
+  assert tool._scene_profile.name == "industrial_tabletop_v1"
+  assert tool._scene_profile.image_size == (424.0, 240.0)
+
+
+def test_grounded_sam2_refines_the_scene_aware_winner() -> None:
+  tool = VisionGroundedSam2Tool(
+    detector=_SceneDetector(),
+    mask_refiner=_MaskRefiner(),
+  )
+
+  result = tool.run(
+    _call(
+      candidate_policy="scene_aware",
+      scene_profile={"workspace_roi": [0.0, 0.0, 50.0, 50.0]},
+    )
+  )
+
+  assert result.success
+  assert result.output["bbox_2d"] == [10.0, 10.0, 30.0, 30.0]
+  assert result.output["candidate_policy"] == "scene_aware"
+  assert result.output["mask_polygons"]

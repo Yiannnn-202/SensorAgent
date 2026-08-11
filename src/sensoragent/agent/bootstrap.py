@@ -150,6 +150,8 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       ),
       base_frame=str(vision_config.get("base_frame", "base_link")),
       workspace=dict(config.scene.workspace or {}),
+      candidate_policy=str(vision_config.get("candidate_policy", "baseline")),
+      scene_profile=vision_config.get("scene_profile"),
     )
     if tool_name == "vision.grounded_sam2":
       return VisionGroundedSam2Tool(**common_settings)
