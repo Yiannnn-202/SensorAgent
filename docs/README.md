@@ -38,6 +38,7 @@ the same status or design.
 - [Public datasets and licenses](guides/vision/public-datasets.md)
 - [Competition vision evaluation and data handoff](guides/vision/competition-evaluation-framework-cn.md)
 - [Tabletop scene-aware candidate policy](guides/vision/scene-aware-candidate-policy-cn.md)
+- [XH-202607 vision module technical packaging](guides/vision/competition-vision-module-packaging-cn.md)
 - [SAM3 suitability assessment](guides/vision/sam3-assessment.md)
 - [Gazebo vision VM setup](guides/vision/gazebo-vm-setup.md)
 - [Gazebo RGB-D ActionList test](guides/vision/gazebo-actionlist-test.md)
@@ -78,6 +79,7 @@ the same status or design.
 - [视觉模块交接](team/vision_handoff_cn.md)
 - [视频文案用视觉模块单页](team/vision_video_slide_cn.md)
 - [8 月 5 日讨论后视觉任务闭环](team/vision_aug5_task_closure_cn.md)
+- [XH-202607 视觉模块比赛交付清单](team/vision_competition_delivery_checklist_cn.md)
 
 ## Archive and assets
 
