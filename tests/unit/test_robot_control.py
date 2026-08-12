@@ -251,7 +251,10 @@ class RobotControlTest(TestCase):
           tool_runtime.calls,
         )
         self.assertIn(
-          ("robot.move_pose", {"pose": plan.grasp.to_dict(), "speed": 0.2}),
+          (
+            "robot.move_pose",
+            {"pose": plan.grasp.to_dict(), "speed": 0.2, "avoid_collisions": True},
+          ),
           tool_runtime.calls,
         )
         self.assertTrue(
