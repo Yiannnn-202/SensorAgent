@@ -11,7 +11,7 @@
         </inertia>
       </inertial>
       <collision name="collision">
-        <geometry><cylinder><radius>0.020</radius><length>0.080</length></cylinder></geometry>
+        <geometry><cylinder><radius>0.020</radius><length>0.050</length></cylinder></geometry>
         <surface>
           <friction>
             <ode>
@@ -32,8 +32,12 @@
         </surface>
       </collision>
       <visual name="visual">
-        <geometry><cylinder><radius>0.020</radius><length>0.080</length></cylinder></geometry>
-        <material><diffuse>0.80 0.18 0.12 1</diffuse></material>
+        <geometry><cylinder><radius>0.020</radius><length>0.050</length></cylinder></geometry>
+        <material>
+          <ambient>0.42 0.43 0.44 1</ambient>
+          <diffuse>0.58 0.59 0.60 1</diffuse>
+          <specular>0.35 0.35 0.35 1</specular>
+        </material>
       </visual>
     </link>
   </model>

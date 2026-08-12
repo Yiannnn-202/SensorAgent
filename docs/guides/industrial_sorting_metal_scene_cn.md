@@ -21,9 +21,17 @@ bash scripts/linux/run_rm65_b_sim.sh \
 
 ## 初始布局
 
-七类金属零件散放在工作台一侧，3x3 料箱位于另一侧且初始为空，用于语音指令驱动的抓取和分格放置。料箱为 `351 x 351 mm`，每个格位约有 `105 x 105 mm` 的净宽和 `55 mm` 外壁，供 Robotiq 2F-85 自上而下进入。
+场景保留滚轮、六角螺母和短螺栓三类零件，每类 3 个，共 9 个。零件在原取料区域内按三排排列，world 坐标如下：
 
-圆柱、轴和螺栓以横放姿态初始化，避免仿真开始后滚动。料箱墙体和分隔条均有碰撞体，可防止零件跨格。
+| 类别 | X 坐标 | Y 坐标 | 姿态 |
+| --- | --- | --- | --- |
+| 短螺栓 | `0.12 / 0.22 / 0.32` | `-0.02` | 头部朝下、细杆朝上 |
+| 六角螺母 | `0.12 / 0.22 / 0.32` | `-0.13` | 竖直，偏航角分别为 `-15 / 0 / 15` 度 |
+| 滚轮 | `0.12 / 0.22 / 0.32` | `-0.24` | 横放，长轴沿 world X |
+
+100 mm 的同排间距和 110 mm 的排间距在保持原工作区的同时，为 Robotiq 2F-85 的俯视抓取留出间隙。所有零件使用低高光浅灰材质，减少视觉模型对类别颜色的依赖。3x3 料箱位于另一侧且初始为空；料箱为 `351 x 351 mm`，每个格位约有 `105 x 105 mm` 的净宽和 `55 mm` 外壁。
+
+当前规则布局是可达性与稳定性基线。赛题要求的密集、混杂、倾倒和倒放状态应在该基线完成 Gazebo 验收后作为独立难度场景加入，避免同时改变几何、抓取姿态和决策逻辑。
 
 ## 抓取姿态
 
@@ -47,12 +55,12 @@ cd ~/SensorAgent
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_voice_sim.py --execute --duration 15
 ```
 
-支持的零件名：`方块`、`阶梯轴`、`中空圆套`、`滚轮`（或“滚柱”）、`六角螺母`、`短螺栓`、`法兰套`。目标格位为 `1号格` 至 `8号格`，分别对应 `bin_cell_1` 至 `bin_cell_8`。
+支持的零件名：`滚轮`（或“滚柱”）、`六角螺母`、`短螺栓`。目标格位为 `1号格` 至 `8号格`，分别对应 `bin_cell_1` 至 `bin_cell_8`。当前确定性语音入口按类别选择每排的中间实例；同类多实例的空间指代应由 RGB-D 视觉入口处理。
 
 例如：
 
 ```text
-把方块放到1号格
+把六角螺母放到1号格
 将短螺栓放到六号格
 把滚柱放到第3格
 ```
@@ -60,7 +68,7 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_voice_si
 可先用文本和假机器人检查指令映射，无需启动 Gazebo 或使用麦克风：
 
 ```bash
-PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_voice_sim.py --text "把方块放到1号格"
+PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_voice_sim.py --text "把六角螺母放到1号格"
 ```
 
 ## 常驻分拣会话
@@ -80,7 +88,7 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_session.
 会话启动后输入：
 
 ```text
-把方块放到1号格
+把六角螺母放到1号格
 将短螺栓放到六号格
 退出
 ```

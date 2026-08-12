@@ -29,10 +29,8 @@ from sensoragent.schemas import AgentRequest, TraceContext  # noqa: E402
 
 ACTIONLIST = "industrial.sorting_config_pick_place_actionlist"
 _OBJECT_ALIASES = {
-  "方块": "方块", "金属方块": "方块", "阶梯轴": "阶梯轴", "中空圆套": "中空圆套",
-  "圆套": "中空圆套", "滚轮": "滚轮", "滚柱": "滚轮", "六角螺母": "六角螺母",
-  "螺母": "六角螺母", "短螺栓": "短螺栓", "螺栓": "短螺栓", "法兰套": "法兰套",
-  "法兰衬套": "法兰套",
+  "滚轮": "滚轮", "滚柱": "滚轮", "六角螺母": "六角螺母",
+  "螺母": "六角螺母", "短螺栓": "短螺栓", "螺栓": "短螺栓",
 }
 _CHINESE_DIGITS = str.maketrans("一二三四五六七八", "12345678")
 

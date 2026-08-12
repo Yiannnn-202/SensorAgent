@@ -160,6 +160,78 @@ class RobotBridgePackageTest(TestCase):
     self.assertIn("<box><size>0.040 0.040 0.040</size></box>", block_model)
     self.assertIn("<mu>20.0</mu>", block_model)
 
+  def test_sorting_world_has_three_reachable_instances_per_retained_class(self) -> None:
+    bringup_root = ROOT / "ros2_ws" / "src" / "sensoragent_rm65_b_bringup"
+    world_root = ET.parse(
+      bringup_root / "worlds" / "industrial_sorting_metal_pgs.sdf"
+    ).getroot()
+    world = world_root.find("world")
+    self.assertIsNotNone(world)
+
+    model_names = {
+      model.get("name")
+      for model in world.findall("model")
+      if model.get("name", "").startswith("metal_")
+    }
+    include_names = {
+      include.findtext("name")
+      for include in world.findall("include")
+      if (include.findtext("name") or "").startswith("metal_")
+    }
+    part_names = model_names | include_names
+    self.assertEqual(
+      part_names,
+      {
+        f"metal_{category}_{index:02d}"
+        for category in ("roller", "hex_nut", "short_bolt")
+        for index in range(1, 4)
+      },
+    )
+
+    part_poses = {
+      node.get("name") or node.findtext("name"): node.findtext("pose")
+      for node in [*world.findall("model"), *world.findall("include")]
+      if (node.get("name") or node.findtext("name") or "").startswith("metal_")
+    }
+    self.assertEqual(
+      [part_poses[f"metal_roller_{index:02d}"] for index in range(1, 4)],
+      [
+        "0.120 -0.240 0.320 0 1.570796 0",
+        "0.220 -0.240 0.320 0 1.570796 0",
+        "0.320 -0.240 0.320 0 1.570796 0",
+      ],
+    )
+    self.assertEqual(
+      [part_poses[f"metal_hex_nut_{index:02d}"] for index in range(1, 4)],
+      [
+        "0.120 -0.130 0.3125 0 0 -0.261799",
+        "0.220 -0.130 0.3125 0 0 0",
+        "0.320 -0.130 0.3125 0 0 0.261799",
+      ],
+    )
+    bolt_poses = [
+      part_poses[f"metal_short_bolt_{index:02d}"]
+      for index in range(1, 4)
+    ]
+    self.assertEqual(
+      bolt_poses,
+      [
+        "0.120 -0.020 0.3325 3.141593 0 0",
+        "0.220 -0.020 0.3325 3.141593 0 0",
+        "0.320 -0.020 0.3325 3.141593 0 0",
+      ],
+    )
+
+    for model_name in (
+      "sensoragent_part_roller",
+      "sensoragent_part_hex_nut",
+      "sensoragent_part_short_bolt",
+    ):
+      model_source = (
+        bringup_root / "models" / model_name / "model.sdf"
+      ).read_text(encoding="utf-8")
+      self.assertIn("<diffuse>0.58 0.59 0.60 1</diffuse>", model_source)
+
   def test_gripper_mapping_matches_simulated_action_semantics(self) -> None:
     maximum = 0.0848
 
