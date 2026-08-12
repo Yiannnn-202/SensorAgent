@@ -30,51 +30,38 @@ source /opt/ros/humble/setup.bash
 source ros2_ws/install/setup.bash
 
 python3 scripts/linux/collect_randomized_sorting_dataset.py \
-  --dataset-dir data/vision/sorting_clear_v1 \
+  --dataset-dir data/vision/sorting_variable_count_v1 \
   --count 100 \
   --seed 20260812 \
-  --occlusion-rate 0 \
+  --min-per-class 0 \
+  --max-per-class 3 \
   --position-jitter 0.0075 \
   --settle-seconds 1
 ```
 
 The collector matches the current sorting world: three rollers, three hex nuts,
-and three short bolts. It randomly assigns all nine instances to the current
-3x3 safe grid and applies up to 7.5 mm of XY jitter. The default has no overlap,
-keeps rollers horizontal, keeps nuts upright, and keeps short bolts head-down
-with their narrow shafts pointing up.
+and three short bolts. For every image it independently samples 0-3 visible
+instances of each class. Unselected entities are moved to parking positions
+outside the camera view. Selected instances are randomly assigned to the current
+3x3 safe grid with up to 7.5 mm of XY jitter. The default prevents a completely
+empty image but allows any individual class to have zero instances. Add
+`--allow-empty-scene` if fully empty negative images are also required.
 
 Images for annotation are in:
 
 ```text
-data/vision/sorting_clear_v1/roboflow_images/
+data/vision/sorting_variable_count_v1/roboflow_images/
 ```
 
 The `raw/` directory preserves RGB arrays, depth, camera information, and TF.
-`randomized_manifest.jsonl` records the Gazebo entity, position, pitch, and yaw
-for each image, and is only for label checking or later 3D evaluation.
-
-## Optional Occlusion Set
-
-Collect a small separate difficult set after clear images are labeled:
-
-```bash
-python3 scripts/linux/collect_randomized_sorting_dataset.py \
-  --dataset-dir data/vision/sorting_occlusion_v1 \
-  --count 30 \
-  --seed 20260813 \
-  --occlusion-rate 0.15 \
-  --settle-seconds 1
-```
-
-Do not use heavily overlapped images as the majority of the first training set.
-For any fully hidden object, do not create a mask or box. Label only visible
-object regions.
+`randomized_manifest.jsonl` records `class_counts`, `empty_classes`, and every
+Gazebo entity's active/parked state, position, roll, pitch, and yaw. It is for
+label checking and later 3D evaluation; it does not replace image annotations.
 
 ## Classes
 
-Use these exact English class names. Each image contains three instances of
-each class:
+Use these exact English class names. Each image contains a random 0-3 instances
+of each class:
 
 ```text
 roller
