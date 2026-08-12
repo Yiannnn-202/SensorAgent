@@ -38,3 +38,10 @@ class IndustrialSortingVoiceScriptTest(TestCase):
     module = _load_module()
     with self.assertRaises(ValueError):
       module.parse_sorting_command("把方块放好")
+
+  def test_parses_ninth_cell_in_physical_three_by_three_bin(self) -> None:
+    module = _load_module()
+    self.assertEqual(
+      module.parse_sorting_command("把螺母放到九号格"),
+      {"object_query": "六角螺母", "target": "bin_cell_9"},
+    )

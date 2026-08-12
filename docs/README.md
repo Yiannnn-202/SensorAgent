@@ -59,6 +59,7 @@ the same status or design.
 
 - [Intent to ActionList](guides/workflows/intent-to-actionlist.md)
 - [Failure detection and recovery](guides/workflows/failure-recovery.md)
+- [Competition multi-instance sorting session](guides/workflows/competition-sorting-session.md)
 
 ### Operations
 

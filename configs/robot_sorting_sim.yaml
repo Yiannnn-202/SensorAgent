@@ -16,6 +16,8 @@ tools:
     - gripper.close
     - gripper.get_state
     - vision.config_detect
+    - recovery.classify_failure
+    - recovery.plan
     - audio.listen_transcribe
     - audio.listen_vad_transcribe
     - audio.transcribe
@@ -62,6 +64,25 @@ scene:
     observe_joints: [-0.000033, -1.039069, 1.044687, 0.000004, 1.575183, -0.000097]
     pick_staging_joints: [-0.625491, 0.049990, 1.435840, 0.0, 1.655755, 2.516105]
     place_staging_joints: [-0.625491, 0.049990, 1.435840, 0.0, 1.655755, 2.516105]
+  object_ontology:
+    roller:
+      display_name: 滚轮
+      aliases: [滚轮, 滚柱, 圆柱滚轮, 金属滚轮, roller]
+      vision_queries: [roller, industrial metal roller, cylindrical roller part]
+      instance_ids: [metal_roller_01, metal_roller_02, metal_roller_03]
+      grasp_opening: 0.032
+    hex_nut:
+      display_name: 六角螺母
+      aliases: [六角螺母, 螺母, 六边形螺母, 罗母, hex nut]
+      vision_queries: [hex nut, industrial hexagonal nut]
+      instance_ids: [metal_hex_nut_01, metal_hex_nut_02, metal_hex_nut_03]
+      grasp_opening: 0.032
+    short_bolt:
+      display_name: 短螺栓
+      aliases: [短螺栓, 螺栓, 短螺丝, 倒放螺栓, short bolt]
+      vision_queries: [short bolt, metal bolt with narrow shaft]
+      instance_ids: [metal_short_bolt_01, metal_short_bolt_02, metal_short_bolt_03]
+      grasp_opening: 0.020
   objects:
     # Generic category names retain the center instance for deterministic demos.
     roller: [-0.2625, 0.22, 0.14, 0.0, 0.0, 0.0]
@@ -111,6 +132,7 @@ scene:
     bin_cell_6: {position: [-0.360, -0.210, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
     bin_cell_7: {position: [-0.167, -0.323, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
     bin_cell_8: {position: [-0.280, -0.323, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+    bin_cell_9: {position: [-0.393, -0.323, 0.25], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
   workspace:
     frame: base_link
     x: [-0.59, -0.09]

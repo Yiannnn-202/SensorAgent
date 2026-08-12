@@ -55,7 +55,7 @@ cd ~/SensorAgent
 PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_voice_sim.py --execute --duration 15
 ```
 
-支持的零件名：`滚轮`（或“滚柱”）、`六角螺母`、`短螺栓`。目标格位为 `1号格` 至 `8号格`，分别对应 `bin_cell_1` 至 `bin_cell_8`。当前确定性语音入口按类别选择每排的中间实例；同类多实例的空间指代应由 RGB-D 视觉入口处理。
+支持的零件名：`滚轮`（或“滚柱”）、`六角螺母`、`短螺栓`。目标格位为 `1号格` 至 `9号格`，分别对应 `bin_cell_1` 至 `bin_cell_9`。旧确定性语音入口按类别选择每排的中间实例；同类多实例任务应使用下方的竞赛会话入口。
 
 例如：
 
@@ -94,3 +94,16 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_industrial_sorting_session.
 ```
 
 `--execute` 会连接 `http://127.0.0.1:8765` 的 Gazebo/MoveIt 机器人桥；不加 `--execute` 时自动切换到 fake robot backend 做干跑。单条指令失败不会结束会话，Agent 会打印该轮 JSON 结果并继续等待下一条指令。`退出`、`exit` 或 `quit` 用于结束会话。
+
+面向当前三类九实例场景，应优先使用带语义接地、歧义拒绝、世界状态和有限
+恢复的新竞赛入口：
+
+```bash
+PYTHONPATH=src .venv312/bin/python \
+  scripts/linux/run_competition_sorting_session.py \
+  --mode text \
+  --execute
+```
+
+真实语音将 `--mode text` 改为 `--mode voice`。完整说明见
+[竞赛多实例分拣会话](workflows/competition-sorting-session.md)。
