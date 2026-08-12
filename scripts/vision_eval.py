@@ -68,13 +68,28 @@ def _parser() -> argparse.ArgumentParser:
   run.add_argument("--save-overlays", action="store_true")
   run.add_argument("--box-threshold", type=float, default=None)
   run.add_argument("--text-threshold", type=float, default=None)
+  run.add_argument(
+    "--candidate-policy",
+    choices=("baseline", "scene_aware"),
+    default=None,
+    help="Optional candidate policy override for tabletop scene evaluation.",
+  )
+  run.add_argument(
+    "--scene-profile",
+    type=Path,
+    default=None,
+    help="YAML or JSON scene-profile file used with --candidate-policy scene_aware.",
+  )
   run.add_argument("--warmup-runs", type=int, default=1)
   run.add_argument("--min-precision", type=float, default=None)
   run.add_argument("--min-recall", type=float, default=None)
   run.add_argument("--min-box-iou", type=float, default=None)
   run.add_argument("--min-mask-iou", type=float, default=None)
+  run.add_argument("--min-map50-95", type=float, default=None)
   run.add_argument("--max-center-error-px", type=float, default=None)
   run.add_argument("--max-warm-p95-ms", type=float, default=None)
+  run.add_argument("--max-scene-rejection-rate", type=float, default=None)
+  run.add_argument("--max-ambiguity-rate", type=float, default=None)
   return parser
 
 
@@ -101,9 +116,36 @@ def main(argv: list[str] | None = None) -> int:
     min_recall=args.min_recall,
     min_box_iou=args.min_box_iou,
     min_mask_iou=args.min_mask_iou,
+    min_map50_95=args.min_map50_95,
     max_center_error_px=args.max_center_error_px,
     max_warm_p95_ms=args.max_warm_p95_ms,
+    max_scene_rejection_rate=args.max_scene_rejection_rate,
+    max_ambiguity_rate=args.max_ambiguity_rate,
   )
+  scene_profile = None
+  if args.scene_profile is not None:
+    try:
+      raw_profile = args.scene_profile.read_text(encoding="utf-8")
+      try:
+        scene_profile = json.loads(raw_profile)
+      except json.JSONDecodeError:
+        import yaml
+
+        scene_profile = yaml.safe_load(raw_profile)
+      if isinstance(scene_profile, dict) and "scene_profile" not in scene_profile:
+        nested = (
+          scene_profile.get("integrations", {})
+          .get("vision", {})
+          if isinstance(scene_profile.get("integrations"), dict)
+          else {}
+        )
+        if isinstance(nested, dict) and isinstance(nested.get("scene_profile"), dict):
+          scene_profile = nested["scene_profile"]
+      if not isinstance(scene_profile, dict):
+        raise ValueError("scene profile must contain a mapping/object")
+    except (OSError, ValueError, ImportError) as exc:
+      print(f"invalid --scene-profile: {exc}", file=sys.stderr)
+      return 2
   try:
     evaluation = evaluate_manifest(
       args.manifest,
@@ -118,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
       warmup_runs=args.warmup_runs,
       thresholds=thresholds,
       tool_name=args.tool,
+      candidate_policy=args.candidate_policy,
+      scene_profile=scene_profile,
     )
   except ValueError as exc:
     print(str(exc), file=sys.stderr)
