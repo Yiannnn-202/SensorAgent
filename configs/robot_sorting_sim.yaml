@@ -8,6 +8,7 @@ tools:
     - robot.move_joints
     - robot.move_pose
     - robot.move_linear
+    - robot.stop
     - robot.plan_top_down_pick
     - robot.plan_place
     - robot.resolve_place_target

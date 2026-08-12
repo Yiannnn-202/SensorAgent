@@ -34,11 +34,15 @@ python3 scripts/linux/collect_randomized_sorting_dataset.py \
   --count 100 \
   --seed 20260812 \
   --occlusion-rate 0 \
+  --position-jitter 0.0075 \
   --settle-seconds 1
 ```
 
-The default is no overlap. It keeps all seven parts separated and preserves the
-horizontal orientation of `roller` and `stepped_shaft`.
+The collector matches the current sorting world: three rollers, three hex nuts,
+and three short bolts. It randomly assigns all nine instances to the current
+3x3 safe grid and applies up to 7.5 mm of XY jitter. The default has no overlap,
+keeps rollers horizontal, keeps nuts upright, and keeps short bolts head-down
+with their narrow shafts pointing up.
 
 Images for annotation are in:
 
@@ -69,16 +73,13 @@ object regions.
 
 ## Classes
 
-Use these exact English class names:
+Use these exact English class names. Each image contains three instances of
+each class:
 
 ```text
-block
 roller
-hollow_sleeve
-stepped_shaft
 hex_nut
 short_bolt
-flange_bushing
 ```
 
 Use instance masks when the annotation tool supports them; otherwise use tight

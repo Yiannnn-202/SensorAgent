@@ -51,6 +51,7 @@ the same status or design.
 - [Industrial Gazebo environment](guides/simulation/industrial-environment.md)
 - [Gazebo pick test](guides/simulation/gazebo-pick-test.md)
 - [Gazebo pick/place test](guides/simulation/gazebo-pick-place-test.md)
+- [Sorting-scene grasp matrix test](guides/simulation/sorting-scene-grasp-matrix-test.md)
 - [Gazebo recovery demo](guides/simulation/gazebo-recovery-demo.md)
 - [Create a grasping block](guides/simulation/create-grasp-block.md)
 
