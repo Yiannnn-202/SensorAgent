@@ -29,12 +29,10 @@ from sensoragent.schemas import AgentRequest, TraceContext  # noqa: E402
 
 ACTIONLIST = "industrial.sorting_config_pick_place_actionlist"
 _OBJECT_ALIASES = {
-  "方块": "方块", "金属方块": "方块", "阶梯轴": "阶梯轴", "中空圆套": "中空圆套",
-  "圆套": "中空圆套", "滚轮": "滚轮", "滚柱": "滚轮", "六角螺母": "六角螺母",
-  "螺母": "六角螺母", "短螺栓": "短螺栓", "螺栓": "短螺栓", "法兰套": "法兰套",
-  "法兰衬套": "法兰套",
+  "滚轮": "滚轮", "滚柱": "滚轮", "六角螺母": "六角螺母",
+  "螺母": "六角螺母", "短螺栓": "短螺栓", "螺栓": "短螺栓",
 }
-_CHINESE_DIGITS = str.maketrans("一二三四五六七八", "12345678")
+_CHINESE_DIGITS = str.maketrans("一二三四五六七八九", "123456789")
 
 
 def parse_sorting_command(text: str) -> dict[str, str]:
@@ -44,7 +42,7 @@ def parse_sorting_command(text: str) -> dict[str, str]:
     (canonical for alias, canonical in sorted(_OBJECT_ALIASES.items(), key=lambda item: len(item[0]), reverse=True) if alias in normalized),
     None,
   )
-  target_match = re.search(r"(?:第)?([1-8])(?:号)?(?:格|格子|格位)", normalized)
+  target_match = re.search(r"(?:第)?([1-9])(?:号)?(?:格|格子|格位)", normalized)
   if object_query is None or target_match is None:
     raise ValueError("无法识别分拣指令；请说例如：把方块放到1号格")
   return {"object_query": object_query, "target": f"bin_cell_{target_match.group(1)}"}

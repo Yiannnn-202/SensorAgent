@@ -60,7 +60,7 @@ def build_sorting_config_pick_place_actionlist(
           "speed": SORTING_SPEED,
           "descent_speed": 0.25,
           "open_opening": "{{ object.release_opening }}",
-          "close_opening": 0.032,
+          "close_opening": "{{ object.grasp_opening }}",
           "grasp_avoid_collisions": False,
           "gripper_force": 1.0,
         },

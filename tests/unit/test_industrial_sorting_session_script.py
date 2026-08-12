@@ -68,12 +68,12 @@ class IndustrialSortingSessionScriptTest(TestCase):
     module = _load_module()
     bundle = _build_text_bundle(module)
 
-    result = module.run_sorting_turn(bundle, "把方块放到1号格", turn_index=0)
+    result = module.run_sorting_turn(bundle, "把六角螺母放到1号格", turn_index=0)
 
     self.assertTrue(result["success"], result.get("error"))
     self.assertEqual(
       result["command"],
-      {"object_query": "方块", "target": "bin_cell_1"},
+      {"object_query": "六角螺母", "target": "bin_cell_1"},
     )
     self.assertEqual(result["type"], "command")
 
@@ -84,7 +84,7 @@ class IndustrialSortingSessionScriptTest(TestCase):
 
     code = module.run_text_loop(
       bundle,
-      input_stream=StringIO("把方块放到1号格\nexit\n"),
+      input_stream=StringIO("把六角螺母放到1号格\nexit\n"),
       output_stream=output,
       prompt_stream=StringIO(),
     )

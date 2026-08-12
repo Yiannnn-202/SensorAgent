@@ -11,22 +11,29 @@
         </inertia>
       </inertial>
       <collision name="shaft_collision">
-        <pose>0 0 -0.0075 0 0 0</pose>
-        <geometry><cylinder><radius>0.0125</radius><length>0.065</length></cylinder></geometry>
+        <pose>0 0 -0.005 0 0 0</pose>
+        <geometry><cylinder><radius>0.0125</radius><length>0.045</length></cylinder></geometry>
       </collision>
       <collision name="head_collision">
-        <pose>0 0 0.0325 0 0 0</pose>
+        <pose>0 0 0.025 0 0 0</pose>
         <geometry><cylinder><radius>0.025</radius><length>0.015</length></cylinder></geometry>
       </collision>
       <visual name="shaft_visual">
-        <pose>0 0 -0.0075 0 0 0</pose>
-        <geometry><cylinder><radius>0.0125</radius><length>0.065</length></cylinder></geometry>
-        <material><diffuse>0.16 0.70 0.34 1</diffuse></material>
+        <pose>0 0 -0.005 0 0 0</pose>
+        <geometry><cylinder><radius>0.0125</radius><length>0.045</length></cylinder></geometry>
+        <material><ambient>0.42 0.43 0.44 1</ambient><diffuse>0.58 0.59 0.60 1</diffuse><specular>0.35 0.35 0.35 1</specular></material>
       </visual>
+      <visual name="thread_0"><pose>0 0 -0.022 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.58 0.59 0.60 1</diffuse></material></visual>
+      <visual name="thread_1"><pose>0 0 -0.017 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.58 0.59 0.60 1</diffuse></material></visual>
+      <visual name="thread_2"><pose>0 0 -0.012 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.58 0.59 0.60 1</diffuse></material></visual>
+      <visual name="thread_3"><pose>0 0 -0.007 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.58 0.59 0.60 1</diffuse></material></visual>
+      <visual name="thread_4"><pose>0 0 -0.002 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.58 0.59 0.60 1</diffuse></material></visual>
+      <visual name="thread_5"><pose>0 0 0.003 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.58 0.59 0.60 1</diffuse></material></visual>
+      <visual name="thread_6"><pose>0 0 0.008 0 0 0</pose><geometry><cylinder><radius>0.014</radius><length>0.002</length></cylinder></geometry><material><diffuse>0.58 0.59 0.60 1</diffuse></material></visual>
       <visual name="head_visual">
-        <pose>0 0 0.0325 0 0 0</pose>
+        <pose>0 0 0.025 0 0 0</pose>
         <geometry><cylinder><radius>0.025</radius><length>0.015</length></cylinder></geometry>
-        <material><diffuse>0.16 0.70 0.34 1</diffuse></material>
+        <material><ambient>0.42 0.43 0.44 1</ambient><diffuse>0.58 0.59 0.60 1</diffuse><specular>0.35 0.35 0.35 1</specular></material>
       </visual>
     </link>
   </model>
