@@ -274,7 +274,7 @@
       </link>
     </model>
     <model name="metal_roller_01">
-      <pose>0.1325 -0.220 0.320 0 1.570796 0</pose>
+      <pose>0.1625 -0.220 0.320 0 1.570796 0</pose>
       <link name="part">
         <inertial>
           <mass>0.20</mass>
@@ -316,7 +316,7 @@
       </link>
     </model>
     <model name="metal_hex_nut_01">
-      <pose>0.1325 -0.130 0.3125 0 0 -0.261799</pose>
+      <pose>0.1625 -0.130 0.3125 0 0 -0.261799</pose>
       <link name="part">
         <inertial>
           <mass>0.18</mass>
@@ -341,7 +341,7 @@
       </link>
     </model>
     <model name="metal_short_bolt_01">
-      <pose>0.1325 -0.040 0.3325 3.141593 0 0</pose>
+      <pose>0.1625 -0.040 0.3325 3.141593 0 0</pose>
       <link name="part">
         <inertial>
           <mass>0.20</mass>
@@ -409,32 +409,32 @@
     <include>
       <uri>model://sensoragent_part_roller</uri>
       <name>metal_roller_02</name>
-      <pose>0.2325 -0.220 0.320 0 1.570796 0</pose>
+      <pose>0.2625 -0.220 0.320 0 1.570796 0</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_roller</uri>
       <name>metal_roller_03</name>
-      <pose>0.3325 -0.220 0.320 0 1.570796 0</pose>
+      <pose>0.3625 -0.220 0.320 0 1.570796 0</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_hex_nut</uri>
       <name>metal_hex_nut_02</name>
-      <pose>0.2325 -0.130 0.3125 0 0 0</pose>
+      <pose>0.2625 -0.130 0.3125 0 0 0</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_hex_nut</uri>
       <name>metal_hex_nut_03</name>
-      <pose>0.3325 -0.130 0.3125 0 0 0.261799</pose>
+      <pose>0.3625 -0.130 0.3125 0 0 0.261799</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_short_bolt</uri>
       <name>metal_short_bolt_02</name>
-      <pose>0.2325 -0.040 0.3325 3.141593 0 0</pose>
+      <pose>0.2625 -0.040 0.3325 3.141593 0 0</pose>
     </include>
     <include>
       <uri>model://sensoragent_part_short_bolt</uri>
       <name>metal_short_bolt_03</name>
-      <pose>0.3325 -0.040 0.3325 3.141593 0 0</pose>
+      <pose>0.3625 -0.040 0.3325 3.141593 0 0</pose>
     </include>
   </world>
 </sdf>

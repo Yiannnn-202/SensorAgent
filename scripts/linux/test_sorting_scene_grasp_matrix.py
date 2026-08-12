@@ -35,15 +35,15 @@ from sensoragent.schemas import TraceContext  # noqa: E402
 
 
 SCENE_PARTS = {
-  "metal_roller_01": (0.1325, -0.220, 0.320, 0.0, math.pi / 2.0, 0.0),
-  "metal_roller_02": (0.2325, -0.220, 0.320, 0.0, math.pi / 2.0, 0.0),
-  "metal_roller_03": (0.3325, -0.220, 0.320, 0.0, math.pi / 2.0, 0.0),
-  "metal_hex_nut_01": (0.1325, -0.130, 0.3125, 0.0, 0.0, -0.261799),
-  "metal_hex_nut_02": (0.2325, -0.130, 0.3125, 0.0, 0.0, 0.0),
-  "metal_hex_nut_03": (0.3325, -0.130, 0.3125, 0.0, 0.0, 0.261799),
-  "metal_short_bolt_01": (0.1325, -0.040, 0.3325, math.pi, 0.0, 0.0),
-  "metal_short_bolt_02": (0.2325, -0.040, 0.3325, math.pi, 0.0, 0.0),
-  "metal_short_bolt_03": (0.3325, -0.040, 0.3325, math.pi, 0.0, 0.0),
+  "metal_roller_01": (0.1625, -0.220, 0.320, 0.0, math.pi / 2.0, 0.0),
+  "metal_roller_02": (0.2625, -0.220, 0.320, 0.0, math.pi / 2.0, 0.0),
+  "metal_roller_03": (0.3625, -0.220, 0.320, 0.0, math.pi / 2.0, 0.0),
+  "metal_hex_nut_01": (0.1625, -0.130, 0.3125, 0.0, 0.0, -0.261799),
+  "metal_hex_nut_02": (0.2625, -0.130, 0.3125, 0.0, 0.0, 0.0),
+  "metal_hex_nut_03": (0.3625, -0.130, 0.3125, 0.0, 0.0, 0.261799),
+  "metal_short_bolt_01": (0.1625, -0.040, 0.3325, math.pi, 0.0, 0.0),
+  "metal_short_bolt_02": (0.2625, -0.040, 0.3325, math.pi, 0.0, 0.0),
+  "metal_short_bolt_03": (0.3625, -0.040, 0.3325, math.pi, 0.0, 0.0),
 }
 
 
@@ -168,7 +168,7 @@ def run_grasp_attempt(
       "speed": 0.35,
       "descent_speed": 0.25,
       "open_opening": object_data["release_opening"],
-      "close_opening": 0.032,
+      "close_opening": object_data["grasp_opening"],
       "grasp_avoid_collisions": False,
       "gripper_force": 1.0,
     },

@@ -57,8 +57,8 @@ class RandomizedSortingDatasetScriptTest(TestCase):
     self.assertEqual(len(poses), 9)
     positions = [pose["position"][:2] for pose in poses.values()]
     for x, y in positions:
-      self.assertGreaterEqual(x, 0.125)
-      self.assertLessEqual(x, 0.340)
+      self.assertGreaterEqual(x, 0.155)
+      self.assertLessEqual(x, 0.370)
       self.assertGreaterEqual(y, -0.228)
       self.assertLessEqual(y, -0.032)
     minimum_distance = min(

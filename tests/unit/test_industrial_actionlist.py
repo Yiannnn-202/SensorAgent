@@ -265,7 +265,10 @@ class SortingConfigActionListTest(TestCase):
     self.assertEqual(plan_pick_step.input["pregrasp_distance"], 0.08)
     self.assertEqual(plan_pick_step.input["lift_height"], 0.18)
     self.assertEqual(pick_step.input["open_opening"], "{{ object.release_opening }}")
-    self.assertEqual(pick_step.input["close_opening"], 0.032)
+    self.assertEqual(
+      pick_step.input["close_opening"],
+      "{{ object.grasp_opening }}",
+    )
     self.assertFalse(pick_step.input["grasp_avoid_collisions"])
 
   def test_place_uses_same_object_safe_opening_for_release(self) -> None:
@@ -306,6 +309,7 @@ class SortingConfigActionListTest(TestCase):
           "opening": 0.0848,
           "place_z": 0.25,
           "pick_offset_z": 0.04,
+          "grasp_opening": 0.032,
           "grasp_orientation": [0.0, 1.0, 0.0, 0.0],
         },
         "滚轮": {
@@ -328,6 +332,7 @@ class SortingConfigActionListTest(TestCase):
     self.assertEqual(result.output["release_opening"], 0.063)
     self.assertEqual(result.output["release_z"], 0.22)
     self.assertEqual(result.output["pick_offset_z"], 0.04)
+    self.assertEqual(result.output["grasp_opening"], 0.032)
     self.assertEqual(result.output["grasp_orientation"], long_axis_grasp)
 
 
