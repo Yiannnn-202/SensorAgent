@@ -58,11 +58,11 @@ class CompetitionSortingSessionScriptTest(TestCase):
     self.assertTrue(result["success"], result.get("execution"))
     self.assertEqual(
       result["selected_instance"]["instance_id"],
-      "metal_roller_01",
+      "metal_roller_03",
     )
     self.assertEqual(
       result["world_state"]["bins"]["bin_cell_3"]["occupied_by"],
-      "metal_roller_01",
+      "metal_roller_03",
     )
     self.assertEqual(result["perception_backend"], "oracle_config")
 

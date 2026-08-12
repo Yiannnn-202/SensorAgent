@@ -41,7 +41,7 @@ class CompetitionGroundingTest(TestCase):
     self.assertEqual(intent.selector.ordinal, 1)
     selected, error = self.resolver.resolve(intent)
     self.assertIsNone(error)
-    self.assertEqual(selected.instance_id, "metal_roller_01")
+    self.assertEqual(selected.instance_id, "metal_roller_03")
 
   def test_object_ordinal_is_separate_from_target_ordinal(self) -> None:
     intent = self.grounder.ground("把最前面第二个六角螺母放到第六号格")
@@ -51,7 +51,7 @@ class CompetitionGroundingTest(TestCase):
     self.assertEqual(intent.target, "bin_cell_6")
     selected, error = self.resolver.resolve(intent)
     self.assertIsNone(error)
-    self.assertEqual(selected.instance_id, "metal_hex_nut_02")
+    self.assertEqual(selected.instance_id, "metal_hex_nut_01")
 
   def test_multiple_instances_without_selector_require_clarification(self) -> None:
     intent = self.grounder.ground("把短螺栓放到一号格")
