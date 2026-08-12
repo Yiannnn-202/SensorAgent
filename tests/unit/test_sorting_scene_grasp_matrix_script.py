@@ -69,6 +69,19 @@ class SortingSceneGraspMatrixScriptTest(TestCase):
     self.assertEqual(result["instance_id"], "metal_roller_02")
     self.assertEqual(result["failed_stage"], None)
 
+  def test_grasp_config_does_not_initialize_unused_audio_models(self) -> None:
+    module = _load_module()
+    config = module.load_config(ROOT / "configs" / "robot_sorting_sim.yaml")
+
+    active = module._active_config(config, execute=False)
+
+    self.assertFalse(
+      any(name.startswith("audio.") for name in active.tools.enabled)
+    )
+    self.assertFalse(
+      any(name.startswith("audio.") for name in active.skills.enabled)
+    )
+
   def test_main_fake_mode_writes_report(self) -> None:
     module = _load_module()
     output = ROOT / "logs" / "tasks" / "test_sorting_grasp_matrix.json"
