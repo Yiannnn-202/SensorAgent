@@ -207,12 +207,27 @@ def run_grasp_attempt(
 
 
 def _active_config(config: SensorAgentConfig, execute: bool) -> SensorAgentConfig:
-  if execute:
-    return config
   robot = dict(config.integrations.robot)
-  robot["backend"] = "fake"
+  if not execute:
+    robot["backend"] = "fake"
+  tools = replace(
+    config.tools,
+    enabled=[
+      name for name in config.tools.enabled
+      if not name.startswith("audio.")
+    ],
+  )
+  skills = replace(
+    config.skills,
+    enabled=[
+      name for name in config.skills.enabled
+      if not name.startswith("audio.")
+    ],
+  )
   return replace(
     config,
+    tools=tools,
+    skills=skills,
     integrations=replace(config.integrations, robot=robot),
   )
 
