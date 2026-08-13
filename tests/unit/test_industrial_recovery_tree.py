@@ -67,6 +67,19 @@ class IndustrialRecoveryTreeTest(TestCase):
     self.assertTrue(result.success, msg=result.error)
     self.assertEqual(result.nodes[-1].node, "success")
     self.assertNotIn("recovery.classify_failure", [call[0] for call in tool_runtime.calls])
+    world = result.output["world_state"]
+    self.assertEqual(world["objects"]["roller"]["status"], "placed")
+    self.assertEqual(world["bins"]["bin_cell_3"]["occupied_by"], "roller")
+    self.assertEqual(world["bins"]["bin_cell_3"]["status"], "occupied")
+    self.assertEqual(world["current_task"]["step"], "placed")
+    self.assertIn(
+      "object_observed",
+      [entry["event"] for entry in world["history"]],
+    )
+    self.assertIn(
+      "object_placed_in_target",
+      [entry["event"] for entry in world["history"]],
+    )
 
   def test_configured_intermediate_joints_are_in_nominal_tree(self) -> None:
     runtime, tool_runtime, _ = _make_runtime()
@@ -207,6 +220,81 @@ class IndustrialRecoveryTreeTest(TestCase):
       result.output["classification"]["failure_type"],
     )
     self.assertEqual(history[0]["strategy"], result.output["recovery"]["strategy"])
+    self.assertIn("node_overrides", history[0])
+    world_events = [entry["event"] for entry in result.output["world_state"]["history"]]
+    self.assertIn("node_failed", world_events)
+    self.assertIn("failure_classified", world_events)
+    self.assertIn("recovery_planned", world_events)
+
+  def test_grasp_empty_recovery_changes_recover_pick_inputs(self) -> None:
+    runtime, tool_runtime, skill_runtime = _make_runtime(
+      verify_grasp_sequence=[
+        _StubResult(False, {"held": False, "opening": 0.0848}, "grasp not detected (opening=0.0848)"),
+        _StubResult(True, {"held": True, "opening": 0.027}),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(result.output["recovery"]["strategy"], "retry_pick_adjusted_grasp")
+    plan_pick_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "robot.plan_top_down_pick"
+    ]
+    pick_inputs = [
+      input_data for name, input_data in skill_runtime.calls if name == "robot.pick"
+    ]
+    self.assertEqual(plan_pick_inputs[-1]["position_offset"], [0.0, 0.0, 0.035])
+    self.assertEqual(pick_inputs[-1]["close_opening"], 0.027)
+
+  def test_low_confidence_recovery_changes_redetect_input(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      config_detect_sequence=[
+        _StubResult(False, {"found": True, "confidence": 0.10}, "LOW_CONFIDENCE: 0.010 below 0.350"),
+        _StubResult(False, {"found": True, "confidence": 0.10}, "LOW_CONFIDENCE: 0.010 below 0.350"),
+        _StubResult(True, _config_detection()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    detect_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "vision.config_detect"
+    ]
+    self.assertEqual(detect_inputs[-1]["depth_window"], 11)
+
+  def test_place_plan_recovery_changes_recover_place_inputs(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_place_sequence=[
+        _StubResult(False, error="PLACE_PLAN failed for bin_cell_3"),
+        _StubResult(True, _place_plan()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    resolve_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "robot.resolve_place_target"
+    ]
+    plan_place_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "robot.plan_place"
+    ]
+    self.assertEqual(resolve_inputs[-1]["place_offset"], [0.0, 0.0, 0.03])
+    self.assertEqual(plan_place_inputs[-1]["clearance"], 0.13)
 
   def test_recovery_attempts_are_observable_after_short_circuit(self) -> None:
     # On short-circuit the counter reflects the recoveries that ran (1), while

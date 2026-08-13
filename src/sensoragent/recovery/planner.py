@@ -13,6 +13,11 @@ from sensoragent.recovery.failures import (
 )
 
 
+_DEFAULT_PICK_POSITION_OFFSET = [0.0, 0.0, 0.02]
+_DEFAULT_PICK_CLOSE_OPENING = 0.032
+_DEFAULT_PLACE_CLEARANCE = 0.08
+
+
 class RecoveryPlanner:
   """Map classified failures to bounded, explainable replanning strategies."""
 
@@ -71,6 +76,11 @@ class RecoveryPlanner:
           "depth_window_delta": 4,
           "min_confidence_delta": -0.05,
         },
+        node_overrides={
+          "recover_redetect": {
+            "depth_window": _positive_number(context.get("depth_window"), 7) + 4,
+          },
+        },
         notes=["Refresh RGB-D evidence and relax only perception-side sampling parameters."],
       )
     if failure_type == FailureType.PICK_PLAN_FAILED:
@@ -84,6 +94,18 @@ class RecoveryPlanner:
           "pick_planner": "robot.plan_oriented_pick",
           "approach_distance_delta": 0.03,
           "position_offset_delta": [0.0, 0.0, 0.01],
+        },
+        node_overrides={
+          "recover_pick": {
+            "oriented_pick_requested": True,
+            "oriented_pick_applied": False,
+            "oriented_pick_reason": "missing_base_frame_object_points",
+            "position_offset": _add_xyz(
+              context.get("pick_position_offset"),
+              [0.0, 0.0, 0.01],
+              _DEFAULT_PICK_POSITION_OFFSET,
+            ),
+          },
         },
         notes=["Switch from top-down grasp to oriented grasp and add clearance."],
       )
@@ -99,6 +121,16 @@ class RecoveryPlanner:
           "position_offset_candidates": [[0.0, 0.0, 0.02], [0.0, 0.0, 0.035]],
           "recapture_frame": True,
         },
+        node_overrides={
+          "recover_pick": {
+            "position_offset": [0.0, 0.0, 0.035],
+            "close_opening": max(
+              0.0,
+              _number(context.get("pick_close_opening"), _DEFAULT_PICK_CLOSE_OPENING)
+              - 0.005,
+            ),
+          },
+        },
         notes=["Re-detect the object and retry with adjusted TCP/gripper closure."],
       )
     if failure_type in {FailureType.PICK_EXEC_FAILED, FailureType.MOTION_FAILED}:
@@ -109,6 +141,9 @@ class RecoveryPlanner:
         "plan_pick",
         max_attempts,
         updated_input={"reset_to_staging": True, "recapture_frame": True},
+        node_overrides={
+          "recover_pick": {"position_offset": _DEFAULT_PICK_POSITION_OFFSET},
+        },
         notes=["Stop overlapping motion, return to staging, and regenerate pick waypoints."],
       )
     if failure_type == FailureType.DROPPED_OBJECT:
@@ -119,6 +154,13 @@ class RecoveryPlanner:
         "detect_object",
         max_attempts,
         updated_input={"use_observed_pose_as_new_pick_target": True},
+        node_overrides={
+          "recover_pick": {
+            "use_observed_pose_as_new_pick_target": True,
+            "observed_pose_applied": False,
+            "observed_pose_reason": "missing_observed_object_pose",
+          },
+        },
         notes=["Treat the dropped object pose as the new pick target."],
       )
     if failure_type == FailureType.PLACE_PLAN_FAILED:
@@ -138,6 +180,16 @@ class RecoveryPlanner:
           ],
           "clearance_delta": 0.05,
         },
+        node_overrides={
+          "recover_place": {
+            "place_offset": [0.0, 0.0, 0.03],
+            "clearance": _number(
+              context.get("place_clearance"),
+              _DEFAULT_PLACE_CLEARANCE,
+            )
+            + 0.05,
+          },
+        },
         notes=["Try nearby release poses and slightly higher clearance before giving up."],
       )
     if failure_type == FailureType.PLACE_EXEC_FAILED:
@@ -148,6 +200,12 @@ class RecoveryPlanner:
         "plan_place",
         max_attempts,
         updated_input={"reset_to_staging": True, "clearance_delta": 0.05},
+        node_overrides={
+          "recover_place": {
+            "clearance": _number(context.get("place_clearance"), _DEFAULT_PLACE_CLEARANCE)
+            + 0.05,
+          },
+        },
         notes=["Return to place staging joints and regenerate the target approach."],
       )
     if failure_type in {FailureType.RELEASE_FAILED, FailureType.GRIPPER_FAILED}:
@@ -158,6 +216,9 @@ class RecoveryPlanner:
         "place_open_gripper",
         max_attempts,
         updated_input={"opening": 0.0848, "speed": 0.3, "stop_after_retry": True},
+        node_overrides={
+          "recover_release": {"opening": 0.0848, "speed": 0.3},
+        },
         notes=["Retry open command at conservative speed, then retreat and re-verify."],
       )
     if failure_type == FailureType.WRONG_BIN:
@@ -168,6 +229,14 @@ class RecoveryPlanner:
         "detect_object",
         max_attempts,
         updated_input={"use_observed_pose_as_new_pick_target": True, "preserve_target": True},
+        node_overrides={
+          "recover_pick": {
+            "use_observed_pose_as_new_pick_target": True,
+            "preserve_target": True,
+            "observed_pose_applied": False,
+            "observed_pose_reason": "missing_observed_object_pose",
+          },
+        },
         notes=["Re-pick the object from its observed wrong-bin pose and place it into the requested cell."],
       )
     if failure_type in {FailureType.BRIDGE_ERROR, FailureType.ROBOT_NOT_READY}:
@@ -178,6 +247,9 @@ class RecoveryPlanner:
         "robot_health_check",
         max_attempts,
         updated_input={"call_stop": True, "check_ready": True, "reset_home": True},
+        node_overrides={
+          "recover_bridge": {"reason": failure_type.value},
+        },
         notes=["Stop motion, wait for bridge readiness, and reset home before replanning."],
       )
     return _plan(
@@ -216,6 +288,7 @@ def _plan(
   max_attempts: int,
   *,
   updated_input: dict[str, Any] | None = None,
+  node_overrides: dict[str, dict[str, Any]] | None = None,
   notes: list[str] | None = None,
 ) -> RecoveryPlan:
   return RecoveryPlan(
@@ -225,6 +298,7 @@ def _plan(
     next_step=next_step,
     max_attempts=max_attempts,
     updated_input=updated_input or {},
+    node_overrides=node_overrides or {},
     notes=notes or [],
   )
 
@@ -234,3 +308,26 @@ def _max_attempts(context: dict[str, Any], default: int) -> int:
   if isinstance(value, int) and not isinstance(value, bool) and value > 0:
     return value
   return default
+
+
+def _number(value: Any, default: float) -> float:
+  if isinstance(value, (int, float)) and not isinstance(value, bool):
+    return float(value)
+  return default
+
+
+def _positive_number(value: Any, default: int) -> int:
+  if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+    return int(value)
+  return default
+
+
+def _add_xyz(value: Any, delta: list[float], default: list[float]) -> list[float]:
+  base = (
+    [float(item) for item in value]
+    if isinstance(value, list)
+    and len(value) >= 3
+    and all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in value[:3])
+    else list(default)
+  )
+  return [base[index] + float(delta[index]) for index in range(3)]

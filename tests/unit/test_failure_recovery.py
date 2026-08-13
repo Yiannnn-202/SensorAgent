@@ -265,6 +265,10 @@ class RecoveryPlannerTest(TestCase):
     self.assertEqual(plan.next_step, "plan_pick")
     self.assertEqual(plan.max_attempts, 3)
     self.assertEqual(plan.updated_input["pick_planner"], "robot.plan_oriented_pick")
+    self.assertEqual(
+      plan.node_overrides["recover_pick"]["position_offset"],
+      [0.0, 0.0, 0.03],
+    )
 
   def test_model_missing_fails_fast(self) -> None:
     classification = FailureDetector().classify({
@@ -288,6 +292,7 @@ class RecoveryPlannerTest(TestCase):
     self.assertEqual(plan.strategy, RecoveryStrategy.RETRY_WITH_EXPANDED_VISION)
     self.assertEqual(plan.next_step, "detect_object")
     self.assertTrue(plan.updated_input["recapture_frame"])
+    self.assertEqual(plan.node_overrides["recover_redetect"]["depth_window"], 11)
     # Relax perception-side sampling only, never the task target.
     self.assertNotIn("preserve_target", plan.updated_input)
 
@@ -302,6 +307,7 @@ class RecoveryPlannerTest(TestCase):
     self.assertEqual(plan.strategy, RecoveryStrategy.REPICK_FROM_OBSERVED_POSE)
     self.assertEqual(plan.next_step, "detect_object")
     self.assertTrue(plan.updated_input["use_observed_pose_as_new_pick_target"])
+    self.assertFalse(plan.node_overrides["recover_pick"]["observed_pose_applied"])
 
   def test_wrong_bin_repick_preserves_the_target(self) -> None:
     classification = FailureDetector().classify({
@@ -317,6 +323,7 @@ class RecoveryPlannerTest(TestCase):
     self.assertTrue(plan.updated_input["use_observed_pose_as_new_pick_target"])
     # Re-pick from the wrong-bin pose, but keep re-placing into the same cell.
     self.assertTrue(plan.updated_input["preserve_target"])
+    self.assertTrue(plan.node_overrides["recover_pick"]["preserve_target"])
 
   def test_bridge_error_resets_via_health_check(self) -> None:
     classification = FailureDetector().classify({
@@ -329,6 +336,7 @@ class RecoveryPlannerTest(TestCase):
     self.assertEqual(plan.strategy, RecoveryStrategy.CHECK_BRIDGE_AND_RESET)
     self.assertEqual(plan.next_step, "robot_health_check")
     self.assertTrue(plan.updated_input["call_stop"])
+    self.assertEqual(plan.node_overrides["recover_bridge"]["reason"], "BRIDGE_ERROR")
 
   def test_release_failed_retries_opening_the_gripper(self) -> None:
     classification = FailureDetector().classify({
@@ -340,6 +348,7 @@ class RecoveryPlannerTest(TestCase):
 
     self.assertEqual(plan.strategy, RecoveryStrategy.RETRY_OPEN_GRIPPER)
     self.assertEqual(plan.next_step, "place_open_gripper")
+    self.assertEqual(plan.node_overrides["recover_release"]["speed"], 0.3)
     self.assertEqual(plan.updated_input["opening"], 0.0848)
 
   def test_unknown_failure_fails_fast_with_zero_attempts(self) -> None:
