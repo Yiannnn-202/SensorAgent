@@ -152,3 +152,18 @@ class VisionDetectCliArgsTest(TestCase):
 
     self.assertTrue(input_data["refine_masks"])
     self.assertTrue(input_data["require_masks"])
+
+  def test_nms_iou_threshold_is_forwarded(self) -> None:
+    input_data = self._run(
+      [
+        "--image",
+        "scene.jpg",
+        "--query",
+        "roller",
+        "--nms-iou-threshold",
+        "0.55",
+      ],
+      Path("logs") / "tasks" / "unused.jsonl",
+    )
+
+    self.assertEqual(input_data["nms_iou_threshold"], 0.55)

@@ -69,6 +69,12 @@ def _parser() -> argparse.ArgumentParser:
   run.add_argument("--box-threshold", type=float, default=None)
   run.add_argument("--text-threshold", type=float, default=None)
   run.add_argument(
+    "--nms-iou-threshold",
+    type=float,
+    default=None,
+    help="Optional Ultralytics NMS IoU override; select it on validation only.",
+  )
+  run.add_argument(
     "--candidate-policy",
     choices=("baseline", "scene_aware"),
     default=None,
@@ -81,6 +87,12 @@ def _parser() -> argparse.ArgumentParser:
     help="YAML or JSON scene-profile file used with --candidate-policy scene_aware.",
   )
   run.add_argument("--warmup-runs", type=int, default=1)
+  run.add_argument(
+    "--match-iou-threshold",
+    type=float,
+    default=0.5,
+    help="IoU threshold for bbox-match TP/FN confusion statistics.",
+  )
   run.add_argument("--min-precision", type=float, default=None)
   run.add_argument("--min-recall", type=float, default=None)
   run.add_argument("--min-box-iou", type=float, default=None)
@@ -156,12 +168,14 @@ def main(argv: list[str] | None = None) -> int:
       require_masks=args.require_masks,
       box_threshold=args.box_threshold,
       text_threshold=args.text_threshold,
+      nms_iou_threshold=args.nms_iou_threshold,
       save_overlays=args.save_overlays,
       warmup_runs=args.warmup_runs,
       thresholds=thresholds,
       tool_name=args.tool,
       candidate_policy=args.candidate_policy,
       scene_profile=scene_profile,
+      match_iou_threshold=args.match_iou_threshold,
     )
   except ValueError as exc:
     print(str(exc), file=sys.stderr)

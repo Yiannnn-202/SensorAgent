@@ -187,6 +187,7 @@ def test_evaluate_manifest_writes_rows_and_summary(tmp_path: Path) -> None:
 
   assert evaluation.passed
   assert evaluation.summary["confusion"] == {"tp": 1, "fp": 1, "tn": 1, "fn": 0}
+  assert evaluation.summary["confusion_protocol"]["iou_threshold"] == 0.5
   assert evaluation.summary["precision"] == 0.5
   assert evaluation.summary["recall"] == 1.0
   assert evaluation.summary["mean_box_iou"] == 0.8
@@ -197,6 +198,79 @@ def test_evaluate_manifest_writes_rows_and_summary(tmp_path: Path) -> None:
   assert len((output_dir / "results.jsonl").read_text(encoding="utf-8").splitlines()) == 3
   assert evaluation.summary["ap50"] == pytest.approx(1.0, abs=1e-6)
   assert evaluation.summary["map50_95"] == pytest.approx(0.7, abs=1e-6)
+
+
+def test_evaluate_manifest_counts_found_wrong_bbox_as_fn(tmp_path: Path) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(manifest, [_sample("sample")])
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=lambda _: {
+      "success": True,
+      "output": {
+        "found": True,
+        "confidence": 0.9,
+        "bbox_2d": [20, 20, 30, 30],
+      },
+    },
+    output_dir=tmp_path / "out",
+  )
+
+  assert evaluation.summary["confusion"] == {"tp": 0, "fp": 0, "tn": 0, "fn": 1}
+  assert evaluation.summary["precision"] is None
+  assert evaluation.summary["recall"] == 0.0
+
+
+def test_evaluate_manifest_counts_iou_threshold_boundary_as_tp(tmp_path: Path) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(manifest, [_sample("sample")])
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=lambda _: {
+      "success": True,
+      "output": {
+        "found": True,
+        "confidence": 0.9,
+        "bbox_2d": [0, 0, 20, 10],
+      },
+    },
+    output_dir=tmp_path / "out",
+    match_iou_threshold=0.5,
+  )
+
+  assert evaluation.summary["confusion"]["tp"] == 1
+
+
+def test_evaluate_manifest_forwards_nms_iou_threshold(tmp_path: Path) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(manifest, [_sample("sample")])
+  received: dict[str, object] = {}
+
+  def runner(input_data: dict[str, object]) -> dict[str, object]:
+    received.update(input_data)
+    return {
+      "success": True,
+      "output": {
+        "found": True,
+        "confidence": 0.9,
+        "bbox_2d": [0, 0, 10, 10],
+      },
+    }
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=runner,
+    output_dir=tmp_path / "out",
+    nms_iou_threshold=0.55,
+  )
+
+  assert received["nms_iou_threshold"] == 0.55
+  assert evaluation.summary["execution_error_count"] == 0
 
 
 def test_evaluate_manifest_reports_ranked_ap_at_multiple_iou_thresholds(

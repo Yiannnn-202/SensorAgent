@@ -23,7 +23,10 @@ from sensoragent.tools.vision import (
   VisionInferenceOptions,
   VisionOpenVocabularyDetectTool,
 )
-from sensoragent.tools.vision.open_vocab import UltralyticsOpenVocabularyBackend
+from sensoragent.tools.vision.open_vocab import (
+  UltralyticsOpenVocabularyBackend,
+  UltralyticsSam2Backend,
+)
 
 
 PIL_AVAILABLE = importlib.util.find_spec("PIL") is not None
@@ -62,6 +65,15 @@ class _FakeFixedClassModel:
     ]
 
 
+class _RecordingFixedClassModel(_FakeFixedClassModel):
+  def __init__(self) -> None:
+    self.predict_arguments: dict[str, object] | None = None
+
+  def predict(self, **kwargs):
+    self.predict_arguments = dict(kwargs)
+    return super().predict(**kwargs)
+
+
 def test_fixed_class_model_filters_predictions_by_query() -> None:
   backend = object.__new__(UltralyticsOpenVocabularyBackend)
   backend._model_path = Path("models/vision/industrial_student_best.pt")
@@ -79,6 +91,33 @@ def test_fixed_class_model_filters_predictions_by_query() -> None:
   assert detections[0].found
   assert detections[0].label == "roller"
   assert detections[0].confidence == 0.75
+
+
+def test_yoloe_backend_forwards_configured_nms_iou() -> None:
+  backend = object.__new__(UltralyticsOpenVocabularyBackend)
+  backend._model_path = Path("models/vision/industrial_student_best.pt")
+  backend._backend = "yoloe"
+  backend._model = _RecordingFixedClassModel()
+
+  detections = backend.detect_all(
+    query="roller",
+    image_path="frame.jpg",
+    depth_path=None,
+    options=VisionInferenceOptions(
+      box_threshold=0.25,
+      nms_iou_threshold=0.55,
+      device="0",
+    ),
+  )
+
+  assert detections[0].found
+  assert backend._model.predict_arguments == {
+    "source": "frame.jpg",
+    "verbose": False,
+    "conf": 0.25,
+    "iou": 0.55,
+    "device": "0",
+  }
 
 
 def test_fixed_class_model_reports_not_found_for_absent_query() -> None:
@@ -263,6 +302,65 @@ class _FailingMaskRefiner:
 
 
 class VisionOpenVocabularyToolTest(TestCase):
+  def test_yoloe_can_enable_sam2_refinement_from_configuration(self) -> None:
+    tool = VisionOpenVocabularyDetectTool(
+      backend="yoloe",
+      detector=_FakeBoxOnlyBackend(),
+      refine_masks=True,
+    )
+
+    self.assertTrue(tool._refine_masks)
+    self.assertIsInstance(tool._mask_refiner, UltralyticsSam2Backend)
+
+  def test_yoloe_nms_iou_threshold_is_accepted(self) -> None:
+    result = VisionOpenVocabularyDetectTool(
+      backend="yoloe",
+      detector=_FakeBoxOnlyBackend(),
+      nms_iou_threshold=0.60,
+    ).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "roller",
+          "image_path": "frame.jpg",
+          "nms_iou_threshold": 0.55,
+        },
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertTrue(result.success)
+
+  def test_yoloe_rejects_invalid_nms_iou_threshold(self) -> None:
+    result = VisionOpenVocabularyDetectTool(
+      backend="yoloe",
+      detector=_FakeBoxOnlyBackend(),
+    ).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={
+          "query": "roller",
+          "image_path": "frame.jpg",
+          "nms_iou_threshold": 1.1,
+        },
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn("nms_iou_threshold must be between 0 and 1", result.error or "")
+
+  def test_yoloe_sam2_example_config_registers_without_loading_weights(self) -> None:
+    bundle = build_agent_from_config(
+      ROOT / "configs" / "vision_yoloe_sam2.example.yaml"
+    )
+    tool = bundle.tool_registry.get("vision.open_vocab_detect")
+
+    self.assertEqual(tool._backend, "yoloe")
+    self.assertTrue(tool._refine_masks)
+    self.assertTrue(tool._require_masks)
+    self.assertIsInstance(tool._mask_refiner, UltralyticsSam2Backend)
+
   def test_placeholder_reports_model_not_ready(self) -> None:
     result = VisionOpenVocabularyDetectTool(
       model_path="models/vision/missing-yoloe.pt",

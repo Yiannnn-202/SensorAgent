@@ -192,6 +192,7 @@ def _build_parser() -> argparse.ArgumentParser:
   vision_detect.add_argument("--device", default=None)
   vision_detect.add_argument("--box-threshold", type=float, default=None)
   vision_detect.add_argument("--text-threshold", type=float, default=None)
+  vision_detect.add_argument("--nms-iou-threshold", type=float, default=None)
   vision_detect.add_argument("--depth-scale", type=float, default=None)
   vision_detect.add_argument(
     "--spatial-relation",
@@ -514,6 +515,7 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
     "device": args.device,
     "box_threshold": args.box_threshold,
     "text_threshold": args.text_threshold,
+    "nms_iou_threshold": args.nms_iou_threshold,
     "depth_scale": args.depth_scale,
     "overlay_path": str(args.overlay) if args.overlay is not None else None,
   }

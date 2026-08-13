@@ -24,6 +24,7 @@ class VisionInferenceOptions:
 
   box_threshold: float = 0.35
   text_threshold: float = 0.25
+  nms_iou_threshold: float | None = None
   device: str | None = None
 
 
@@ -601,6 +602,8 @@ class UltralyticsOpenVocabularyBackend:
       "verbose": False,
       "conf": options.box_threshold,
     }
+    if options.nms_iou_threshold is not None:
+      arguments["iou"] = options.nms_iou_threshold
     if options.device is not None:
       arguments["device"] = options.device
     started = time.perf_counter()
@@ -1420,6 +1423,7 @@ class VisionOpenVocabularyDetectTool:
     depth_scale: float = 1.0,
     box_threshold: float = 0.35,
     text_threshold: float = 0.25,
+    nms_iou_threshold: float | None = None,
     device: str | None = None,
     refine_masks: bool | None = None,
     require_masks: bool = False,
@@ -1444,6 +1448,7 @@ class VisionOpenVocabularyDetectTool:
     self._depth_scale = depth_scale
     self._box_threshold = box_threshold
     self._text_threshold = text_threshold
+    self._nms_iou_threshold = nms_iou_threshold
     self._device = device
     self._require_masks = require_masks
     self._red_color_shortcut = red_color_shortcut
@@ -1490,7 +1495,7 @@ class VisionOpenVocabularyDetectTool:
       )
     if mask_refiner is not None:
       self._mask_refiner = mask_refiner
-    elif is_grounding_dino:
+    elif self._refine_masks:
       self._mask_refiner = UltralyticsSam2Backend(sam2_model_path)
     else:
       self._mask_refiner = None
@@ -1572,11 +1577,16 @@ class VisionOpenVocabularyDetectTool:
       raise ValueError("box_threshold must be between 0 and 1")
     if not 0.0 <= text_threshold <= 1.0:
       raise ValueError("text_threshold must be between 0 and 1")
+    nms_value = call.input.get("nms_iou_threshold", defaults.nms_iou_threshold)
+    nms_iou_threshold = float(nms_value) if nms_value is not None else None
+    if nms_iou_threshold is not None and not 0.0 <= nms_iou_threshold <= 1.0:
+      raise ValueError("nms_iou_threshold must be between 0 and 1")
     device_value = call.input.get("device", defaults.device)
     device = str(device_value) if device_value not in (None, "") else None
     return VisionInferenceOptions(
       box_threshold=box_threshold,
       text_threshold=text_threshold,
+      nms_iou_threshold=nms_iou_threshold,
       device=device,
     )
 
@@ -1977,6 +1987,7 @@ class VisionOpenVocabularyDetectTool:
     defaults = VisionInferenceOptions(
       box_threshold=self._box_threshold,
       text_threshold=self._text_threshold,
+      nms_iou_threshold=self._nms_iou_threshold,
       device=self._device,
     )
     try:
