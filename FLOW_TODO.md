@@ -36,7 +36,8 @@
 - [x] pick / verify_grasp 成功后写入 held object 状态。
 - [x] verify_place / verify_object_in_bin 后写入 released / placed / bin occupancy 状态。
 - [x] recovery classify / plan 后写入 failure type、strategy、applied overrides。
-- [ ] 扩展持久化 `CompetitionWorldState`，让 session/world state 与 DecisionTree run-local state 合并。
+- [x] 扩展持久化 `CompetitionWorldState`，支持合并 DecisionTree run-local `world_state` 的 objects、bins、current_task、history。
+- [x] 在 competition sorting session 中接入运行结果 `world_state` 回写，作为未来 DecisionTree/live workflow 的持久状态合并入口。
 - [ ] recovery 后写入 observed new pose，并让掉落/放错格重抓使用该 pose。
 
 **验收标准：**
@@ -141,3 +142,212 @@
 5. P1-5：统一 config 与 live RGB-D 流程接口。
 6. P2-8：从真实日志自动汇总流程指标。
 7. P2-7：补轻量多 Agent 调度展示。
+
+## 以 Gazebo 验证点划分的阶段
+
+下面的阶段划分以 **什么时候值得上 Gazebo 验证** 为边界。原则是：
+
+```text
+先 fake/unit 保证逻辑正确
+-> 再 Gazebo smoke 保护稳定基线
+-> 再 Gazebo recovery 验证恢复动作
+-> 再 Gazebo multi-instance 验证复杂任务
+-> 最后 live RGB-D / 批量 / 实机
+```
+
+### Phase G0 - 纯流程内核阶段：不上 Gazebo，只做 fake/unit
+
+**目标：**把流程语义接好，确保不会破坏已有 workflow。
+
+**对应 TODO：**
+
+- [x] P0-1：让 `recovery.plan.updated_input` 真实生效。
+- [x] P0-2 第一段：DecisionTree run-local `world_state`。
+- [x] P0-2 第二段：session `CompetitionWorldState.merge_runtime_state()` 合并入口。
+
+**当前状态：已完成。**
+
+**验证标准：**
+
+- [x] 全量 Python 测试通过。
+- [x] fake competition batch 通过。
+- [x] `industrial.sorting_config_pick_place_actionlist` 未修改。
+
+**已完成验证：**
+
+```text
+python -m unittest discover -s tests -p 'test_*.py'
+Ran 315 tests
+OK (skipped=1)
+
+competition batch:
+run_count=5
+success=5/5
+```
+
+### Phase G1 - Gazebo smoke 验证点：保护稳定基线
+
+**触发条件：**G0 完成后即可做一次小规模 Gazebo smoke。
+
+**目标：**确认流程改动没有破坏当前最稳定的 config-detect sorting 执行链。
+
+**建议验证：**
+
+- [ ] Gazebo 启动 RM65-B + Robotiq + sorting scene。
+- [ ] 跑一次 G1 smoke 脚本：
+  ```bash
+  PYTHONPATH=src .venv312/bin/python \
+    scripts/linux/run_g1_gazebo_smoke.py \
+    --execute \
+    --json-out logs/tasks/g1_gazebo_smoke.json
+  ```
+- [ ] 该脚本会先跑一次 `industrial.sorting_config_pick_place_actionlist` 真执行，再跑一次 `test_sorting_scene_grasp_matrix.py` 的单实例抓取 smoke。
+- [ ] 确认新增 `world_state` / `node_overrides` 不影响稳定 baseline。
+
+**不要求：**
+
+- 不要求 live RGB-D。
+- 不要求批量随机场景。
+- 不要求所有失败恢复都真实触发。
+
+**通过标准：**
+
+- [ ] 稳定 config-detect 抓放仍能成功。
+- [ ] MoveIt planning / gripper command 没有因为本轮流程改动新增失败。
+- [ ] 运行日志中无模板变量缺失、schema 验证错误。
+
+### Phase G2 - Gazebo recovery smoke 验证点：验证恢复动作差异
+
+**触发条件：**G1 通过后再做。
+
+**目标：**确认恢复树不是只重跑，而是真的改变后续动作输入。
+
+**对应 TODO：**
+
+- [x] P0-1 已完成：`node_overrides` 生效。
+- [ ] P1-6：典型失败恢复动作差异的 Gazebo smoke。
+
+**建议验证：**
+
+- [ ] 注入或制造 `PICK_PLAN_FAILED` / `PLACE_PLAN_FAILED` / `GRASP_EMPTY` 中至少一种。
+- [ ] 跑 `industrial.recovery_pick_place_tree`。
+- [ ] 检查日志中出现：
+  - `recovery.node_overrides`
+  - `recovery_applied_overrides`
+  - `world_state.history`
+  - 恢复后 Tool/Skill 输入变化。
+
+**通过标准：**
+
+- [ ] 恢复分支能进入并完成。
+- [ ] 恢复后的输入和第一次失败前不同。
+- [ ] `world_state.history` 能显示 failed -> classified -> planned -> recovered 的事件链。
+
+**不要求：**
+
+- 不要求所有 19 类失败都覆盖。
+- 不要求 live RGB-D 观测错误位置。
+
+### Phase G3 - 多实例 / 任务队列 Gazebo 验证点
+
+**触发条件：**G1 通过，且 P1-3 代码完成。
+
+**目标：**从单个 pick-place 升级到多实例任务队列。
+
+**对应 TODO：**
+
+- [ ] P1-3：打通 `quantity == all` 和多实例任务队列。
+- [ ] P1-4：支持“最多区域装箱”的最小版本。
+- [ ] P0-2 后续：后续 plan 使用最新 world state。
+
+**建议验证：**
+
+- [ ] “把所有滚轮依次放入空格”。
+- [ ] “把最近的三个零件依次放入空格”。
+- [ ] “把零件最多的区域装箱”的最小版本。
+
+**通过标准：**
+
+- [ ] 任务队列能生成多个子任务。
+- [ ] 每个子任务后 world state 更新。
+- [ ] 已放置对象不会被重复选择。
+- [ ] 已占用格子不会被重复分配。
+- [ ] 中途失败时能保留剩余队列和失败对象。
+
+### Phase G4 - live RGB-D Gazebo 验证点
+
+**触发条件：**G2/G3 的 config-detect 路径稳定后再做。
+
+**目标：**把 config-detect 与 live RGB-D 路径统一到同一流程接口。
+
+**对应 TODO：**
+
+- [ ] P1-5：统一 config-detect 与 live-perception 流程接口。
+- [ ] P0-2 后续：live observation 写入 persistent world state。
+- [ ] P1-6 后续：放错格/掉落后从 observed pose 重抓。
+
+**建议验证：**
+
+- [ ] `vision.capture_frame -> vision.open_vocab_detect -> pick/place`。
+- [ ] post-place live verify 使用真实观测，而不是 commanded pose。
+- [ ] wrong-bin / dropped-object 的 observed pose 写入 world state。
+
+**通过标准：**
+
+- [ ] live detect 输出和 config detect 输出字段结构一致。
+- [ ] DecisionTree 能在 live mode 下持续写入 world state。
+- [ ] wrong-bin / dropped-object 至少能记录 observed pose；第二阶段再要求从 observed pose 重抓成功。
+
+### Phase G5 - Gazebo batch 验收点
+
+**触发条件：**G1-G4 的小规模 smoke 都通过。
+
+**目标：**把流程能力变成可报告指标。
+
+**对应 TODO：**
+
+- [ ] P2-8：从真实运行日志生成流程指标。
+- [ ] 扩展 competition scenarios。
+- [ ] 自动 Gazebo reset / batch runner。
+
+**建议验证：**
+
+- [ ] 20+ 条任务。
+- [ ] 多类别、多目标格、多空间关系。
+- [ ] 至少 6 类失败注入或可控触发。
+
+**通过标准：**
+
+- [ ] 自动导出 `results.jsonl` 和 `summary.json`。
+- [ ] summary 中包含：
+  - end-to-end success rate
+  - recovery triggered rate
+  - recovery success rate
+  - avg recovery cost
+  - failure type distribution
+  - branch coverage
+  - planner parse / sequence validity
+
+### Phase G6 - 多 Agent / 实机展示验证点
+
+**触发条件：**G3/G5 后再做，多 Agent 不应阻塞前面阶段。
+
+**目标：**把复杂任务能力包装成可展示的多 Agent / 多执行体协同。
+
+**对应 TODO：**
+
+- [ ] P2-7：轻量多 Agent / 多执行体协同展示。
+- [ ] 实机证据回填。
+
+**建议验证：**
+
+- [ ] 任务队列按角色拆分：区域拣选、装箱执行、搬运/复核。
+- [ ] 多角色共享 world state。
+- [ ] 日志证明没有抢同一物体或同一格子。
+- [ ] 如实机可用，录制一个小规模真实迁移片段。
+
+**通过标准：**
+
+- [ ] 报告中能清楚说明多 Agent 是调度/协同层验证。
+- [ ] 有日志或视频证明状态交接和冲突避免。
+- [ ] 不把模拟多 Agent 夸大成多物理机械臂已验收。

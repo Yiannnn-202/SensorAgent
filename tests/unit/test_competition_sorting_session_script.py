@@ -135,3 +135,58 @@ class CompetitionSortingSessionScriptTest(TestCase):
       first_attempt["recovery_plan"]["strategy"],
       "retry_pick_adjusted_grasp",
     )
+
+  def test_execution_runtime_world_state_is_merged_into_session_state(self) -> None:
+    _, session = self._session()
+    original_run = session.bundle.actionlist_runtime.run
+
+    def run_with_world_state(actionlist, input_data, trace):
+      result = original_run(actionlist, input_data, trace)
+      output = dict(result.output or {})
+      output["world_state"] = {
+        "objects": {
+          input_data["object_query"]: {
+            "label": "roller",
+            "pose_3d": [0.24, 0.23, 0.142],
+            "confidence": 0.99,
+            "source": "decision_tree",
+            "status": "placed",
+            "target": input_data["target"],
+          }
+        },
+        "bins": {
+          input_data["target"]: {
+            "status": "occupied",
+            "occupied_by": input_data["object_query"],
+            "observed_position": [0.36, -0.06, 0.30],
+          }
+        },
+        "current_task": {
+          "object_id": input_data["object_query"],
+          "target": input_data["target"],
+          "step": "placed",
+        },
+        "history": [{"event": "object_placed_in_target"}],
+      }
+      return ActionListResult(
+        actionlist=result.actionlist,
+        success=result.success,
+        steps=result.steps,
+        output=output,
+        error=result.error,
+      )
+
+    session.bundle.actionlist_runtime.run = run_with_world_state
+    result = session.handle_text(
+      "把离机械臂最近的滚轮放到三号格",
+      turn_index=0,
+    )
+
+    self.assertTrue(result["success"], result.get("execution"))
+    instance_id = result["selected_instance"]["instance_id"]
+    self.assertEqual(session.world.objects[instance_id].confidence, 0.99)
+    self.assertEqual(session.world.bins["bin_cell_3"].observed_position, (0.36, -0.06, 0.30))
+    self.assertIn(
+      "runtime_world_state_merged",
+      [entry["event"] for entry in session.world.history],
+    )
