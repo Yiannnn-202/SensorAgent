@@ -19,7 +19,7 @@
 - [ ] 让 `RETRY_PICK_ORIENTED` 真实切换到 `robot.plan_oriented_pick`，或在缺少点云时明确降级并记录原因。
 - [ ] 让 `RETRY_PICK_ADJUSTED_GRASP` 影响下一次 pick：如 `close_opening_delta`、`position_offset_candidates`。
 - [ ] 让 `RETRY_PLACE_CANDIDATES` 影响下一次 place：如候选 release pose、clearance delta。
-- [ ] 让 `REPICK_FROM_OBSERVED_POSE` 使用实际观测到的错误位置或掉落位置，而不是重新使用原始配置位姿。
+- [x] 让 `REPICK_FROM_OBSERVED_POSE` 使用实际观测到的错误位置或掉落位置，而不是重新使用原始配置位姿。
 
 **验收标准：**
 
@@ -38,7 +38,7 @@
 - [x] recovery classify / plan 后写入 failure type、strategy、applied overrides。
 - [x] 扩展持久化 `CompetitionWorldState`，支持合并 DecisionTree run-local `world_state` 的 objects、bins、current_task、history。
 - [x] 在 competition sorting session 中接入运行结果 `world_state` 回写，作为未来 DecisionTree/live workflow 的持久状态合并入口。
-- [ ] recovery 后写入 observed new pose，并让掉落/放错格重抓使用该 pose。
+- [x] recovery 后写入 observed new pose，并让掉落/放错格重抓使用该 pose。
 
 **验收标准：**
 

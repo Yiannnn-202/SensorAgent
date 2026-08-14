@@ -273,6 +273,81 @@ def build_industrial_pick_only_actionlist(
   )
 
 
+def build_industrial_pick_at_pose_actionlist(
+  joint_poses: Mapping[str, Any] | None = None,
+) -> ActionList:
+  """Pick an object at an explicitly given pose, skipping detection entirely.
+
+  Used by recovery branches that already observed where the object ended up
+  (dropped mid-transport, placed in the wrong cell): re-detecting would return
+  the stale config pose, so the observed pose is handed straight to the pick
+  planner. The arm ends at the lift pose with the gripper closed on the object."""
+  pick_staging = pick_staging_joints(joint_poses)
+  carry = carry_joints(joint_poses)
+
+  return ActionList(
+    name="industrial.pick_at_pose_actionlist",
+    description="Industrial pick at an observed pose; no detection, arm ends holding the object.",
+    inputs={
+      "pose_3d": "array",
+      "object_id": "string",
+      "position_offset": "array",
+      "approach_distance": "number",
+      "pregrasp_distance": "number",
+      "lift_height": "number",
+      "close_opening": "number",
+      "gripper_force": "number",
+    },
+    input_defaults={
+      "position_offset": PICK_POSITION_OFFSET,
+      "approach_distance": PICK_APPROACH_DISTANCE,
+      "pregrasp_distance": PICK_PREGRASP_DISTANCE,
+      "lift_height": PICK_LIFT_HEIGHT,
+      "close_opening": GRIPPER_CLOSE_OPENING,
+      "gripper_force": GRIPPER_PICK_FORCE,
+    },
+    tags=("industrial", "pick", "verify", "recovery"),
+    steps=[
+      ActionStep(
+        name="plan_pick_at_pose",
+        kind=ActionStepKind.TOOL,
+        target="robot.plan_top_down_pick",
+        input={
+          "pose_3d": "{{ pose_3d }}",
+          "position_offset": "{{ position_offset }}",
+          "approach_distance": "{{ approach_distance }}",
+          "pregrasp_distance": "{{ pregrasp_distance }}",
+          "lift_height": "{{ lift_height }}",
+        },
+        save_as="pick_plan",
+      ),
+      *optional_move_joints_step("pick_staging_joints", pick_staging, PICK_SPEED),
+      ActionStep(
+        name="pick",
+        kind=ActionStepKind.SKILL,
+        target="robot.pick",
+        input={
+          "plan": "{{ pick_plan.plan }}",
+          "object_id": "{{ object_id }}",
+          "speed": PICK_SPEED,
+          "descent_speed": PICK_DESCENT_SPEED,
+          "close_opening": "{{ close_opening }}",
+          "gripper_force": "{{ gripper_force }}",
+        },
+        save_as="pick_result",
+      ),
+      ActionStep(
+        name="verify_grasp",
+        kind=ActionStepKind.SKILL,
+        target="robot.verify_grasp",
+        input={},
+        save_as="grasp_check",
+      ),
+      *optional_move_joints_step("carry_joints", carry, PICK_SPEED),
+    ],
+  )
+
+
 def build_industrial_place_only_actionlist(
   joint_poses: Mapping[str, Any] | None = None,
 ) -> ActionList:

@@ -321,8 +321,8 @@ def build_industrial_recovery_pick_place_tree(
       _failure_type_check("is_pick_plan_failed", "PICK_PLAN_FAILED", "recover_pick", "is_pick_exec_failed"),
       _failure_type_check("is_pick_exec_failed", "PICK_EXEC_FAILED", "recover_pick", "is_grasp_empty"),
       _failure_type_check("is_grasp_empty", "GRASP_EMPTY", "recover_pick", "is_dropped_object"),
-      _failure_type_check("is_dropped_object", "DROPPED_OBJECT", "recover_pick", "is_wrong_bin"),
-      _failure_type_check("is_wrong_bin", "WRONG_BIN", "recover_pick", "is_place_plan_failed"),
+      _failure_type_check("is_dropped_object", "DROPPED_OBJECT", "recover_pick_at_pose", "is_wrong_bin"),
+      _failure_type_check("is_wrong_bin", "WRONG_BIN", "recover_pick_at_pose", "is_place_plan_failed"),
       _failure_type_check("is_place_plan_failed", "PLACE_PLAN_FAILED", "recover_place", "is_place_exec_failed"),
       _failure_type_check("is_place_exec_failed", "PLACE_EXEC_FAILED", "recover_place", "is_release_failed"),
       _failure_type_check("is_release_failed", "RELEASE_FAILED", "recover_release", "is_gripper_failed"),
@@ -343,6 +343,22 @@ def build_industrial_recovery_pick_place_tree(
         kind=DecisionNodeKind.ACTIONLIST,
         target="industrial.pick_only_actionlist",
         input={"object_query": "{{ object_query }}"},
+        save_as="recovered_pick",
+        max_retries=1,
+        on_success="resolve_place_target",
+        on_failure="failure",
+      ),
+      DecisionNode(
+        name="recover_pick_at_pose",
+        kind=DecisionNodeKind.ACTIONLIST,
+        target="industrial.pick_at_pose_actionlist",
+        # pose_3d is injected by the runtime from the observed failure pose
+        # (node_input_overrides); without an observation this branch is not
+        # routed to, so the template variable is always resolved by then.
+        input={
+          "pose_3d": "{{ recovered_observed_pose }}",
+          "object_id": "{{ object_query }}",
+        },
         save_as="recovered_pick",
         max_retries=1,
         on_success="resolve_place_target",

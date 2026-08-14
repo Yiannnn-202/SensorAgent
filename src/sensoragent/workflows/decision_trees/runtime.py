@@ -89,6 +89,35 @@ def _numeric_position(value: Any) -> list[float] | None:
   return [float(item) for item in value[:3]]
 
 
+def _observed_failure_pose(context: dict[str, Any]) -> list[float] | None:
+  """Extract where the object was actually last seen during a failed run.
+
+  Checked in order of freshness: the live post-place re-detections, the
+  post-grasp lift re-detection, then the bin check output (deterministic
+  wrong-bin runs report the observed position). The world-state object record
+  is deliberately excluded: for a drop it still holds the pre-failure pose,
+  which is exactly the stale target pick-at-pose exists to avoid. Returns None
+  when nothing observed the object after the failure — the caller falls back
+  to re-detection recovery.
+  """
+
+  for key in ("observed_recovered_object", "observed_object", "lifted_object"):
+    position = _numeric_position(context.get(key))
+    if position is not None:
+      return position
+  # A failed verify writes its output into last_failure instead of save_as
+  # (save_as only fires on success), so the wrong-bin observation is read
+  # from there; bin_check covers the success-path mismatch case.
+  for key in ("last_failure", "bin_check"):
+    record = context.get(key)
+    output = record.get("output") if isinstance(record, dict) else None
+    if isinstance(output, dict) and output.get("in_target") is False:
+      position = _numeric_position(output)
+      if position is not None:
+        return position
+  return None
+
+
 def _active_object_id(context: dict[str, Any], output: dict[str, Any] | None = None) -> str | None:
   output = output or {}
   for candidate in (
@@ -437,6 +466,20 @@ class DecisionTreeRuntime:
         )
         return final
 
+      # Recovery rerouting: when a planned recovery node cannot run (e.g. the
+      # observed pose for recover_pick_at_pose is missing), plan_recovery marks
+      # a substitute node here so the tree falls back to a runnable branch.
+      reroutes = context.get("reroute_recovery_node")
+      if isinstance(reroutes, dict) and current_name in reroutes:
+        replacement = reroutes.pop(current_name)
+        self._logger.log(
+          "decision_node_rerouted",
+          trace,
+          {"decision_tree": tree.name, "node": current_name, "replacement": replacement},
+        )
+        current_name = replacement
+        continue
+
       # Global recovery budget: each entry into recovery.classify_failure counts
       # as one recovery attempt; short-circuit to failure once the configured
       # limit is exceeded, complementing the max_decision_nodes hard cap.
@@ -527,6 +570,49 @@ class DecisionTreeRuntime:
           history[-1]["node_overrides"] = recovery_plan.get("node_overrides") or {}
         node_overrides = recovery_plan.get("node_overrides")
         if isinstance(node_overrides, dict) and node_overrides:
+          # REPICK_FROM_OBSERVED_POSE only helps if something observed where the
+          # object ended up; the planner cannot see save_as keys, so the pose is
+          # resolved here and surfaced to the recover_pick_at_pose node.
+          observed_pose = None
+          if recovery_plan.get("strategy") == "repick_from_observed_pose":
+            observed_pose = _observed_failure_pose(context)
+            if observed_pose is not None:
+              context["recovered_observed_pose"] = observed_pose
+              overrides = dict(node_overrides)
+              overrides["recover_pick_at_pose"] = {
+                **(overrides.get("recover_pick_at_pose") or {}),
+                "pose_3d": observed_pose,
+                "observed_pose_applied": True,
+              }
+              node_overrides = overrides
+              object_id = _active_object_id(context)
+              if object_id is not None:
+                world = _ensure_world_state(context)
+                existing = world["objects"].get(object_id, {"object_id": object_id})
+                existing["pose_3d"] = observed_pose
+                existing["updated_at"] = utc_now_iso()
+                world["objects"][object_id] = existing
+              _world_record(
+                context,
+                "object_reobserved_from_failure",
+                node=node.name,
+                object_id=object_id,
+                observed_pose=observed_pose,
+              )
+            else:
+              # No observation of where the object ended up: picking at an
+              # unknown pose is impossible, so reroute to the re-detection
+              # recovery branch instead of rendering an unresolvable template.
+              context["reroute_recovery_node"] = {"recover_pick_at_pose": "recover_pick"}
+              context.setdefault("recovery_applied_overrides", []).append(
+                {
+                  "attempt": recovery_attempts,
+                  "strategy": recovery_plan.get("strategy"),
+                  "node_overrides": node_overrides,
+                  "observed_pose_applied": False,
+                  "not_applied_reason": "missing_observed_object_pose",
+                }
+              )
           current_overrides = context.get("node_input_overrides")
           if not isinstance(current_overrides, dict):
             current_overrides = {}

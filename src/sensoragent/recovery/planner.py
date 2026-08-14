@@ -155,10 +155,11 @@ class RecoveryPlanner:
         max_attempts,
         updated_input={"use_observed_pose_as_new_pick_target": True},
         node_overrides={
-          "recover_pick": {
+          # pose_3d is filled by the DecisionTree runtime from the observed
+          # failure pose; when no observation exists the runtime reroutes to
+          # recover_pick (re-detection) instead.
+          "recover_pick_at_pose": {
             "use_observed_pose_as_new_pick_target": True,
-            "observed_pose_applied": False,
-            "observed_pose_reason": "missing_observed_object_pose",
           },
         },
         notes=["Treat the dropped object pose as the new pick target."],
@@ -230,11 +231,12 @@ class RecoveryPlanner:
         max_attempts,
         updated_input={"use_observed_pose_as_new_pick_target": True, "preserve_target": True},
         node_overrides={
-          "recover_pick": {
+          # pose_3d is filled by the runtime from the observed wrong-bin pose;
+          # without an observation the runtime reroutes to recover_pick. The
+          # requested target stays untouched (preserve_target semantics).
+          "recover_pick_at_pose": {
             "use_observed_pose_as_new_pick_target": True,
             "preserve_target": True,
-            "observed_pose_applied": False,
-            "observed_pose_reason": "missing_observed_object_pose",
           },
         },
         notes=["Re-pick the object from its observed wrong-bin pose and place it into the requested cell."],

@@ -307,7 +307,11 @@ class RecoveryPlannerTest(TestCase):
     self.assertEqual(plan.strategy, RecoveryStrategy.REPICK_FROM_OBSERVED_POSE)
     self.assertEqual(plan.next_step, "detect_object")
     self.assertTrue(plan.updated_input["use_observed_pose_as_new_pick_target"])
-    self.assertFalse(plan.node_overrides["recover_pick"]["observed_pose_applied"])
+    # The planner only names the target node; the runtime fills pose_3d from
+    # the observed failure pose and reroutes when no observation exists.
+    self.assertTrue(
+      plan.node_overrides["recover_pick_at_pose"]["use_observed_pose_as_new_pick_target"]
+    )
 
   def test_wrong_bin_repick_preserves_the_target(self) -> None:
     classification = FailureDetector().classify({
@@ -323,7 +327,7 @@ class RecoveryPlannerTest(TestCase):
     self.assertTrue(plan.updated_input["use_observed_pose_as_new_pick_target"])
     # Re-pick from the wrong-bin pose, but keep re-placing into the same cell.
     self.assertTrue(plan.updated_input["preserve_target"])
-    self.assertTrue(plan.node_overrides["recover_pick"]["preserve_target"])
+    self.assertTrue(plan.node_overrides["recover_pick_at_pose"]["preserve_target"])
 
   def test_bridge_error_resets_via_health_check(self) -> None:
     classification = FailureDetector().classify({
