@@ -224,15 +224,28 @@ class SortingCommandGrounder:
       "all" if any(token in normalized for token in ("全部", "所有", "都", "all")) else 1
     )
     if quantity == "all":
+      # Batch mode: the whole class goes into the bins, one instance per cell,
+      # starting from the named target (or the first empty cell). A batch still
+      # needs a destination story, so a targetless "pick all" stays ambiguous.
+      if target is None:
+        return GroundedIntent(
+          status=GroundingStatus.NEEDS_CLARIFICATION,
+          raw_text=raw_text,
+          action=action,
+          object_class=object_class.class_id,
+          quantity=quantity,
+          target=target,
+          reason="TARGET_REQUIRED",
+          clarification="批量任务请指定起始目标格，例如“把所有滚轮放入一号格”。",
+        )
       return GroundedIntent(
-        status=GroundingStatus.UNSUPPORTED,
+        status=GroundingStatus.READY,
         raw_text=raw_text,
         action=action,
         object_class=object_class.class_id,
         quantity=quantity,
         target=target,
-        reason="BATCH_TASK_NOT_ENABLED",
-        clarification="当前版本先支持单个实例，请指定左、右、前、后、最近或第几个。",
+        verify=True,
       )
 
     selector = self._parse_selector(normalized)

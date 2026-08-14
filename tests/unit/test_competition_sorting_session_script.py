@@ -176,17 +176,100 @@ class CompetitionSortingSessionScriptTest(TestCase):
         error=result.error,
       )
 
-    session.bundle.actionlist_runtime.run = run_with_world_state
-    result = session.handle_text(
-      "把离机械臂最近的滚轮放到三号格",
-      turn_index=0,
+  def test_batch_command_places_every_instance_one_cell_each(self) -> None:
+    _, session = self._session()
+    executed: list[dict] = []
+    original_run = session.bundle.actionlist_runtime.run
+
+    def record_runs(actionlist, input_data, trace):
+      executed.append(dict(input_data))
+      return original_run(actionlist, input_data, trace)
+
+    session.bundle.actionlist_runtime.run = record_runs
+    result = session.handle_text("把所有滚轮放到一号格", turn_index=0)
+
+    self.assertTrue(result["success"], result.get("subtasks"))
+    self.assertEqual(result["type"], "batch_command")
+    self.assertEqual(len(result["subtasks"]), 3)
+    # Each instance gets its own cell, filling from the named start target.
+    self.assertEqual(
+      [subtask["target"] for subtask in result["subtasks"]],
+      ["bin_cell_1", "bin_cell_2", "bin_cell_3"],
+    )
+    self.assertEqual(
+      {subtask["instance_id"] for subtask in result["subtasks"]},
+      {"metal_roller_01", "metal_roller_02", "metal_roller_03"},
+    )
+    self.assertEqual(len(executed), 3)
+    world_events = [entry["event"] for entry in session.world.history]
+    self.assertIn("batch_task_started", world_events)
+    self.assertIn("batch_subtask_completed", world_events)
+    self.assertIn("batch_task_finished", world_events)
+
+  def test_batch_command_failure_stops_and_records_remaining_queue(self) -> None:
+    _, session = self._session()
+    original_run = session.bundle.actionlist_runtime.run
+    instances_executed: list[str] = []
+
+    def fail_second_instance(actionlist, input_data, trace):
+      instance_id = input_data["object_query"]
+      if not instances_executed or instances_executed[-1] != instance_id:
+        instances_executed.append(instance_id)
+      # The second queued instance fails every attempt, including recovery.
+      if len(instances_executed) >= 2:
+        return ActionListResult(
+          actionlist=actionlist.name,
+          success=False,
+          steps=[
+            ActionStepResult(
+              step="verify_grasp",
+              success=False,
+              output={"opening": 0.0},
+              error="grasp not detected (opening=0.0000)",
+            )
+          ],
+          output=dict(input_data),
+          error="grasp not detected (opening=0.0000)",
+        )
+      return original_run(actionlist, input_data, trace)
+
+    session.bundle.actionlist_runtime.run = fail_second_instance
+    result = session.handle_text("把所有滚轮放到一号格", turn_index=0)
+
+    self.assertFalse(result["success"])
+    self.assertEqual(len(result["subtasks"]), 2)
+    self.assertTrue(result["subtasks"][0]["success"])
+    self.assertFalse(result["subtasks"][1]["success"])
+    failed_id = result["subtasks"][1]["instance_id"]
+    self.assertEqual(result["failed_instance"], failed_id)
+    self.assertEqual(len(result["remaining_queue"]), 1)
+    self.assertNotIn(failed_id, result["remaining_queue"])
+    self.assertNotIn(failed_id, session.world.placed_instances)
+    world_events = [entry["event"] for entry in session.world.history]
+    self.assertIn("batch_task_interrupted", world_events)
+    # Only the first two instances ever reached the actionlist.
+    self.assertEqual(
+      set(instances_executed),
+      {sub["instance_id"] for sub in result["subtasks"]},
     )
 
-    self.assertTrue(result["success"], result.get("execution"))
-    instance_id = result["selected_instance"]["instance_id"]
-    self.assertEqual(session.world.objects[instance_id].confidence, 0.99)
-    self.assertEqual(session.world.bins["bin_cell_3"].observed_position, (0.36, -0.06, 0.30))
-    self.assertIn(
-      "runtime_world_state_merged",
-      [entry["event"] for entry in session.world.history],
-    )
+  def test_batch_command_rejects_when_cells_run_out(self) -> None:
+    _, session = self._session()
+    for target, cell in session.world.bins.items():
+      if target != "bin_cell_2":
+        cell.status = "occupied"
+
+    result = session.handle_text("把所有滚轮放到一号格", turn_index=0)
+
+    self.assertFalse(result["success"])
+    self.assertEqual(result["error"], "NOT_ENOUGH_EMPTY_CELLS")
+
+  def test_batch_command_rejects_when_class_is_exhausted(self) -> None:
+    _, session = self._session()
+    for instance_id in ("metal_roller_01", "metal_roller_02", "metal_roller_03"):
+      session.world.mark_placed(instance_id, "bin_cell_1")
+
+    result = session.handle_text("把所有滚轮放到一号格", turn_index=0)
+
+    self.assertFalse(result["success"])
+    self.assertEqual(result["error"], "NO_REMAINING_INSTANCES")

@@ -67,11 +67,19 @@ class CompetitionGroundingTest(TestCase):
     self.assertEqual(intent.status, GroundingStatus.UNSUPPORTED)
     self.assertEqual(intent.reason, "UNKNOWN_OBJECT_CLASS")
 
-  def test_all_objects_is_explicitly_rejected_until_batch_loop_exists(self) -> None:
+  def test_all_objects_with_target_grounds_as_batch_intent(self) -> None:
     intent = self.grounder.ground("把所有滚轮放到三号格")
 
-    self.assertEqual(intent.status, GroundingStatus.UNSUPPORTED)
-    self.assertEqual(intent.reason, "BATCH_TASK_NOT_ENABLED")
+    self.assertEqual(intent.status, GroundingStatus.READY)
+    self.assertEqual(intent.quantity, "all")
+    self.assertEqual(intent.object_class, "roller")
+    self.assertEqual(intent.target, "bin_cell_3")
+
+  def test_all_objects_without_target_requires_clarification(self) -> None:
+    intent = self.grounder.ground("把所有滚轮都拿起来")
+
+    self.assertEqual(intent.status, GroundingStatus.NEEDS_CLARIFICATION)
+    self.assertEqual(intent.reason, "TARGET_REQUIRED")
 
   def test_invalid_target_requests_clarification(self) -> None:
     intent = self.grounder.ground("把最近的滚轮放到十号格")

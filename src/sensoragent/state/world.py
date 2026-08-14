@@ -128,6 +128,22 @@ class CompetitionWorldState:
     cell = self.bins.get(target)
     return cell is not None and cell.status == "empty"
 
+  def next_empty_cell(self, start_from: str | None = None) -> str | None:
+    """Return the first empty cell in target order, optionally after a start.
+
+    Batch tasks fill cells one per instance; when the requested starting cell
+    is unavailable the scan continues from wherever that cell sits in the
+    configured order. Returns None when every cell is occupied.
+    """
+
+    targets = tuple(self.bins)
+    if start_from in targets:
+      targets = targets[targets.index(start_from):]
+    for target in targets:
+      if self.bins[target].status == "empty":
+        return target
+    return None
+
   def merge_runtime_state(self, runtime_world_state: Mapping[str, Any]) -> None:
     """Merge a DecisionTree run-local world state into this persistent state.
 
@@ -217,6 +233,11 @@ class CompetitionWorldState:
 
   def _record(self, event: str, **payload) -> None:
     self.history.append({"event": event, "timestamp": _now(), **payload})
+
+  def record(self, event: str, **payload) -> None:
+    """Append a caller-defined event (batch orchestration, run summaries)."""
+
+    self._record(event, **payload)
 
 
 def _pose_tuple(value: Any) -> tuple[float, float, float] | None:
