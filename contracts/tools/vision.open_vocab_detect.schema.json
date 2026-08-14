@@ -34,6 +34,7 @@
       "depth_scale": {"type": "number"},
       "box_threshold": {"type": "number"},
       "text_threshold": {"type": "number"},
+      "nms_iou_threshold": {"type": "number"},
       "device": {"type": "string"},
       "refine_masks": {"type": "boolean"},
       "require_masks": {"type": "boolean"},

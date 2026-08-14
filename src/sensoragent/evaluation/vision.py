@@ -520,6 +520,7 @@ def _build_tool_input(
   require_masks: bool,
   box_threshold: float | None,
   text_threshold: float | None,
+  nms_iou_threshold: float | None,
   overlay_path: Path | None,
   candidate_policy: str | None,
   scene_profile: dict[str, object] | None,
@@ -542,6 +543,7 @@ def _build_tool_input(
     "device": device,
     "box_threshold": box_threshold,
     "text_threshold": text_threshold,
+    "nms_iou_threshold": nms_iou_threshold,
     "overlay_path": str(overlay_path) if overlay_path is not None else None,
   }
   input_data.update({key: value for key, value in optional.items() if value is not None})
@@ -558,12 +560,22 @@ def _evaluate_row(
   *,
   root: Path,
   wall_clock_ms: float,
+  match_iou_threshold: float,
 ) -> dict[str, object]:
   expected = sample["expected"]
   output = result["output"]
   expected_found = bool(expected["found"])
   predicted_found = bool(output.get("found", False))
-  if expected_found and predicted_found:
+  expected_bbox = expected.get("bbox_2d")
+  predicted_bbox = output.get("bbox_2d")
+  has_valid_boxes = _number_list(expected_bbox, 4) and _number_list(predicted_bbox, 4)
+  bbox_match = (
+    expected_found
+    and predicted_found
+    and has_valid_boxes
+    and box_iou(expected_bbox, predicted_bbox) >= match_iou_threshold
+  )
+  if bbox_match:
     outcome = "tp"
   elif expected_found:
     outcome = "fn"
@@ -573,9 +585,7 @@ def _evaluate_row(
     outcome = "tn"
 
   metrics: dict[str, float] = {}
-  expected_bbox = expected.get("bbox_2d")
-  predicted_bbox = output.get("bbox_2d")
-  if _number_list(expected_bbox, 4) and _number_list(predicted_bbox, 4):
+  if has_valid_boxes:
     metrics["box_iou"] = round(box_iou(expected_bbox, predicted_bbox), 6)
   expected_center = _center(expected)
   predicted_center = _center(output)
@@ -613,7 +623,12 @@ def _evaluate_row(
   }
 
 
-def _summary(rows: Sequence[dict[str, object]], warmup_runs: int) -> dict[str, object]:
+def _summary(
+  rows: Sequence[dict[str, object]],
+  warmup_runs: int,
+  *,
+  match_iou_threshold: float,
+) -> dict[str, object]:
   counts = {name: sum(row["outcome"] == name for row in rows) for name in ("tp", "fp", "tn", "fn")}
   precision_denominator = counts["tp"] + counts["fp"]
   recall_denominator = counts["tp"] + counts["fn"]
@@ -671,6 +686,11 @@ def _summary(rows: Sequence[dict[str, object]], warmup_runs: int) -> dict[str, o
     "sample_count": len(rows),
     "execution_error_count": sum(not row["execution_ok"] for row in rows),
     "confusion": counts,
+    "confusion_protocol": {
+      "name": "bbox_match",
+      "iou_threshold": match_iou_threshold,
+      "positive_found_without_match_is": "fn",
+    },
     "precision": round(precision, 6) if precision is not None else None,
     "recall": round(recall, 6) if recall is not None else None,
     "f1": round(f1, 6) if f1 is not None else None,
@@ -792,14 +812,19 @@ def evaluate_manifest(
   require_masks: bool = False,
   box_threshold: float | None = None,
   text_threshold: float | None = None,
+  nms_iou_threshold: float | None = None,
   save_overlays: bool = False,
   warmup_runs: int = 1,
   thresholds: AcceptanceThresholds | None = None,
   tool_name: str = "vision.open_vocab_detect",
   candidate_policy: str | None = None,
   scene_profile: dict[str, object] | None = None,
+  match_iou_threshold: float = 0.5,
 ) -> EvaluationRun:
   """Validate a manifest, run one persistent backend, and save report artifacts."""
+
+  if not 0.0 <= match_iou_threshold <= 1.0:
+    raise ValueError("match_iou_threshold must be between 0 and 1")
 
   validation = validate_manifest(manifest_path, check_files=True)
   if not validation.valid:
@@ -824,6 +849,7 @@ def evaluate_manifest(
       require_masks=require_masks,
       box_threshold=box_threshold,
       text_threshold=text_threshold,
+      nms_iou_threshold=nms_iou_threshold,
       overlay_path=overlay_path,
       candidate_policy=candidate_policy,
       scene_profile=scene_profile,
@@ -845,10 +871,15 @@ def evaluate_manifest(
         result,
         root=validation.manifest.parent,
         wall_clock_ms=elapsed_ms,
+        match_iou_threshold=match_iou_threshold,
       )
     )
 
-  summary = _summary(rows, warmup_runs)
+  summary = _summary(
+    rows,
+    warmup_runs,
+    match_iou_threshold=match_iou_threshold,
+  )
   failures = check_acceptance(summary, thresholds or AcceptanceThresholds())
   summary["acceptance"] = {
     "passed": not failures,

@@ -144,6 +144,11 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       depth_scale=float(vision_config.get("depth_scale", 1.0)),
       box_threshold=float(vision_config.get("box_threshold", 0.35)),
       text_threshold=float(vision_config.get("text_threshold", 0.25)),
+      nms_iou_threshold=(
+        float(vision_config["nms_iou_threshold"])
+        if vision_config.get("nms_iou_threshold") is not None
+        else None
+      ),
       device=vision_config.get("device"),
       camera_frame=str(
         vision_config.get("camera_frame", "camera_color_optical_frame")

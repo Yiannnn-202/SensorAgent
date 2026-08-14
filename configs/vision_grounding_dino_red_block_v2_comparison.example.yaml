@@ -1,0 +1,31 @@
+agent:
+  name: sensoragent
+  mode: vision_grounding_dino_red_block_v2_comparison
+
+tools:
+  enabled:
+    - vision.grounded_sam2
+
+skills:
+  enabled: []
+
+integrations:
+  vision:
+    grounding_dino_model: runs/vision/train/grounding_dino_red_block_v0/output/checkpoint-best
+    sam2_model_path: models/vision/sam2_t.pt
+    # Selected on red_block_v2 validation and frozen for test.
+    box_threshold: 0.05
+    text_threshold: 0.05
+    refine_masks: true
+    require_masks: true
+    depth_scale: 1.0
+    camera_frame: camera_color_optical_frame
+    base_frame: base_link
+
+logging:
+  level: info
+  console: true
+  app_log: logs/app.log
+  task_dir: logs/tasks
+  trace_dir: logs/traces
+  error_dir: logs/errors
