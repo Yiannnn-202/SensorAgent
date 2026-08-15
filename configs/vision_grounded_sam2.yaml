@@ -11,7 +11,8 @@ skills:
 
 integrations:
   vision:
-    grounding_dino_model: IDEA-Research/grounding-dino-tiny
+    grounding_dino_model: models/vision/grounding-dino/grounding_dino_object_mask_2_unified_v1/checkpoint-best
+    # vision.grounded_sam2 is strict and still requires this file to exist.
     sam2_model_path: models/vision/sam2_t.pt
     box_threshold: 0.35
     text_threshold: 0.25

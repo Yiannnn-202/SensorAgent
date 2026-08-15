@@ -38,8 +38,10 @@ integrations:
     timeout_seconds: 120.0
   vision:
     backend: grounding_dino
-    grounding_dino_model: IDEA-Research/grounding-dino-tiny
+    grounding_dino_model: models/vision/grounding-dino/grounding_dino_object_mask_2_unified_v1/checkpoint-best
     sam2_model_path: models/vision/sam2_t.pt
+    refine_masks: true
+    require_masks: false
     # The Gazebo validation scene uses a single red block. This deterministic
     # fallback keeps "red ..." commands from depending on text matching.
     red_color_shortcut: true
