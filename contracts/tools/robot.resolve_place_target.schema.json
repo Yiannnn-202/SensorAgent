@@ -9,6 +9,15 @@
       "target": {
         "type": "string",
         "description": "Place-target identifier registered in the runtime."
+      },
+      "release_z": {
+        "type": "number",
+        "description": "Optional override for the resolved place pose Z coordinate."
+      },
+      "place_offset": {
+        "type": "array",
+        "items": {"type": "number"},
+        "description": "Optional XYZ offset added to the resolved place pose."
       }
     }
   },

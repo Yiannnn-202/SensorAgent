@@ -142,6 +142,7 @@ class RecoveryPlan:
   next_step: str | None
   max_attempts: int
   updated_input: dict[str, Any] = field(default_factory=dict)
+  node_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
   notes: list[str] = field(default_factory=list)
 
   def to_dict(self) -> dict[str, Any]:

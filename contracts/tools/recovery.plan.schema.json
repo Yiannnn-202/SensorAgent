@@ -21,13 +21,14 @@
   },
   "output_schema": {
     "type": "object",
-    "required": ["strategy", "failure_type", "retryable", "max_attempts", "updated_input", "notes"],
+    "required": ["strategy", "failure_type", "retryable", "max_attempts", "updated_input", "node_overrides", "notes"],
     "properties": {
       "strategy": {"type": "string"},
       "failure_type": {"type": "string"},
       "retryable": {"type": "boolean"},
       "max_attempts": {"type": "number"},
       "updated_input": {"type": "object"},
+      "node_overrides": {"type": "object"},
       "notes": {"type": "array", "items": {"type": "string"}}
     }
   },

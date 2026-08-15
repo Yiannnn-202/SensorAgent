@@ -202,6 +202,8 @@ class CompetitionSortingSession:
         {"object_query": instance_id, "target": target},
         trace,
       )
+      if isinstance(result.output, dict) and isinstance(result.output.get("world_state"), dict):
+        self.world.merge_runtime_state(result.output["world_state"])
       attempt_result = {
         "attempt": attempt,
         "success": result.success,

@@ -17,6 +17,7 @@ from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlan
 from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
 from sensoragent.workflows.actionlists import (
   ActionListRuntime,
+  build_industrial_pick_at_pose_actionlist,
   build_industrial_pick_only_actionlist,
   build_industrial_place_only_actionlist,
 )
@@ -67,6 +68,19 @@ class IndustrialRecoveryTreeTest(TestCase):
     self.assertTrue(result.success, msg=result.error)
     self.assertEqual(result.nodes[-1].node, "success")
     self.assertNotIn("recovery.classify_failure", [call[0] for call in tool_runtime.calls])
+    world = result.output["world_state"]
+    self.assertEqual(world["objects"]["roller"]["status"], "placed")
+    self.assertEqual(world["bins"]["bin_cell_3"]["occupied_by"], "roller")
+    self.assertEqual(world["bins"]["bin_cell_3"]["status"], "occupied")
+    self.assertEqual(world["current_task"]["step"], "placed")
+    self.assertIn(
+      "object_observed",
+      [entry["event"] for entry in world["history"]],
+    )
+    self.assertIn(
+      "object_placed_in_target",
+      [entry["event"] for entry in world["history"]],
+    )
 
   def test_configured_intermediate_joints_are_in_nominal_tree(self) -> None:
     runtime, tool_runtime, _ = _make_runtime()
@@ -207,6 +221,81 @@ class IndustrialRecoveryTreeTest(TestCase):
       result.output["classification"]["failure_type"],
     )
     self.assertEqual(history[0]["strategy"], result.output["recovery"]["strategy"])
+    self.assertIn("node_overrides", history[0])
+    world_events = [entry["event"] for entry in result.output["world_state"]["history"]]
+    self.assertIn("node_failed", world_events)
+    self.assertIn("failure_classified", world_events)
+    self.assertIn("recovery_planned", world_events)
+
+  def test_grasp_empty_recovery_changes_recover_pick_inputs(self) -> None:
+    runtime, tool_runtime, skill_runtime = _make_runtime(
+      verify_grasp_sequence=[
+        _StubResult(False, {"held": False, "opening": 0.0848}, "grasp not detected (opening=0.0848)"),
+        _StubResult(True, {"held": True, "opening": 0.027}),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(result.output["recovery"]["strategy"], "retry_pick_adjusted_grasp")
+    plan_pick_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "robot.plan_top_down_pick"
+    ]
+    pick_inputs = [
+      input_data for name, input_data in skill_runtime.calls if name == "robot.pick"
+    ]
+    self.assertEqual(plan_pick_inputs[-1]["position_offset"], [0.0, 0.0, 0.035])
+    self.assertEqual(pick_inputs[-1]["close_opening"], 0.027)
+
+  def test_low_confidence_recovery_changes_redetect_input(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      config_detect_sequence=[
+        _StubResult(False, {"found": True, "confidence": 0.10}, "LOW_CONFIDENCE: 0.010 below 0.350"),
+        _StubResult(False, {"found": True, "confidence": 0.10}, "LOW_CONFIDENCE: 0.010 below 0.350"),
+        _StubResult(True, _config_detection()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    detect_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "vision.config_detect"
+    ]
+    self.assertEqual(detect_inputs[-1]["depth_window"], 11)
+
+  def test_place_plan_recovery_changes_recover_place_inputs(self) -> None:
+    runtime, tool_runtime, _ = _make_runtime(
+      plan_place_sequence=[
+        _StubResult(False, error="PLACE_PLAN failed for bin_cell_3"),
+        _StubResult(True, _place_plan()),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    resolve_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "robot.resolve_place_target"
+    ]
+    plan_place_inputs = [
+      input_data for name, input_data in tool_runtime.calls if name == "robot.plan_place"
+    ]
+    self.assertEqual(resolve_inputs[-1]["place_offset"], [0.0, 0.0, 0.03])
+    self.assertEqual(plan_place_inputs[-1]["clearance"], 0.13)
 
   def test_recovery_attempts_are_observable_after_short_circuit(self) -> None:
     # On short-circuit the counter reflects the recoveries that ran (1), while
@@ -315,9 +404,67 @@ class IndustrialRecoveryTreeTest(TestCase):
     )
 
     self.assertTrue(result.success, msg=result.error)
-    self.assertIn("recover_pick", [node.node for node in result.nodes])
+    self.assertIn("recover_pick_at_pose", [node.node for node in result.nodes])
     self.assertEqual(result.output["classification"]["failure_type"], "WRONG_BIN")
     self.assertGreaterEqual([call[0] for call in tool_runtime.calls].count("vision.verify_object_in_bin"), 2)
+
+  def test_wrong_bin_repick_uses_observed_pose_not_config_pose(self) -> None:
+    # The wrong-bin failure reports where the object actually landed; the
+    # recovery pick must plan against that observed pose, not the stale config
+    # detection pose the object was first picked from.
+    runtime, tool_runtime, _ = _make_runtime(
+      verify_bin_sequence=[
+        _StubResult(
+          False,
+          {
+            "target": "bin_cell_3",
+            "in_target": False,
+            "object_position": [0.55, -0.30, 0.31],
+            "target_position": [0.36, -0.06, 0.30],
+            "distance_xy": 0.30,
+          },
+          "WRONG_BIN: object is outside the requested target cell",
+        ),
+        _StubResult(
+          True,
+          {
+            "target": "bin_cell_3",
+            "in_target": True,
+            "object_position": [0.36, -0.06, 0.30],
+            "target_position": [0.36, -0.06, 0.30],
+            "distance_xy": 0.0,
+          },
+        ),
+      ]
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    plan_pick_inputs = [
+      input_data
+      for name, input_data in tool_runtime.calls
+      if name == "robot.plan_top_down_pick"
+    ]
+    self.assertEqual(len(plan_pick_inputs), 2)
+    self.assertEqual(plan_pick_inputs[-1]["pose_3d"], [0.55, -0.30, 0.31])
+    # The world state records the re-observed pose for the failed object.
+    world_events = [
+      entry["event"] for entry in result.output["world_state"]["history"]
+    ]
+    self.assertIn("object_reobserved_from_failure", world_events)
+    overrides = result.output["recovery_applied_overrides"]
+    self.assertTrue(
+      any(
+        entry.get("node_overrides", {}).get("recover_pick_at_pose", {}).get("pose_3d")
+        == [0.55, -0.30, 0.31]
+        for entry in overrides
+      )
+    )
 
   def test_object_not_found_recovers_by_redetect(self) -> None:
     # The detect node has one internal retry (max_retries=1), so it must fail
@@ -456,6 +603,36 @@ class IndustrialRecoveryTreeTest(TestCase):
     self.assertIn("place_lift_clearance", node_names)
     self.assertEqual(result.output["classification"]["failure_type"], "RELEASE_FAILED")
 
+  def test_dropped_object_without_observation_reroutes_to_re_detect(self) -> None:
+    # A transport drop observed only through a failed verify (no pose in the
+    # output) cannot support pick-at-pose; the tree must fall back to the
+    # re-detection branch instead of rendering an unresolvable template.
+    runtime, tool_runtime, _ = _make_runtime(
+      verify_place_sequence=[
+        _StubResult(False, None, "DROPPED_OBJECT: object lost during transport"),
+        _StubResult(True, {"released": True, "opening": 0.0848}),
+      ],
+    )
+
+    result = runtime.run(
+      build_industrial_recovery_pick_place_tree(),
+      {"object_query": "roller", "target": "bin_cell_3"},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(result.output["classification"]["failure_type"], "DROPPED_OBJECT")
+    node_names = [node.node for node in result.nodes]
+    self.assertNotIn("recover_pick_at_pose", node_names)
+    self.assertIn("recover_pick", node_names)
+    overrides = result.output["recovery_applied_overrides"]
+    self.assertTrue(
+      any(
+        entry.get("not_applied_reason") == "missing_observed_object_pose"
+        for entry in overrides
+      )
+    )
+
 
 class LiveDetectRecoveryTreeTest(TestCase):
   """The perception-driven variant must observe placement, not assume it."""
@@ -576,7 +753,7 @@ class LiveDetectRecoveryTreeTest(TestCase):
 
     node_names = [node.node for node in result.nodes]
     self.assertIn("redetect_post_place", node_names)
-    self.assertIn("recover_pick", node_names)
+    self.assertIn("recover_pick_at_pose", node_names)
     self.assertEqual(result.output["classification"]["failure_type"], "WRONG_BIN")
     verify_inputs = [
       input_data for name, input_data in tool_runtime.calls if name == "vision.verify_object_in_bin"
@@ -629,12 +806,20 @@ class LiveDetectRecoveryTreeTest(TestCase):
 
     node_names = [node.node for node in result.nodes]
     self.assertIn("verify_object_lifted", node_names)
-    self.assertIn("recover_pick", node_names)
+    self.assertIn("recover_pick_at_pose", node_names)
     self.assertEqual(
       result.output["classification"]["failure_type"],
       "DROPPED_OBJECT",
       msg=f"nodes={node_names}",
     )
+    # The re-pick plans against the observed resting pose, not the original
+    # pre-grasp detection pose [0.24, 0.23, 0.142].
+    plan_pick_inputs = [
+      input_data
+      for name, input_data in tool_runtime.calls
+      if name == "robot.plan_top_down_pick"
+    ]
+    self.assertEqual(plan_pick_inputs[-1]["pose_3d"][:3], [0.24, 0.23, 0.145])
     # The step name is what the detector keys DROPPED_OBJECT off, so pin it.
     self.assertEqual(
       result.output["classification"]["evidence"]["failed_step"],
@@ -832,6 +1017,7 @@ def _make_runtime(
   })
   actionlists = {
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
+    "industrial.pick_at_pose_actionlist": build_industrial_pick_at_pose_actionlist(),
     "industrial.place_only_actionlist": build_industrial_place_only_actionlist(),
   }
   actionlist_runtime = ActionListRuntime(tool_runtime, skill_runtime, _NullLogger())
