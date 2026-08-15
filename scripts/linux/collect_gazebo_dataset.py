@@ -28,17 +28,17 @@ ROOT = Path(__file__).resolve().parents[2]
 CAPTURE_SCRIPT = ROOT / "scripts" / "linux" / "capture_gazebo_rgbd_frame.py"
 
 
-def _completed_indices(images_dir: Path) -> list[int]:
+def _completed_indices(images_dir: Path, prefix: str) -> list[int]:
   indices = []
-  for path in images_dir.glob("red_block_*.png"):
-    suffix = path.stem.removeprefix("red_block_")
+  for path in images_dir.glob(f"{prefix}_*.png"):
+    suffix = path.stem.removeprefix(f"{prefix}_")
     if suffix.isdigit():
       indices.append(int(suffix))
   return sorted(indices)
 
 
-def _next_index(images_dir: Path) -> int:
-  indices = _completed_indices(images_dir)
+def _next_index(images_dir: Path, prefix: str) -> int:
+  indices = _completed_indices(images_dir, prefix)
   return indices[-1] + 1 if indices else 1
 
 
@@ -52,6 +52,7 @@ def _append_manifest(
   dataset_dir: Path,
   index: int,
   class_name: str,
+  prefix: str,
   image_path: Path,
   raw_dir: Path,
 ) -> None:
@@ -76,7 +77,7 @@ def _append_manifest(
     writer.writerow(
       {
         "capture_index": index,
-        "scene_id": f"scene_{index:03d}",
+        "scene_id": f"{prefix}_{index:03d}",
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "class_name": class_name,
         "image": _relative(image_path, dataset_dir),
@@ -96,9 +97,9 @@ def _capture(
   images_dir: Path,
   raw_root: Path,
 ) -> bool:
-  index = _next_index(images_dir)
-  raw_dir = raw_root / f"scene_{index:03d}"
-  image_path = images_dir / f"red_block_{index:03d}.png"
+  index = _next_index(images_dir, args.prefix)
+  raw_dir = raw_root / f"{args.prefix}_{index:03d}"
+  image_path = images_dir / f"{args.prefix}_{index:03d}.png"
   command = [
     args.ros_python,
     str(CAPTURE_SCRIPT),
@@ -143,22 +144,23 @@ def _capture(
     dataset_dir=dataset_dir,
     index=index,
     class_name=args.class_name,
+    prefix=args.prefix,
     image_path=image_path,
     raw_dir=raw_dir,
   )
-  count = len(_completed_indices(images_dir))
+  count = len(_completed_indices(images_dir, args.prefix))
   print(f"[capture] saved {image_path}")
   print(f"[capture] progress {count}/{args.target_count}")
   return True
 
 
-def _show_status(dataset_dir: Path, images_dir: Path, target_count: int) -> None:
-  indices = _completed_indices(images_dir)
+def _show_status(dataset_dir: Path, images_dir: Path, target_count: int, prefix: str) -> None:
+  indices = _completed_indices(images_dir, prefix)
   print()
   print(f"Dataset: {dataset_dir}")
   print(f"Roboflow images: {images_dir}")
   print(f"Captured: {len(indices)}/{target_count}")
-  print(f"Next scene: {_next_index(images_dir):03d}")
+  print(f"Next scene: {_next_index(images_dir, prefix):03d}")
   print()
 
 
@@ -172,6 +174,11 @@ def _parser() -> argparse.ArgumentParser:
     default=ROOT / "data" / "vision" / "red_block_v0",
   )
   parser.add_argument("--class-name", default="red block")
+  parser.add_argument(
+    "--prefix",
+    default="red_block",
+    help="Filename prefix + index pattern for captures; match your object (e.g. 'metal_part').",
+  )
   parser.add_argument("--target-count", type=int, default=20)
   parser.add_argument("--ros-python", default="python3")
   parser.add_argument("--image-topic", default="/industrial_camera/image")
@@ -192,9 +199,9 @@ def main(argv: list[str] | None = None) -> int:
   images_dir.mkdir(parents=True, exist_ok=True)
   raw_root.mkdir(parents=True, exist_ok=True)
 
-  print("Gazebo red block dataset collector")
+  print(f'Gazebo dataset collector for "{args.class_name}" (file prefix "{args.prefix}")')
   print("Move the object in Gazebo, return here, then press 1 to capture.")
-  _show_status(dataset_dir, images_dir, args.target_count)
+  _show_status(dataset_dir, images_dir, args.target_count, args.prefix)
 
   while True:
     choice = input("[1] capture  [2] status  [0] exit > ").strip().casefold()
@@ -206,9 +213,9 @@ def main(argv: list[str] | None = None) -> int:
         raw_root=raw_root,
       )
     elif choice in {"2", "s", "status"}:
-      _show_status(dataset_dir, images_dir, args.target_count)
+      _show_status(dataset_dir, images_dir, args.target_count, args.prefix)
     elif choice in {"0", "q", "quit", "exit"}:
-      _show_status(dataset_dir, images_dir, args.target_count)
+      _show_status(dataset_dir, images_dir, args.target_count, args.prefix)
       print("Collection stopped. Existing captures are preserved.")
       return 0
     else:
