@@ -139,6 +139,8 @@ class CompetitionSortingSession:
         "error": intent.reason,
         "clarification": intent.clarification,
       }
+    if intent.quantity == "all":
+      return self._handle_batch(intent, base_result)
     if intent.target is None:
       return {
         **base_result,
@@ -190,6 +192,105 @@ class CompetitionSortingSession:
       "status": "completed" if execution["success"] else "failed",
       "selected_instance": instance.to_dict(),
       "execution": execution,
+      "world_state": self.world.to_dict(),
+    }
+
+  def _handle_batch(self, intent, base_result: dict) -> dict:
+    """Queue every remaining instance of the class, one cell per instance.
+
+    Cells fill from the named target onwards; a subtask failure stops the
+    batch so the remaining queue and the failed object stay on record.
+    """
+
+    queue = self.resolver.candidates(
+      intent.object_class,
+      excluded=self.world.unavailable_instances,
+    )
+    if not queue:
+      return {
+        **base_result,
+        "success": False,
+        "status": GroundingStatus.NEEDS_CLARIFICATION,
+        "error": "NO_REMAINING_INSTANCES",
+        "clarification": "当前场景中没有剩余的该类零件。",
+      }
+    remaining_cells = sum(
+      1 for cell in self.world.bins.values() if cell.status == "empty"
+    )
+    if remaining_cells < len(queue):
+      return {
+        **base_result,
+        "success": False,
+        "status": GroundingStatus.NEEDS_CLARIFICATION,
+        "error": "NOT_ENOUGH_EMPTY_CELLS",
+        "clarification": (
+          f"剩余 {len(queue)} 个实例但只有 {remaining_cells} 个空格。"
+        ),
+      }
+
+    self.world.record(
+      "batch_task_started",
+      object_class=intent.object_class,
+      start_target=intent.target,
+      queue=[instance.instance_id for instance in queue],
+    )
+    subtasks: list[dict] = []
+    for position, instance in enumerate(queue):
+      target = self.world.next_empty_cell(start_from=intent.target)
+      if target is None:
+        break
+      self.world.observe(instance)
+      self.world.select(instance.instance_id, target)
+      execution = self._execute_with_recovery(instance.instance_id, target)
+      subtask = {
+        "position": position + 1,
+        "instance_id": instance.instance_id,
+        "target": target,
+        "success": execution["success"],
+        "execution": execution,
+      }
+      subtasks.append(subtask)
+      if execution["success"]:
+        self.world.mark_placed(instance.instance_id, target)
+        self.world.record(
+          "batch_subtask_completed",
+          instance_id=instance.instance_id,
+          target=target,
+          position=position + 1,
+        )
+      else:
+        self.world.mark_failed(
+          instance.instance_id,
+          str(execution.get("error") or "workflow failed"),
+        )
+        remaining = [item.instance_id for item in queue[position + 1:]]
+        self.world.record(
+          "batch_task_interrupted",
+          failed_instance=instance.instance_id,
+          error=execution.get("error"),
+          remaining_queue=remaining,
+        )
+        return {
+          **base_result,
+          "success": False,
+          "status": "failed",
+          "type": "batch_command",
+          "subtasks": subtasks,
+          "failed_instance": instance.instance_id,
+          "remaining_queue": remaining,
+          "world_state": self.world.to_dict(),
+        }
+
+    self.world.record(
+      "batch_task_finished",
+      placed=[subtask["instance_id"] for subtask in subtasks],
+    )
+    return {
+      **base_result,
+      "success": True,
+      "status": "completed",
+      "type": "batch_command",
+      "subtasks": subtasks,
       "world_state": self.world.to_dict(),
     }
 

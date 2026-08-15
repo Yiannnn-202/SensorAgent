@@ -55,3 +55,25 @@ class CompetitionWorldStateTest(TestCase):
     self.assertEqual(world.bins["bin_cell_3"].observed_position, (0.36, -0.06, 0.30))
     self.assertEqual(world.current_task["step"], "placed")
     self.assertIn("runtime_world_state_merged", [entry["event"] for entry in world.history])
+
+  def test_next_empty_cell_scans_in_target_order_from_start(self) -> None:
+    world = CompetitionWorldState(("bin_cell_1", "bin_cell_2", "bin_cell_3"))
+
+    self.assertEqual(world.next_empty_cell(), "bin_cell_1")
+    self.assertEqual(world.next_empty_cell(start_from="bin_cell_2"), "bin_cell_2")
+    # An occupied start cell skips forward to the next empty one.
+    world.bins["bin_cell_2"].status = "occupied"
+    self.assertEqual(world.next_empty_cell(start_from="bin_cell_2"), "bin_cell_3")
+    for cell in world.bins.values():
+      cell.status = "occupied"
+    self.assertIsNone(world.next_empty_cell(start_from="bin_cell_1"))
+
+  def test_record_appends_caller_defined_events(self) -> None:
+    world = CompetitionWorldState(("bin_cell_1",))
+
+    world.record("batch_task_started", queue=["roller_01", "roller_02"])
+
+    entry = world.history[-1]
+    self.assertEqual(entry["event"], "batch_task_started")
+    self.assertEqual(entry["queue"], ["roller_01", "roller_02"])
+    self.assertIn("timestamp", entry)
