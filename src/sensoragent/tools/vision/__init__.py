@@ -6,6 +6,7 @@ from sensoragent.tools.vision.grounded_sam2 import VisionGroundedSam2Tool
 from sensoragent.tools.vision.open_vocab import (
   SPATIAL_RELATIONS,
   GroundingDinoBackend,
+  VisionCandidateDecision,
   MaskRefinementBackend,
   OpenVocabularyVisionBackend,
   SpatialConstraint,
@@ -14,6 +15,8 @@ from sensoragent.tools.vision.open_vocab import (
   VisionDetection,
   VisionInferenceOptions,
   VisionOpenVocabularyDetectTool,
+  VisionGroundingDinoCandidatesTool,
+  filter_cross_category_candidates,
 )
 from sensoragent.tools.vision.verify import (
   VisionVerifyObjectInBinTool,
@@ -23,6 +26,7 @@ from sensoragent.tools.vision.verify import (
 __all__ = [
   "SPATIAL_RELATIONS",
   "GroundingDinoBackend",
+  "VisionCandidateDecision",
   "MaskRefinementBackend",
   "OpenVocabularyVisionBackend",
   "SpatialConstraint",
@@ -34,6 +38,8 @@ __all__ = [
   "VisionGroundedSam2Tool",
   "VisionInferenceOptions",
   "VisionOpenVocabularyDetectTool",
+  "VisionGroundingDinoCandidatesTool",
+  "filter_cross_category_candidates",
   "VisionVerifyObjectInBinTool",
   "VisionVerifyObjectLiftedTool",
 ]

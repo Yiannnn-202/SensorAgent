@@ -1,0 +1,34 @@
+agent:
+  name: sensoragent
+  mode: vision_grounding_dino
+
+tools:
+  enabled:
+    - vision.open_vocab_detect
+
+skills:
+  enabled: []
+
+integrations:
+  vision:
+    backend: grounding_dino
+    grounding_dino_model: runs/vision/train/grounding_dino_public_mechanical_reinitialized_9epochs_20260812/checkpoint-best
+    sam2_model_path: models/vision/sam2_t.pt
+    # These values were selected on the public validation split, then frozen
+    # for the 58-image public test evaluation. They are not calibration values
+    # for the later room_110/training_building collection.
+    box_threshold: 0.05
+    text_threshold: 0.05
+    refine_masks: true
+    require_masks: false
+    depth_scale: 1.0
+    camera_frame: camera_color_optical_frame
+    base_frame: base_link
+
+logging:
+  level: info
+  console: true
+  app_log: logs/app.log
+  task_dir: logs/tasks
+  trace_dir: logs/traces
+  error_dir: logs/errors

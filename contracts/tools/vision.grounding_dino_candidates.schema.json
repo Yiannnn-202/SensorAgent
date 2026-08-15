@@ -1,0 +1,56 @@
+{
+  "name": "vision.grounding_dino_candidates",
+  "version": "0.1.0",
+  "description": "Run Grounding DINO for several queries and resolve same-object candidate conflicts.",
+  "input_schema": {
+    "type": "object",
+    "required": ["image_path", "queries"],
+    "properties": {
+      "image_path": {"type": "string"},
+      "queries": {
+        "type": "array",
+        "minItems": 1,
+        "items": {"type": "string"}
+      },
+      "box_threshold": {"type": "number"},
+      "text_threshold": {"type": "number"},
+      "classwise_nms_iou": {"type": "number"},
+      "cross_class_iou": {"type": "number"},
+      "ambiguity_margin": {"type": "number"},
+      "device": {"type": "string"}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["found", "source", "queries", "detections", "selected", "suppressed", "ambiguous"],
+    "properties": {
+      "found": {"type": "boolean"},
+      "source": {"type": "string"},
+      "model": {"type": "string"},
+      "image_path": {"type": "string"},
+      "queries": {"type": "array", "items": {"type": "string"}},
+      "detections": {"type": "array", "items": {"type": "object"}},
+      "selected": {"type": "array", "items": {"type": "object"}},
+      "suppressed": {"type": "array", "items": {"type": "object"}},
+      "ambiguous": {"type": "array", "items": {"type": "object"}},
+      "policy": {
+        "type": "object",
+        "properties": {
+          "classwise_nms_iou": {"type": "number"},
+          "cross_class_iou": {"type": "number"},
+          "ambiguity_margin": {"type": "number"},
+          "score_semantics": {"type": "string"}
+        }
+      },
+      "timing_ms": {"type": "object"}
+    }
+  },
+  "errors": [
+    "VISION_MODEL_NOT_READY",
+    "VISION_BACKEND_UNAVAILABLE",
+    "VISION_BACKEND_ERROR",
+    "VISION_INPUT_ERROR",
+    "OBJECT_NOT_FOUND",
+    "OBJECT_AMBIGUOUS"
+  ]
+}

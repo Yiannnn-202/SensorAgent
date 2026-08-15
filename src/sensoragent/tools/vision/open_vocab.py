@@ -24,6 +24,7 @@ class VisionInferenceOptions:
 
   box_threshold: float = 0.35
   text_threshold: float = 0.25
+  nms_iou_threshold: float | None = None
   device: str | None = None
 
 
@@ -431,6 +432,170 @@ def _mask_area_and_centroid(
   return total_area, [weighted_x / total_area, weighted_y / total_area]
 
 
+def _bbox_iou(first: Sequence[float], second: Sequence[float]) -> float:
+  """Return IoU for two ``xyxy`` boxes without depending on an ML package."""
+
+  left = max(float(first[0]), float(second[0]))
+  top = max(float(first[1]), float(second[1]))
+  right = min(float(first[2]), float(second[2]))
+  bottom = min(float(first[3]), float(second[3]))
+  intersection = max(0.0, right - left) * max(0.0, bottom - top)
+  first_area = max(0.0, float(first[2]) - float(first[0])) * max(
+    0.0, float(first[3]) - float(first[1])
+  )
+  second_area = max(0.0, float(second[2]) - float(second[0])) * max(
+    0.0, float(second[3]) - float(second[1])
+  )
+  union = first_area + second_area - intersection
+  return intersection / union if union > 0.0 else 0.0
+
+
+@dataclass(frozen=True)
+class VisionCandidateDecision:
+  """Explain how one candidate was handled by the candidate policy."""
+
+  index: int
+  detection: VisionDetection
+  status: str
+  rejection_reason: str | None = None
+  conflict_with: int | None = None
+  score_margin: float | None = None
+  overlap_iou: float | None = None
+
+
+def filter_cross_category_candidates(
+  candidates: Sequence[VisionDetection],
+  *,
+  classwise_nms_iou: float = 0.5,
+  cross_class_iou: float = 0.5,
+  ambiguity_margin: float = 0.03,
+) -> list[VisionCandidateDecision]:
+  """Apply class-wise NMS followed by cross-class conflict resolution.
+
+  The detector may be run once per text prompt, so scores from different
+  prompts are treated as ranking scores rather than calibrated probabilities.
+  A cross-class overlap is resolved only when the score gap is larger than
+  ``ambiguity_margin``.  Close scores remain ``ambiguous`` and are never
+  silently sent to a downstream action.
+  """
+
+  for name, value in (
+    ("classwise_nms_iou", classwise_nms_iou),
+    ("cross_class_iou", cross_class_iou),
+  ):
+    if not 0.0 <= float(value) <= 1.0:
+      raise ValueError(f"{name} must be between 0 and 1")
+  if float(ambiguity_margin) < 0.0:
+    raise ValueError("ambiguity_margin must be non-negative")
+
+  valid = [
+    (index, detection)
+    for index, detection in enumerate(candidates)
+    if detection.found and detection.bbox_2d is not None
+  ]
+  ordered = sorted(
+    valid,
+    key=lambda item: (-float(item[1].confidence), item[0]),
+  )
+  kept: list[tuple[int, VisionDetection]] = []
+  decisions: dict[int, VisionCandidateDecision] = {}
+  for index, detection in ordered:
+    same_class_overlap = next(
+      (
+        (kept_index, _bbox_iou(detection.bbox_2d, kept_detection.bbox_2d))
+        for kept_index, kept_detection in kept
+        if kept_detection.label.casefold() == detection.label.casefold()
+        and _bbox_iou(detection.bbox_2d, kept_detection.bbox_2d)
+        >= classwise_nms_iou
+      ),
+      None,
+    )
+    if same_class_overlap is not None:
+      kept_index, overlap = same_class_overlap
+      decisions[index] = VisionCandidateDecision(
+        index=index,
+        detection=detection,
+        status="suppressed",
+        rejection_reason="same_class_nms",
+        conflict_with=kept_index,
+        overlap_iou=round(overlap, 6),
+      )
+      continue
+    kept.append((index, detection))
+    decisions[index] = VisionCandidateDecision(
+      index=index,
+      detection=detection,
+      status="selected",
+    )
+
+  kept_by_index = {index: detection for index, detection in kept}
+  for position, (first_index, first) in enumerate(kept):
+    for second_index, second in kept[position + 1 :]:
+      if first.label.casefold() == second.label.casefold():
+        continue
+      overlap = _bbox_iou(first.bbox_2d, second.bbox_2d)
+      if overlap < cross_class_iou:
+        continue
+      margin = abs(float(first.confidence) - float(second.confidence))
+      if margin <= ambiguity_margin:
+        for index, other in ((first_index, second), (second_index, first)):
+          current = decisions[index]
+          ambiguity = {
+            "is_ambiguous": True,
+            "score_margin": round(margin, 6),
+            "required_margin": float(ambiguity_margin),
+            "overlap_iou": round(overlap, 6),
+            "competing_label": other.label,
+          }
+          decisions[index] = VisionCandidateDecision(
+            index=index,
+            detection=replace(
+              current.detection,
+              rejection_reason="cross_class_overlap_ambiguous",
+              ambiguity=ambiguity,
+            ),
+            status="ambiguous",
+            rejection_reason="cross_class_overlap_ambiguous",
+            conflict_with=(
+              second_index if index == first_index else first_index
+            ),
+            score_margin=round(margin, 6),
+            overlap_iou=round(overlap, 6),
+          )
+        continue
+      winner_index = (
+        first_index
+        if float(first.confidence) > float(second.confidence)
+        else second_index
+      )
+      loser_index = second_index if winner_index == first_index else first_index
+      loser = kept_by_index[loser_index]
+      current = decisions[loser_index]
+      if current.status == "ambiguous":
+        continue
+      decisions[loser_index] = VisionCandidateDecision(
+        index=loser_index,
+        detection=replace(
+          loser,
+          rejection_reason="cross_class_overlap_lower_score",
+          ambiguity={
+            "is_ambiguous": False,
+            "score_margin": round(margin, 6),
+            "required_margin": float(ambiguity_margin),
+            "overlap_iou": round(overlap, 6),
+            "winner_label": kept_by_index[winner_index].label,
+          },
+        ),
+        status="suppressed",
+        rejection_reason="cross_class_overlap_lower_score",
+        conflict_with=winner_index,
+        score_margin=round(margin, 6),
+        overlap_iou=round(overlap, 6),
+      )
+
+  return [decisions[index] for index, _ in sorted(valid, key=lambda item: item[0])]
+
+
 def _resolve_torch_device(device: str | None) -> str | None:
   if device is None or not str(device).strip():
     return None
@@ -601,6 +766,8 @@ class UltralyticsOpenVocabularyBackend:
       "verbose": False,
       "conf": options.box_threshold,
     }
+    if options.nms_iou_threshold is not None:
+      arguments["iou"] = options.nms_iou_threshold
     if options.device is not None:
       arguments["device"] = options.device
     started = time.perf_counter()
@@ -842,6 +1009,241 @@ class GroundingDinoBackend:
     if not found:
       return candidates[0]
     return max(found, key=lambda detection: detection.confidence)
+
+
+class VisionGroundingDinoCandidatesTool:
+  """Run multiple Grounding DINO prompts and expose a safe candidate list.
+
+  This tool is intentionally independent from the agent bootstrap.  It is a
+  callable image-processing interface for validating the candidate policy
+  before the result is connected to robot actions or process management.
+  """
+
+  spec = ToolSpec(
+    name="vision.grounding_dino_candidates",
+    description=(
+      "Run Grounding DINO for several object queries, apply class-wise NMS "
+      "and cross-class overlap filtering, and return structured candidates."
+    ),
+    version="0.1.0",
+    tags=("vision", "grounding-dino", "candidate-policy", "image"),
+    timeout_seconds=300.0,
+  )
+
+  def __init__(
+    self,
+    *,
+    grounding_dino_model: str | None = None,
+    box_threshold: float = 0.15,
+    text_threshold: float = 0.001,
+    classwise_nms_iou: float = 0.5,
+    cross_class_iou: float = 0.5,
+    ambiguity_margin: float = 0.03,
+    device: str | None = None,
+    detector: OpenVocabularyVisionBackend | None = None,
+  ) -> None:
+    self._detector = detector or GroundingDinoBackend(grounding_dino_model)
+    self._box_threshold = float(box_threshold)
+    self._text_threshold = float(text_threshold)
+    self._classwise_nms_iou = float(classwise_nms_iou)
+    self._cross_class_iou = float(cross_class_iou)
+    self._ambiguity_margin = float(ambiguity_margin)
+    self._device = device
+    self._model_reference = (
+      grounding_dino_model
+      or getattr(self._detector, "model_id", "grounding_dino")
+    )
+    self._validate_policy_values(
+      box_threshold=self._box_threshold,
+      text_threshold=self._text_threshold,
+      classwise_nms_iou=self._classwise_nms_iou,
+      cross_class_iou=self._cross_class_iou,
+      ambiguity_margin=self._ambiguity_margin,
+    )
+
+  @staticmethod
+  def _validate_policy_values(**values: float) -> None:
+    for name in ("box_threshold", "text_threshold", "classwise_nms_iou", "cross_class_iou"):
+      value = float(values[name])
+      if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} must be between 0 and 1")
+    if float(values["ambiguity_margin"]) < 0.0:
+      raise ValueError("ambiguity_margin must be non-negative")
+
+  @staticmethod
+  def _candidate_output(
+    decision: VisionCandidateDecision,
+    query: str,
+  ) -> dict[str, object]:
+    output = decision.detection.to_output()
+    output.update(
+      {
+        "query": query,
+        "status": decision.status,
+      }
+    )
+    if decision.rejection_reason is not None:
+      output["rejection_reason"] = decision.rejection_reason
+    if decision.conflict_with is not None:
+      output["conflict_with_index"] = decision.conflict_with
+    if decision.score_margin is not None:
+      output["score_margin"] = decision.score_margin
+    if decision.overlap_iou is not None:
+      output["overlap_iou"] = decision.overlap_iou
+    return output
+
+  @staticmethod
+  def _error_result(
+    *,
+    tool_name: str,
+    error: str,
+    source: str = "grounding_dino",
+    image_path: str | None = None,
+  ) -> ToolResult:
+    output: dict[str, object] = {
+      "found": False,
+      "source": source,
+      "queries": [],
+      "detections": [],
+      "selected": [],
+      "suppressed": [],
+      "ambiguous": [],
+    }
+    if image_path is not None:
+      output["image_path"] = image_path
+    return ToolResult(tool=tool_name, success=False, output=output, error=error)
+
+  def run(self, call: ToolCall) -> ToolResult:
+    """Process one image independently from the main agent workflow."""
+
+    image_path = call.input.get("image_path")
+    queries_value = call.input.get("queries")
+    if not isinstance(image_path, str) or not image_path.strip():
+      return self._error_result(
+        tool_name=self.spec.name,
+        error="VISION_INPUT_ERROR: image_path must be a non-empty string",
+      )
+    if not isinstance(queries_value, list) or not queries_value:
+      return self._error_result(
+        tool_name=self.spec.name,
+        error="VISION_INPUT_ERROR: queries must be a non-empty list",
+        image_path=image_path,
+      )
+    queries: list[str] = []
+    for value in queries_value:
+      if not isinstance(value, str) or not value.strip():
+        return self._error_result(
+          tool_name=self.spec.name,
+          error="VISION_INPUT_ERROR: every query must be a non-empty string",
+          image_path=image_path,
+        )
+      if value.strip() not in queries:
+        queries.append(value.strip())
+
+    defaults = {
+      "box_threshold": self._box_threshold,
+      "text_threshold": self._text_threshold,
+      "classwise_nms_iou": self._classwise_nms_iou,
+      "cross_class_iou": self._cross_class_iou,
+      "ambiguity_margin": self._ambiguity_margin,
+    }
+    try:
+      for name in defaults:
+        if name in call.input:
+          defaults[name] = float(call.input[name])
+      self._validate_policy_values(**defaults)
+      options = VisionInferenceOptions(
+        box_threshold=defaults["box_threshold"],
+        text_threshold=defaults["text_threshold"],
+        device=str(call.input.get("device", self._device))
+        if call.input.get("device", self._device) is not None
+        else None,
+      )
+      started = time.perf_counter()
+      detections: list[VisionDetection] = []
+      query_for_index: list[str] = []
+      per_query_ms: dict[str, float] = {}
+      for query in queries:
+        query_started = time.perf_counter()
+        found = self._detector.detect_all(
+          query=query,
+          image_path=image_path,
+          depth_path=None,
+          options=options,
+        )
+        per_query_ms[query] = round((time.perf_counter() - query_started) * 1000.0, 3)
+        for detection in found:
+          if detection.found and detection.bbox_2d is not None:
+            detections.append(detection)
+            query_for_index.append(query)
+      decisions = filter_cross_category_candidates(
+        detections,
+        classwise_nms_iou=defaults["classwise_nms_iou"],
+        cross_class_iou=defaults["cross_class_iou"],
+        ambiguity_margin=defaults["ambiguity_margin"],
+      )
+      all_outputs = [
+        self._candidate_output(decision, query_for_index[decision.index])
+        for decision in decisions
+      ]
+      selected = [item for item in all_outputs if item["status"] == "selected"]
+      suppressed = [item for item in all_outputs if item["status"] == "suppressed"]
+      ambiguous = [item for item in all_outputs if item["status"] == "ambiguous"]
+      elapsed_ms = round((time.perf_counter() - started) * 1000.0, 3)
+      output = {
+        "found": bool(selected),
+        "source": "grounding_dino",
+        "model": self._model_reference,
+        "image_path": image_path,
+        "queries": queries,
+        "detections": all_outputs,
+        "selected": selected,
+        "suppressed": suppressed,
+        "ambiguous": ambiguous,
+        "policy": {
+          "classwise_nms_iou": defaults["classwise_nms_iou"],
+          "cross_class_iou": defaults["cross_class_iou"],
+          "ambiguity_margin": defaults["ambiguity_margin"],
+          "score_semantics": "ranking_score_not_calibrated_probability",
+        },
+        "timing_ms": {
+          "total": elapsed_ms,
+          "per_query": per_query_ms,
+        },
+      }
+      error = None
+      if not selected:
+        error = "OBJECT_AMBIGUOUS" if ambiguous else "OBJECT_NOT_FOUND"
+      return ToolResult(
+        tool=self.spec.name,
+        success=bool(selected),
+        output=output,
+        error=error,
+      )
+    except VisionModelNotReadyError as exc:
+      return self._error_result(
+        tool_name=self.spec.name,
+        error=f"VISION_MODEL_NOT_READY: {exc}",
+        image_path=image_path,
+      )
+    except (FileNotFoundError, PermissionError, ValueError) as exc:
+      return self._error_result(
+        tool_name=self.spec.name,
+        error=f"VISION_INPUT_ERROR: {exc}",
+        image_path=image_path,
+      )
+    except ImportError as exc:
+      return self._error_result(
+        tool_name=self.spec.name,
+        error=f"VISION_BACKEND_UNAVAILABLE: {exc}",
+        image_path=image_path,
+      )
+    except (OSError, RuntimeError) as exc:
+      return self._error_result(
+        tool_name=self.spec.name,
+        error=f"VISION_BACKEND_ERROR: {exc}",
+        image_path=image_path,
+      )
 
 
 class UltralyticsSam2Backend:
@@ -1420,6 +1822,7 @@ class VisionOpenVocabularyDetectTool:
     depth_scale: float = 1.0,
     box_threshold: float = 0.35,
     text_threshold: float = 0.25,
+    nms_iou_threshold: float | None = None,
     device: str | None = None,
     refine_masks: bool | None = None,
     require_masks: bool = False,
@@ -1444,6 +1847,7 @@ class VisionOpenVocabularyDetectTool:
     self._depth_scale = depth_scale
     self._box_threshold = box_threshold
     self._text_threshold = text_threshold
+    self._nms_iou_threshold = nms_iou_threshold
     self._device = device
     self._require_masks = require_masks
     self._red_color_shortcut = red_color_shortcut
@@ -1490,7 +1894,7 @@ class VisionOpenVocabularyDetectTool:
       )
     if mask_refiner is not None:
       self._mask_refiner = mask_refiner
-    elif is_grounding_dino:
+    elif self._refine_masks:
       self._mask_refiner = UltralyticsSam2Backend(sam2_model_path)
     else:
       self._mask_refiner = None
@@ -1572,11 +1976,16 @@ class VisionOpenVocabularyDetectTool:
       raise ValueError("box_threshold must be between 0 and 1")
     if not 0.0 <= text_threshold <= 1.0:
       raise ValueError("text_threshold must be between 0 and 1")
+    nms_value = call.input.get("nms_iou_threshold", defaults.nms_iou_threshold)
+    nms_iou_threshold = float(nms_value) if nms_value is not None else None
+    if nms_iou_threshold is not None and not 0.0 <= nms_iou_threshold <= 1.0:
+      raise ValueError("nms_iou_threshold must be between 0 and 1")
     device_value = call.input.get("device", defaults.device)
     device = str(device_value) if device_value not in (None, "") else None
     return VisionInferenceOptions(
       box_threshold=box_threshold,
       text_threshold=text_threshold,
+      nms_iou_threshold=nms_iou_threshold,
       device=device,
     )
 
@@ -1977,6 +2386,7 @@ class VisionOpenVocabularyDetectTool:
     defaults = VisionInferenceOptions(
       box_threshold=self._box_threshold,
       text_threshold=self._text_threshold,
+      nms_iou_threshold=self._nms_iou_threshold,
       device=self._device,
     )
     try:

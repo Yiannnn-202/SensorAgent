@@ -38,6 +38,7 @@ the same status or design.
 - [Public datasets and licenses](guides/vision/public-datasets.md)
 - [Competition vision evaluation and data handoff](guides/vision/competition-evaluation-framework-cn.md)
 - [Tabletop scene-aware candidate policy](guides/vision/scene-aware-candidate-policy-cn.md)
+- [Grounding DINO multi-class candidate Tool](guides/vision/grounding-dino-candidate-tool-cn.md)
 - [XH-202607 vision module technical packaging](guides/vision/competition-vision-module-packaging-cn.md)
 - [SAM3 suitability assessment](guides/vision/sam3-assessment.md)
 - [Gazebo vision VM setup](guides/vision/gazebo-vm-setup.md)
