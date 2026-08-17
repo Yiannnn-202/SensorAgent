@@ -24,6 +24,7 @@ class VisionInferenceOptions:
 
   box_threshold: float = 0.35
   text_threshold: float = 0.25
+  nms_iou_threshold: float | None = None
   device: str | None = None
 
 
@@ -51,6 +52,12 @@ class VisionDetection:
   base_frame: str | None = None
   world_frame: str | None = None
   model: str | None = None
+  candidate_policy: str | None = None
+  scene_profile: str | None = None
+  scene_score: float | None = None
+  scene_features: dict[str, float] | None = None
+  rejection_reason: str | None = None
+  ambiguity: dict[str, object] | None = None
   timing_ms: dict[str, float] = field(default_factory=dict)
   warnings: list[str] = field(default_factory=list)
   source: str = "open_vocab"
@@ -82,11 +89,147 @@ class VisionDetection:
       "base_frame": self.base_frame,
       "world_frame": self.world_frame,
       "model": self.model,
+      "candidate_policy": self.candidate_policy,
+      "scene_profile": self.scene_profile,
+      "scene_score": self.scene_score,
+      "scene_features": self.scene_features,
+      "rejection_reason": self.rejection_reason,
+      "ambiguity": self.ambiguity,
       "timing_ms": self.timing_ms or None,
       "warnings": self.warnings or None,
     }
     output.update({key: value for key, value in optional.items() if value is not None})
     return output
+
+
+def _float_range(value: object, field_name: str) -> tuple[float, float] | None:
+  if value is None:
+    return None
+  if not isinstance(value, (list, tuple)) or len(value) != 2:
+    raise ValueError(f"scene_profile.{field_name} must contain two numbers")
+  try:
+    low, high = float(value[0]), float(value[1])
+  except (TypeError, ValueError) as exc:
+    raise ValueError(
+      f"scene_profile.{field_name} must contain two numbers"
+    ) from exc
+  if low < 0.0 or high <= low:
+    raise ValueError(
+      f"scene_profile.{field_name} must satisfy 0 <= low < high"
+    )
+  return low, high
+
+
+def _float_roi(value: object, field_name: str) -> tuple[float, float, float, float]:
+  if not isinstance(value, (list, tuple)) or len(value) != 4:
+    raise ValueError(f"scene_profile.{field_name} must be [x1, y1, x2, y2]")
+  try:
+    x1, y1, x2, y2 = (float(item) for item in value)
+  except (TypeError, ValueError) as exc:
+    raise ValueError(
+      f"scene_profile.{field_name} must be [x1, y1, x2, y2]"
+    ) from exc
+  if x2 <= x1 or y2 <= y1:
+    raise ValueError(
+      f"scene_profile.{field_name} must satisfy x2>x1 and y2>y1"
+    )
+  return x1, y1, x2, y2
+
+
+def _positive_pair(value: object, field_name: str) -> tuple[float, float] | None:
+  if value is None:
+    return None
+  if not isinstance(value, (list, tuple)) or len(value) != 2:
+    raise ValueError(f"scene_profile.{field_name} must contain two numbers")
+  try:
+    first, second = float(value[0]), float(value[1])
+  except (TypeError, ValueError) as exc:
+    raise ValueError(
+      f"scene_profile.{field_name} must contain two numbers"
+    ) from exc
+  if first <= 0.0 or second <= 0.0:
+    raise ValueError(f"scene_profile.{field_name} values must be positive")
+  return first, second
+
+
+@dataclass(frozen=True)
+class TabletopSceneProfile:
+  """2D priors for ranking detector candidates in one fixed tabletop scene."""
+
+  name: str = "industrial_tabletop_v1"
+  workspace_roi: tuple[float, float, float, float] | None = None
+  forbidden_rois: tuple[tuple[float, float, float, float], ...] = ()
+  image_size: tuple[float, float] | None = None
+  expected_width_px: tuple[float, float] | None = None
+  expected_height_px: tuple[float, float] | None = None
+  expected_aspect_ratio: tuple[float, float] | None = None
+  min_roi_coverage: float = 0.50
+  min_boundary_coverage: float = 0.90
+  max_forbidden_overlap: float = 0.10
+  max_candidate_iou: float = 0.75
+  min_scene_score: float = 0.05
+  ambiguity_margin: float = 0.03
+
+  @classmethod
+  def from_value(cls, value: object) -> "TabletopSceneProfile | None":
+    """Parse a config/call profile; None or false keeps baseline behavior."""
+
+    if value in (None, False, "", "baseline"):
+      return None
+    if isinstance(value, cls):
+      return value
+    if isinstance(value, str):
+      return cls(name=value.strip() or "industrial_tabletop_v1")
+    if not isinstance(value, dict):
+      raise ValueError("scene_profile must be an object, string, or null")
+    name = str(value.get("name", "industrial_tabletop_v1")).strip()
+    if not name:
+      raise ValueError("scene_profile.name must be non-empty")
+    workspace_value = value.get("workspace_roi")
+    workspace_roi = (
+      _float_roi(workspace_value, "workspace_roi")
+      if workspace_value is not None
+      else None
+    )
+    forbidden_value = value.get("forbidden_rois", [])
+    if not isinstance(forbidden_value, list):
+      raise ValueError("scene_profile.forbidden_rois must be a list")
+    forbidden_rois = tuple(
+      _float_roi(item, f"forbidden_rois[{index}]")
+      for index, item in enumerate(forbidden_value)
+    )
+    image_size = _positive_pair(value.get("image_size"), "image_size")
+
+    def probability(field_name: str, default: float) -> float:
+      try:
+        parsed = float(value.get(field_name, default))
+      except (TypeError, ValueError) as exc:
+        raise ValueError(f"scene_profile.{field_name} must be a number") from exc
+      if not 0.0 <= parsed <= 1.0:
+        raise ValueError(f"scene_profile.{field_name} must be between 0 and 1")
+      return parsed
+
+    return cls(
+      name=name,
+      workspace_roi=workspace_roi,
+      forbidden_rois=forbidden_rois,
+      image_size=image_size,
+      expected_width_px=_float_range(
+        value.get("expected_width_px"), "expected_width_px"
+      ),
+      expected_height_px=_float_range(
+        value.get("expected_height_px"), "expected_height_px"
+      ),
+      expected_aspect_ratio=_float_range(
+        value.get("expected_aspect_ratio"), "expected_aspect_ratio"
+      ),
+      min_roi_coverage=probability("min_roi_coverage", 0.50),
+      min_boundary_coverage=probability("min_boundary_coverage", 0.90),
+      max_forbidden_overlap=probability("max_forbidden_overlap", 0.10),
+      max_candidate_iou=probability("max_candidate_iou", 0.75),
+      min_scene_score=probability("min_scene_score", 0.05),
+      ambiguity_margin=probability("ambiguity_margin", 0.03),
+    )
 
 
 _SPATIAL_IMAGE_X_RELATIONS = frozenset({"left", "right"})
@@ -462,6 +605,8 @@ class UltralyticsOpenVocabularyBackend:
       "verbose": False,
       "conf": options.box_threshold,
     }
+    if options.nms_iou_threshold is not None:
+      arguments["iou"] = options.nms_iou_threshold
     if options.device is not None:
       arguments["device"] = options.device
     started = time.perf_counter()
@@ -1096,6 +1241,172 @@ def _within_workspace(
   return True
 
 
+def _rect_area(rect: Sequence[float]) -> float:
+  return max(0.0, float(rect[2]) - float(rect[0])) * max(
+    0.0, float(rect[3]) - float(rect[1])
+  )
+
+
+def _intersection_area(left: Sequence[float], right: Sequence[float]) -> float:
+  width = max(
+    0.0,
+    min(float(left[2]), float(right[2])) - max(float(left[0]), float(right[0])),
+  )
+  height = max(
+    0.0,
+    min(float(left[3]), float(right[3])) - max(float(left[1]), float(right[1])),
+  )
+  return width * height
+
+
+def _box_iou(left: Sequence[float], right: Sequence[float]) -> float:
+  intersection = _intersection_area(left, right)
+  union = _rect_area(left) + _rect_area(right) - intersection
+  return intersection / union if union > 0.0 else 0.0
+
+
+def _range_quality(value: float, expected: tuple[float, float] | None) -> float:
+  if expected is None:
+    return 1.0
+  low, high = expected
+  if low <= value <= high:
+    return 1.0
+  if value < low:
+    return max(0.0, value / low) if low > 0.0 else 0.0
+  return max(0.0, high / value) if value > 0.0 else 0.0
+
+
+def _score_scene_candidate(
+  detection: VisionDetection,
+  candidates: Sequence[VisionDetection],
+  profile: TabletopSceneProfile,
+) -> VisionDetection:
+  """Attach explainable tabletop-scene features and a joint candidate score."""
+
+  bbox = detection.bbox_2d
+  if bbox is None or len(bbox) < 4 or _rect_area(bbox) <= 0.0:
+    return replace(
+      detection,
+      candidate_policy="scene_aware",
+      scene_profile=profile.name,
+      scene_score=0.0,
+      rejection_reason="invalid_bbox",
+    )
+  area = _rect_area(bbox)
+  width = float(bbox[2]) - float(bbox[0])
+  height = float(bbox[3]) - float(bbox[1])
+  aspect_ratio = width / height if height > 0.0 else 0.0
+  roi_consistency = (
+    _intersection_area(bbox, profile.workspace_roi) / area
+    if profile.workspace_roi is not None
+    else 1.0
+  )
+  forbidden_overlap = max(
+    (_intersection_area(bbox, roi) / area for roi in profile.forbidden_rois),
+    default=0.0,
+  )
+  boundary_quality = (
+    _intersection_area(bbox, (0.0, 0.0, *profile.image_size)) / area
+    if profile.image_size is not None
+    else 1.0
+  )
+  max_candidate_iou = max(
+    (
+      _box_iou(bbox, other.bbox_2d)
+      for other in candidates
+      if other is not detection and other.bbox_2d is not None
+    ),
+    default=0.0,
+  )
+  size_prior = (
+    _range_quality(width, profile.expected_width_px)
+    * _range_quality(height, profile.expected_height_px)
+    * _range_quality(aspect_ratio, profile.expected_aspect_ratio)
+  )
+  non_overlap_quality = max(0.0, 1.0 - max_candidate_iou)
+  confidence = min(1.0, max(0.0, float(detection.confidence)))
+  scene_score = (
+    confidence
+    * roi_consistency
+    * size_prior
+    * boundary_quality
+    * non_overlap_quality
+  )
+  rejection_reasons: list[str] = []
+  if roi_consistency < profile.min_roi_coverage:
+    rejection_reasons.append("outside_workspace_roi")
+  if forbidden_overlap > profile.max_forbidden_overlap:
+    rejection_reasons.append("forbidden_roi_overlap")
+  if boundary_quality < profile.min_boundary_coverage:
+    rejection_reasons.append("boundary_clipped")
+  if max_candidate_iou > profile.max_candidate_iou:
+    rejection_reasons.append("duplicate_candidate_overlap")
+  if scene_score < profile.min_scene_score:
+    rejection_reasons.append("scene_score_below_minimum")
+  return replace(
+    detection,
+    candidate_policy="scene_aware",
+    scene_profile=profile.name,
+    scene_score=round(scene_score, 6),
+    scene_features={
+      "detection_confidence": round(confidence, 6),
+      "roi_consistency": round(roi_consistency, 6),
+      "size_prior": round(size_prior, 6),
+      "boundary_quality": round(boundary_quality, 6),
+      "non_overlap_quality": round(non_overlap_quality, 6),
+      "forbidden_overlap": round(forbidden_overlap, 6),
+      "max_candidate_iou": round(max_candidate_iou, 6),
+    },
+    rejection_reason=";".join(rejection_reasons) or None,
+  )
+
+
+def _rank_scene_candidates(
+  candidates: Sequence[VisionDetection],
+  profile: TabletopSceneProfile,
+) -> tuple[VisionDetection | None, list[VisionDetection], str | None]:
+  """Rank all 2D candidates and reject unsafe or ambiguous selections."""
+
+  found = [
+    candidate
+    for candidate in candidates
+    if candidate.found and candidate.bbox_2d is not None
+  ]
+  if not found:
+    return None, [], "not_found"
+  ranked = sorted(
+    (_score_scene_candidate(candidate, found, profile) for candidate in found),
+    key=lambda candidate: (
+      float(candidate.scene_score or 0.0),
+      float(candidate.confidence),
+    ),
+    reverse=True,
+  )
+  accepted = [candidate for candidate in ranked if candidate.rejection_reason is None]
+  if not accepted:
+    return None, ranked, "not_found"
+  winner = accepted[0]
+  runner_up = accepted[1] if len(accepted) > 1 else None
+  margin = (
+    float(winner.scene_score or 0.0) - float(runner_up.scene_score or 0.0)
+    if runner_up is not None
+    else 1.0
+  )
+  ambiguity = {
+    "is_ambiguous": runner_up is not None and margin <= profile.ambiguity_margin,
+    "score_margin": round(margin, 6),
+    "required_margin": profile.ambiguity_margin,
+  }
+  if runner_up is not None:
+    ambiguity["runner_up_score"] = float(runner_up.scene_score or 0.0)
+  winner = replace(winner, ambiguity=ambiguity)
+  ranked = [winner if candidate is accepted[0] else candidate for candidate in ranked]
+  if ambiguity["is_ambiguous"]:
+    return None, ranked, "ambiguous"
+  alternatives = [candidate for candidate in ranked if candidate is not winner]
+  return winner, alternatives, None
+
+
 class VisionOpenVocabularyDetectTool:
   """Open-vocabulary detection with optional SAM 2 and RGB-D localization."""
 
@@ -1125,6 +1436,7 @@ class VisionOpenVocabularyDetectTool:
     depth_scale: float = 1.0,
     box_threshold: float = 0.35,
     text_threshold: float = 0.25,
+    nms_iou_threshold: float | None = None,
     device: str | None = None,
     refine_masks: bool | None = None,
     require_masks: bool = False,
@@ -1133,6 +1445,8 @@ class VisionOpenVocabularyDetectTool:
     base_frame: str = "base_link",
     world_frame: str = "world",
     workspace: dict | None = None,
+    candidate_policy: str = "baseline",
+    scene_profile: dict | str | TabletopSceneProfile | None = None,
     detector: OpenVocabularyVisionBackend | None = None,
     mask_refiner: MaskRefinementBackend | None = None,
   ) -> None:
@@ -1147,6 +1461,7 @@ class VisionOpenVocabularyDetectTool:
     self._depth_scale = depth_scale
     self._box_threshold = box_threshold
     self._text_threshold = text_threshold
+    self._nms_iou_threshold = nms_iou_threshold
     self._device = device
     self._require_masks = require_masks
     self._red_color_shortcut = red_color_shortcut
@@ -1154,6 +1469,11 @@ class VisionOpenVocabularyDetectTool:
     self._base_frame = base_frame
     self._world_frame = world_frame
     self._workspace = dict(workspace or {})
+    normalized_policy = str(candidate_policy).strip().casefold()
+    if normalized_policy not in {"baseline", "scene_aware"}:
+      raise ValueError("candidate_policy must be baseline or scene_aware")
+    self._candidate_policy = normalized_policy
+    self._scene_profile = TabletopSceneProfile.from_value(scene_profile)
     try:
       self._table_z = float(self._workspace.get("table_z", 0.12))
     except (TypeError, ValueError):
@@ -1188,7 +1508,7 @@ class VisionOpenVocabularyDetectTool:
       )
     if mask_refiner is not None:
       self._mask_refiner = mask_refiner
-    elif is_grounding_dino:
+    elif self._refine_masks:
       self._mask_refiner = UltralyticsSam2Backend(sam2_model_path)
     else:
       self._mask_refiner = None
@@ -1270,13 +1590,35 @@ class VisionOpenVocabularyDetectTool:
       raise ValueError("box_threshold must be between 0 and 1")
     if not 0.0 <= text_threshold <= 1.0:
       raise ValueError("text_threshold must be between 0 and 1")
+    nms_value = call.input.get("nms_iou_threshold", defaults.nms_iou_threshold)
+    nms_iou_threshold = float(nms_value) if nms_value is not None else None
+    if nms_iou_threshold is not None and not 0.0 <= nms_iou_threshold <= 1.0:
+      raise ValueError("nms_iou_threshold must be between 0 and 1")
     device_value = call.input.get("device", defaults.device)
     device = str(device_value) if device_value not in (None, "") else None
     return VisionInferenceOptions(
       box_threshold=box_threshold,
       text_threshold=text_threshold,
+      nms_iou_threshold=nms_iou_threshold,
       device=device,
     )
+
+  def _resolve_scene_policy(
+    self,
+    call: ToolCall,
+  ) -> tuple[str, TabletopSceneProfile | None]:
+    policy = str(
+      call.input.get("candidate_policy", self._candidate_policy)
+    ).strip().casefold()
+    if policy not in {"baseline", "scene_aware"}:
+      raise ValueError("candidate_policy must be baseline or scene_aware")
+    if policy == "baseline":
+      return policy, None
+    profile_value = call.input.get("scene_profile", self._scene_profile)
+    profile = TabletopSceneProfile.from_value(profile_value)
+    if profile is None:
+      profile = TabletopSceneProfile()
+    return policy, profile
 
   def _refine_detection(
     self,
@@ -1532,6 +1874,7 @@ class VisionOpenVocabularyDetectTool:
     spatial: SpatialConstraint,
     camera_info: dict | None,
     t_base_camera: list[list[float]] | None,
+    scene_profile: TabletopSceneProfile | None = None,
   ) -> tuple[VisionDetection | None, list[VisionDetection], str | None]:
     """Collect candidates, filter by workspace, and resolve the spatial constraint."""
 
@@ -1546,6 +1889,20 @@ class VisionOpenVocabularyDetectTool:
       for candidate in candidates
       if candidate.found and candidate.bbox_2d is not None
     ]
+    rejected: list[VisionDetection] = []
+    if scene_profile is not None:
+      scored = [
+        _score_scene_candidate(candidate, candidates, scene_profile)
+        for candidate in candidates
+      ]
+      candidates = [
+        candidate for candidate in scored if candidate.rejection_reason is None
+      ]
+      rejected = [
+        candidate for candidate in scored if candidate.rejection_reason is not None
+      ]
+      if not candidates:
+        return None, scored, "not_found"
     base_xy_of = self._base_xy_estimator(camera_info, t_base_camera)
     if self._workspace and base_xy_of is not None:
       candidates = [
@@ -1553,7 +1910,12 @@ class VisionOpenVocabularyDetectTool:
         for candidate in candidates
         if _within_workspace(base_xy_of(candidate), self._workspace)
       ]
-    return _resolve_spatial(candidates, spatial, base_xy_of=base_xy_of)
+    winner, alternatives, error = _resolve_spatial(
+      candidates,
+      spatial,
+      base_xy_of=base_xy_of,
+    )
+    return winner, [*alternatives, *rejected], error
 
   def _spatial_failure(
     self,
@@ -1561,28 +1923,66 @@ class VisionOpenVocabularyDetectTool:
     spatial: SpatialConstraint,
     alternatives: list[VisionDetection],
     error_kind: str,
+    scene_profile: TabletopSceneProfile | None = None,
   ) -> ToolResult:
     """Build the not-found / ambiguous ToolResult for the spatial path."""
 
     code = "OBJECT_AMBIGUOUS" if error_kind == "ambiguous" else "OBJECT_NOT_FOUND"
     candidate_outputs = [alternative.to_output() for alternative in alternatives]
+    output: dict[str, object] = {
+      "found": False,
+      "label": query,
+      "confidence": 0.0,
+      "source": self._backend,
+      "spatial_constraint": {
+        "relation": spatial.relation,
+        "ordinal": spatial.ordinal,
+      },
+      "candidates": candidate_outputs,
+    }
+    if scene_profile is not None:
+      output["candidate_policy"] = "scene_aware"
+      output["scene_profile"] = scene_profile.name
     return ToolResult(
       tool=self.spec.name,
       success=False,
-      output={
-        "found": False,
-        "label": query,
-        "confidence": 0.0,
-        "source": self._backend,
-        "spatial_constraint": {
-          "relation": spatial.relation,
-          "ordinal": spatial.ordinal,
-        },
-        "candidates": candidate_outputs,
-      },
+      output=output,
       error=(
         f"{code}: relation={spatial.relation} ordinal={spatial.ordinal} "
         f"matched {len(candidate_outputs)} candidate(s)"
+      ),
+    )
+
+  def _scene_failure(
+    self,
+    query: str,
+    profile: TabletopSceneProfile,
+    candidates: Sequence[VisionDetection],
+    error_kind: str,
+    scene_policy_ms: float | None = None,
+  ) -> ToolResult:
+    code = "OBJECT_AMBIGUOUS" if error_kind == "ambiguous" else "OBJECT_NOT_FOUND"
+    outputs = [candidate.to_output() for candidate in candidates]
+    output: dict[str, object] = {
+      "found": False,
+      "label": query,
+      "confidence": 0.0,
+      "source": self._backend,
+      "candidate_policy": "scene_aware",
+      "scene_profile": profile.name,
+      "candidates": outputs,
+    }
+    if scene_policy_ms is not None:
+      output["timing_ms"] = {"scene_policy": round(scene_policy_ms, 3)}
+    if candidates and candidates[0].ambiguity is not None:
+      output["ambiguity"] = candidates[0].ambiguity
+    return ToolResult(
+      tool=self.spec.name,
+      success=False,
+      output=output,
+      error=(
+        f"{code}: scene_profile={profile.name} rejected or could not disambiguate "
+        f"{len(outputs)} candidate(s)"
       ),
     )
 
@@ -1621,12 +2021,14 @@ class VisionOpenVocabularyDetectTool:
     defaults = VisionInferenceOptions(
       box_threshold=self._box_threshold,
       text_threshold=self._text_threshold,
+      nms_iou_threshold=self._nms_iou_threshold,
       device=self._device,
     )
     try:
       options = self._validate_options(call, defaults)
       refine_masks = bool(call.input.get("refine_masks", self._refine_masks))
       require_masks = bool(call.input.get("require_masks", self._require_masks))
+      _candidate_policy, scene_profile = self._resolve_scene_policy(call)
       spatial = SpatialConstraint.from_call(call.input.get("spatial_constraint"))
       red_detection = (
         self._largest_red_component(query, image_path)
@@ -1635,7 +2037,29 @@ class VisionOpenVocabularyDetectTool:
       )
       alternatives: list[VisionDetection] = []
       if red_detection is not None:
-        detection = red_detection
+        if scene_profile is not None:
+          started = time.perf_counter()
+          detection, alternatives, scene_error = _rank_scene_candidates(
+            [red_detection], scene_profile
+          )
+          scene_policy_ms = (time.perf_counter() - started) * 1000.0
+          if scene_error is not None or detection is None:
+            return self._scene_failure(
+              query,
+              scene_profile,
+              alternatives,
+              scene_error or "not_found",
+              scene_policy_ms,
+            )
+          detection = replace(
+            detection,
+            timing_ms={
+              **detection.timing_ms,
+              "scene_policy": round(scene_policy_ms, 3),
+            },
+          )
+        else:
+          detection = red_detection
       elif spatial is not None:
         detection, alternatives, spatial_error = self._select_by_spatial(
           query=query,
@@ -1648,16 +2072,59 @@ class VisionOpenVocabularyDetectTool:
             call.input.get("camera_info", self._camera_info),
           ),
           t_base_camera=call.input.get("T_base_camera", self._t_base_camera),
+          scene_profile=scene_profile,
         )
         if spatial_error is not None:
-          return self._spatial_failure(query, spatial, alternatives, spatial_error)
+          return self._spatial_failure(
+            query,
+            spatial,
+            alternatives,
+            spatial_error,
+            scene_profile=scene_profile,
+          )
+        if detection is None:
+          return self._spatial_failure(
+            query,
+            spatial,
+            alternatives,
+            "not_found",
+            scene_profile=scene_profile,
+          )
       else:
-        detection = self._detector.detect(
-          query=query,
-          image_path=image_path,
-          depth_path=depth_path,
-          options=options,
-        )
+        if scene_profile is not None:
+          candidates = self._detector.detect_all(
+            query=query,
+            image_path=image_path,
+            depth_path=depth_path,
+            options=options,
+          )
+          started = time.perf_counter()
+          detection, alternatives, scene_error = _rank_scene_candidates(
+            candidates, scene_profile
+          )
+          scene_policy_ms = (time.perf_counter() - started) * 1000.0
+          if scene_error is not None or detection is None:
+            return self._scene_failure(
+              query,
+              scene_profile,
+              alternatives,
+              scene_error or "not_found",
+              scene_policy_ms,
+            )
+          detection = replace(
+            detection,
+            timing_ms={
+              **detection.timing_ms,
+              "scene_policy": round(scene_policy_ms, 3),
+            },
+          )
+        else:
+          detection = self._detector.detect(
+            query=query,
+            image_path=image_path,
+            depth_path=depth_path,
+            options=options,
+          )
       detection = self._refine_detection(
         detection,
         image_path=image_path,

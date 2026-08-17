@@ -77,7 +77,7 @@ class ActionListRuntime:
   ) -> ActionListResult:
     """Run an ActionList from first step to last step."""
 
-    context: dict[str, Any] = dict(input_data)
+    context: dict[str, Any] = {**actionlist.input_defaults, **input_data}
     if "spatial_constraint" in actionlist.inputs and not isinstance(
       context.get("spatial_constraint"),
       dict,

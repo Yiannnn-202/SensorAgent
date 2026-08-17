@@ -36,6 +36,9 @@ the same status or design.
 - [Grounded SAM 2 strict Tool and red-block evaluation](guides/vision/grounded-sam2-tool-cn.md)
 - [Open-vocabulary vision](guides/vision/open-vocabulary.md)
 - [Public datasets and licenses](guides/vision/public-datasets.md)
+- [Competition vision evaluation and data handoff](guides/vision/competition-evaluation-framework-cn.md)
+- [Tabletop scene-aware candidate policy](guides/vision/scene-aware-candidate-policy-cn.md)
+- [XH-202607 vision module technical packaging](guides/vision/competition-vision-module-packaging-cn.md)
 - [SAM3 suitability assessment](guides/vision/sam3-assessment.md)
 - [Gazebo vision VM setup](guides/vision/gazebo-vm-setup.md)
 - [Gazebo RGB-D ActionList test](guides/vision/gazebo-actionlist-test.md)
@@ -48,6 +51,8 @@ the same status or design.
 - [Industrial Gazebo environment](guides/simulation/industrial-environment.md)
 - [Gazebo pick test](guides/simulation/gazebo-pick-test.md)
 - [Gazebo pick/place test](guides/simulation/gazebo-pick-place-test.md)
+- [Sorting-scene grasp matrix test](guides/simulation/sorting-scene-grasp-matrix-test.md)
+- [Phase G1 Gazebo smoke test](guides/simulation/g1-gazebo-smoke.md)
 - [Gazebo recovery demo](guides/simulation/gazebo-recovery-demo.md)
 - [Create a grasping block](guides/simulation/create-grasp-block.md)
 
@@ -55,6 +60,7 @@ the same status or design.
 
 - [Intent to ActionList](guides/workflows/intent-to-actionlist.md)
 - [Failure detection and recovery](guides/workflows/failure-recovery.md)
+- [Competition multi-instance sorting session](guides/workflows/competition-sorting-session.md)
 
 ### Operations
 
@@ -74,6 +80,9 @@ the same status or design.
 - [中文约定](team/convention_cn.md)
 - [团队总览](team/general_cn.md)
 - [视觉模块交接](team/vision_handoff_cn.md)
+- [视频文案用视觉模块单页](team/vision_video_slide_cn.md)
+- [8 月 5 日讨论后视觉任务闭环](team/vision_aug5_task_closure_cn.md)
+- [XH-202607 视觉模块比赛交付清单](team/vision_competition_delivery_checklist_cn.md)
 
 ## Archive and assets
 

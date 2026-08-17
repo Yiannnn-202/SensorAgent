@@ -53,6 +53,23 @@ class RobotResolvePlaceTargetTool:
         )
       except (TypeError, ValueError):
         return ToolResult(tool=self.spec.name, success=False, error="release_z must be numeric")
+    place_offset = call.input.get("place_offset")
+    if place_offset is not None:
+      if (
+        not isinstance(place_offset, list)
+        or len(place_offset) < 3
+        or not all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in place_offset[:3])
+      ):
+        return ToolResult(tool=self.spec.name, success=False, error="place_offset must contain three numeric values")
+      pose = RobotPose(
+        position=(
+          pose.position[0] + float(place_offset[0]),
+          pose.position[1] + float(place_offset[1]),
+          pose.position[2] + float(place_offset[2]),
+        ),
+        orientation=pose.orientation,
+        frame_id=pose.frame_id,
+      )
     return ToolResult(
       tool=self.spec.name,
       success=True,

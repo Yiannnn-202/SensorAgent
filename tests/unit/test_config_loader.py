@@ -44,12 +44,14 @@ class ConfigLoaderTest(TestCase):
     self.assertEqual(config.integrations.vision["backend"], "grounding_dino")
     self.assertEqual(
       config.integrations.vision["grounding_dino_model"],
-      "IDEA-Research/grounding-dino-tiny",
+      "models/vision/grounding-dino/grounding_dino_object_mask_2_unified_v1/checkpoint-best",
     )
     self.assertEqual(
       config.integrations.vision["sam2_model_path"],
       "models/vision/sam2_t.pt",
     )
+    self.assertTrue(config.integrations.vision["refine_masks"])
+    self.assertFalse(config.integrations.vision["require_masks"])
     self.assertNotIn("model_path", config.integrations.vision)
     self.assertIn("vision.open_vocab_detect", config.tools.enabled)
     self.assertEqual(

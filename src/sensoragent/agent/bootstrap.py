@@ -73,6 +73,7 @@ from sensoragent.workflows import (
   ActionListRuntime,
   build_industrial_recovery_pick_place_tree,
   build_hardware_pick_object_actionlist,
+  build_industrial_pick_at_pose_actionlist,
   build_industrial_pick_only_actionlist,
   build_industrial_pick_observed_object_actionlist,
   build_industrial_pick_place_actionlist,
@@ -155,12 +156,19 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       depth_scale=float(vision_config.get("depth_scale", 1.0)),
       box_threshold=float(vision_config.get("box_threshold", 0.35)),
       text_threshold=float(vision_config.get("text_threshold", 0.25)),
+      nms_iou_threshold=(
+        float(vision_config["nms_iou_threshold"])
+        if vision_config.get("nms_iou_threshold") is not None
+        else None
+      ),
       device=vision_config.get("device"),
       camera_frame=str(
         vision_config.get("camera_frame", "camera_color_optical_frame")
       ),
       base_frame=str(vision_config.get("base_frame", "base_link")),
       workspace=dict(config.scene.workspace or {}),
+      candidate_policy=str(vision_config.get("candidate_policy", "baseline")),
+      scene_profile=vision_config.get("scene_profile"),
     )
     if tool_name == "vision.grounded_sam2":
       return VisionGroundedSam2Tool(**common_settings)
@@ -408,6 +416,7 @@ def build_agent(
     "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(joint_poses),
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(joint_poses),
     "industrial.pick_observed_object_actionlist": build_industrial_pick_observed_object_actionlist(joint_poses),
+    "industrial.pick_at_pose_actionlist": build_industrial_pick_at_pose_actionlist(joint_poses),
     "industrial.place_only_actionlist": build_industrial_place_only_actionlist(joint_poses),
     "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(joint_poses),
     "industrial.sorting_config_pick_place_actionlist": build_sorting_config_pick_place_actionlist(joint_poses),

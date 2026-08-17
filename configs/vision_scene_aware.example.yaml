@@ -1,0 +1,29 @@
+agent:
+  name: sensoragent
+  mode: vision_scene_aware
+
+tools:
+  enabled:
+    - vision.grounded_sam2
+
+integrations:
+  vision:
+    backend: grounding_dino
+    grounding_dino_model: IDEA-Research/grounding-dino-tiny
+    sam2_model_path: models/vision/sam2_t.pt
+    candidate_policy: scene_aware
+    # These values are a starting profile for the 424x240 Gazebo camera.
+    # Re-measure the visible tabletop and forbidden zones after the final
+    # competition scene is frozen; they are not universal camera parameters.
+    scene_profile:
+      name: industrial_tabletop_v1
+      image_size: [424, 240]
+      workspace_roi: [12, 12, 412, 228]
+      forbidden_rois:
+        - [0, 0, 424, 18]
+      min_roi_coverage: 0.65
+      min_boundary_coverage: 0.90
+      max_forbidden_overlap: 0.10
+      max_candidate_iou: 0.75
+      min_scene_score: 0.08
+      ambiguity_margin: 0.04

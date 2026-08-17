@@ -15,7 +15,14 @@ if str(SRC) not in sys.path:
 from sensoragent.agent import LLMPlanner
 from sensoragent.schemas import PlanTargetKind, TraceContext
 from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
-from sensoragent.workflows.actionlists.industrial import build_industrial_pick_place_actionlist
+from sensoragent.workflows.actionlists.industrial import (
+  GRIPPER_CLOSE_OPENING,
+  PICK_POSITION_OFFSET,
+  PLACE_CLEARANCE,
+  build_industrial_pick_only_actionlist,
+  build_industrial_pick_place_actionlist,
+  build_industrial_place_only_actionlist,
+)
 from sensoragent.workflows.actionlists.industrial_vision import (
   build_industrial_vision_pick_place_actionlist,
 )
@@ -266,7 +273,10 @@ class SortingConfigActionListTest(TestCase):
     self.assertEqual(plan_pick_step.input["pregrasp_distance"], 0.08)
     self.assertEqual(plan_pick_step.input["lift_height"], 0.18)
     self.assertEqual(pick_step.input["open_opening"], "{{ object.release_opening }}")
-    self.assertEqual(pick_step.input["close_opening"], 0.032)
+    self.assertEqual(
+      pick_step.input["close_opening"],
+      "{{ object.grasp_opening }}",
+    )
     self.assertFalse(pick_step.input["grasp_avoid_collisions"])
 
   def test_place_uses_same_object_safe_opening_for_release(self) -> None:
@@ -307,6 +317,7 @@ class SortingConfigActionListTest(TestCase):
           "opening": 0.0848,
           "place_z": 0.25,
           "pick_offset_z": 0.04,
+          "grasp_opening": 0.032,
           "grasp_orientation": [0.0, 1.0, 0.0, 0.0],
         },
         "滚轮": {
@@ -329,7 +340,28 @@ class SortingConfigActionListTest(TestCase):
     self.assertEqual(result.output["release_opening"], 0.063)
     self.assertEqual(result.output["release_z"], 0.22)
     self.assertEqual(result.output["pick_offset_z"], 0.04)
+    self.assertEqual(result.output["grasp_opening"], 0.032)
     self.assertEqual(result.output["grasp_orientation"], long_axis_grasp)
+
+  def test_pick_only_defaults_preserve_existing_pick_inputs(self) -> None:
+    actionlist = build_industrial_pick_only_actionlist()
+    plan_pick_step = next(step for step in actionlist.steps if step.name == "plan_pick")
+    pick_step = next(step for step in actionlist.steps if step.name == "pick")
+
+    self.assertEqual(actionlist.input_defaults["position_offset"], PICK_POSITION_OFFSET)
+    self.assertEqual(plan_pick_step.input["position_offset"], "{{ position_offset }}")
+    self.assertEqual(actionlist.input_defaults["close_opening"], GRIPPER_CLOSE_OPENING)
+    self.assertEqual(pick_step.input["close_opening"], "{{ close_opening }}")
+
+  def test_place_only_defaults_preserve_existing_place_inputs(self) -> None:
+    actionlist = build_industrial_place_only_actionlist()
+    resolve_step = next(step for step in actionlist.steps if step.name == "resolve_place_target")
+    plan_place_step = next(step for step in actionlist.steps if step.name == "plan_place")
+
+    self.assertEqual(actionlist.input_defaults["place_offset"], [0.0, 0.0, 0.0])
+    self.assertEqual(resolve_step.input["place_offset"], "{{ place_offset }}")
+    self.assertEqual(actionlist.input_defaults["clearance"], PLACE_CLEARANCE)
+    self.assertEqual(plan_place_step.input["clearance"], "{{ clearance }}")
 
 
 class LLMPlannerAllowedTargetsTest(TestCase):

@@ -62,11 +62,12 @@ absence of physical-robot integration.
 | Strict Grounding DINO + SAM 2 Tool (`vision.grounded_sam2`) | Implemented with a pretrained baseline and a local single-class `red_block_v0` fine-tuning run; multi-class and industrial acceptance remain pending |
 | Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
 | Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
-| Unified competition world state | Partial; task lifecycle and workflow context exist, but there is no durable object/robot/bin world-state model yet |
+| Unified competition world state | Task-local object/bin/task state implemented for the oracle multi-instance session; durable live-perception fusion remains pending |
 | Batch simulation evaluation and repeatable scene reset | Not implemented |
 | HTTP/WebSocket/MCP service entry points | Not implemented; only the CLI exists |
 | Physical robot connection | Not connected |
 | Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
+| Multi-instance competition sorting session | Implemented with text/real-voice input, semantic grounding, ambiguity rejection, oracle instance selection, state tracking, and bounded recovery |
 | Gymnasium RL environment | Not implemented |
 
 The reusable robot control surface now includes state, joint motion, pose motion,

@@ -38,6 +38,7 @@ class ActionList:
   description: str = ""
   version: str = "0.1.0"
   inputs: dict[str, str] = field(default_factory=dict)
+  input_defaults: dict = field(default_factory=dict)
   tags: tuple[str, ...] = ()
 
   def to_dict(self) -> dict:

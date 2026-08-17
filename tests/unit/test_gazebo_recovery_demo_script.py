@@ -65,7 +65,7 @@ class GazeboRecoveryDemoScriptTest(TestCase):
     self.assertTrue(data["success"])
     self.assertEqual(data["classification"]["failure_type"], "WRONG_BIN")
     self.assertEqual(data["recovery"]["strategy"], "repick_from_observed_pose")
-    self.assertIn("recover_pick", [node["node"] for node in data["nodes"]])
+    self.assertIn("recover_pick_at_pose", [node["node"] for node in data["nodes"]])
     self.assertEqual(
       data["result"]["recovered_pick"]["pick_plan"]["grasp_pose"]["orientation"],
       data["failure_injection"]["misplaced_pose"]["orientation"],

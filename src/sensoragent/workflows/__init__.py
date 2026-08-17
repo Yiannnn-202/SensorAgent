@@ -3,6 +3,7 @@
 from sensoragent.workflows.actionlists import (
   ActionListRuntime,
   build_hardware_pick_object_actionlist,
+  build_industrial_pick_at_pose_actionlist,
   build_industrial_pick_only_actionlist,
   build_industrial_pick_observed_object_actionlist,
   build_industrial_pick_place_actionlist,
@@ -23,6 +24,7 @@ __all__ = [
   "ActionListRuntime",
   "DecisionTreeRuntime",
   "build_hardware_pick_object_actionlist",
+  "build_industrial_pick_at_pose_actionlist",
   "build_industrial_pick_only_actionlist",
   "build_industrial_pick_observed_object_actionlist",
   "build_industrial_pick_place_actionlist",

@@ -163,6 +163,15 @@ OpenAI-compatible endpoint and is constrained by an allowed workflow whitelist,
 so it can select approved ActionLists or DecisionTrees but cannot directly call
 arbitrary low-level tools.
 
+The competition sorting path also includes a configuration-backed semantic
+grounding layer. It normalizes operator aliases into canonical industrial
+classes, separates object selectors from bin targets, rejects ambiguous
+multi-instance commands, and records the selected instance in a task-local
+world state. The current reproducible backend uses configured Gazebo instance
+poses and labels its evidence `oracle_config`; it must not be reported as live
+visual perception. Text and local VAD/ASR inputs share this same grounding and
+execution path.
+
 ### Workflows
 
 ActionLists are deterministic ordered workflows. The industrial path currently

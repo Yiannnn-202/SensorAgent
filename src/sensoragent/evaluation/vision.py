@@ -59,8 +59,11 @@ class AcceptanceThresholds:
   min_recall: float | None = None
   min_box_iou: float | None = None
   min_mask_iou: float | None = None
+  min_map50_95: float | None = None
   max_center_error_px: float | None = None
   max_warm_p95_ms: float | None = None
+  max_scene_rejection_rate: float | None = None
+  max_ambiguity_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -433,6 +436,81 @@ def _mean(values: Sequence[float]) -> float | None:
   return round(float(np.mean(np.asarray(values))), 6) if values else None
 
 
+def _average_precision(rows: Sequence[dict[str, object]], iou_threshold: float) -> float | None:
+  """Compute single-query 101-point interpolated AP from persisted rows.
+
+  The current Tool returns one best candidate for one text query. This is a
+  deliberately explicit query-level protocol: one row is one image/query,
+  positives contain at most one expected box, and confidence ranks returned
+  candidates. It is not a replacement for COCO multi-instance mAP.
+  """
+
+  positives = sum(bool(row["expected"].get("found", False)) for row in rows)
+  if positives == 0:
+    return None
+  predictions = [
+    row
+    for row in rows
+    if bool(row["prediction"].get("found", False))
+  ]
+  predictions.sort(
+    key=lambda row: float(row["prediction"].get("confidence", 0.0) or 0.0),
+    reverse=True,
+  )
+  true_positive: list[float] = []
+  false_positive: list[float] = []
+  for row in predictions:
+    expected = row["expected"]
+    prediction = row["prediction"]
+    expected_box = expected.get("bbox_2d")
+    predicted_box = prediction.get("bbox_2d")
+    matched = (
+      bool(expected.get("found", False))
+      and _number_list(expected_box, 4)
+      and _number_list(predicted_box, 4)
+      and box_iou(expected_box, predicted_box) >= iou_threshold
+    )
+    true_positive.append(1.0 if matched else 0.0)
+    false_positive.append(0.0 if matched else 1.0)
+  if not true_positive:
+    return 0.0
+  cumulative_tp = np.cumsum(np.asarray(true_positive))
+  cumulative_fp = np.cumsum(np.asarray(false_positive))
+  recalls = cumulative_tp / float(positives)
+  precisions = cumulative_tp / np.maximum(cumulative_tp + cumulative_fp, 1e-12)
+  interpolated = []
+  for recall_level in np.linspace(0.0, 1.0, 101):
+    available = precisions[recalls >= recall_level]
+    interpolated.append(float(np.max(available)) if available.size else 0.0)
+  return round(float(np.mean(interpolated)), 6)
+
+
+def _average_precision_by_query(
+  rows: Sequence[dict[str, object]],
+  iou_threshold: float,
+) -> float | None:
+  """Average AP over text queries that have at least one positive sample."""
+
+  grouped: dict[str, list[dict[str, object]]] = {}
+  for row in rows:
+    grouped.setdefault(str(row["query"]), []).append(row)
+  values = [
+    score
+    for query_rows in grouped.values()
+    if (score := _average_precision(query_rows, iou_threshold)) is not None
+  ]
+  return _mean(values)
+
+
+def _average_precision_50_95(rows: Sequence[dict[str, object]]) -> float | None:
+  values = [
+    score
+    for threshold in np.arange(0.50, 0.951, 0.05)
+    if (score := _average_precision_by_query(rows, round(float(threshold), 2))) is not None
+  ]
+  return _mean(values)
+
+
 def _build_tool_input(
   sample: dict[str, object],
   *,
@@ -442,7 +520,10 @@ def _build_tool_input(
   require_masks: bool,
   box_threshold: float | None,
   text_threshold: float | None,
+  nms_iou_threshold: float | None,
   overlay_path: Path | None,
+  candidate_policy: str | None,
+  scene_profile: dict[str, object] | None,
 ) -> dict[str, object]:
   input_data: dict[str, object] = {
     "query": str(sample["query"]),
@@ -462,9 +543,14 @@ def _build_tool_input(
     "device": device,
     "box_threshold": box_threshold,
     "text_threshold": text_threshold,
+    "nms_iou_threshold": nms_iou_threshold,
     "overlay_path": str(overlay_path) if overlay_path is not None else None,
   }
   input_data.update({key: value for key, value in optional.items() if value is not None})
+  if candidate_policy is not None:
+    input_data["candidate_policy"] = candidate_policy
+  if scene_profile is not None:
+    input_data["scene_profile"] = scene_profile
   return input_data
 
 
@@ -474,12 +560,22 @@ def _evaluate_row(
   *,
   root: Path,
   wall_clock_ms: float,
+  match_iou_threshold: float,
 ) -> dict[str, object]:
   expected = sample["expected"]
   output = result["output"]
   expected_found = bool(expected["found"])
   predicted_found = bool(output.get("found", False))
-  if expected_found and predicted_found:
+  expected_bbox = expected.get("bbox_2d")
+  predicted_bbox = output.get("bbox_2d")
+  has_valid_boxes = _number_list(expected_bbox, 4) and _number_list(predicted_bbox, 4)
+  bbox_match = (
+    expected_found
+    and predicted_found
+    and has_valid_boxes
+    and box_iou(expected_bbox, predicted_bbox) >= match_iou_threshold
+  )
+  if bbox_match:
     outcome = "tp"
   elif expected_found:
     outcome = "fn"
@@ -489,9 +585,7 @@ def _evaluate_row(
     outcome = "tn"
 
   metrics: dict[str, float] = {}
-  expected_bbox = expected.get("bbox_2d")
-  predicted_bbox = output.get("bbox_2d")
-  if _number_list(expected_bbox, 4) and _number_list(predicted_bbox, 4):
+  if has_valid_boxes:
     metrics["box_iou"] = round(box_iou(expected_bbox, predicted_bbox), 6)
   expected_center = _center(expected)
   predicted_center = _center(output)
@@ -507,7 +601,12 @@ def _evaluate_row(
 
   inference_error = result.get("error")
   execution_ok = bool(result.get("success")) or (
-    not predicted_found and inference_error == "OBJECT_NOT_FOUND"
+    not predicted_found
+    and (
+      inference_error == "OBJECT_NOT_FOUND"
+      or str(inference_error or "").startswith("OBJECT_AMBIGUOUS")
+      or str(inference_error or "").startswith("OBJECT_NOT_FOUND:")
+    )
   )
   return {
     "sample_id": sample["sample_id"],
@@ -524,7 +623,12 @@ def _evaluate_row(
   }
 
 
-def _summary(rows: Sequence[dict[str, object]], warmup_runs: int) -> dict[str, object]:
+def _summary(
+  rows: Sequence[dict[str, object]],
+  warmup_runs: int,
+  *,
+  match_iou_threshold: float,
+) -> dict[str, object]:
   counts = {name: sum(row["outcome"] == name for row in rows) for name in ("tp", "fp", "tn", "fn")}
   precision_denominator = counts["tp"] + counts["fp"]
   recall_denominator = counts["tp"] + counts["fn"]
@@ -548,10 +652,45 @@ def _summary(rows: Sequence[dict[str, object]], warmup_runs: int) -> dict[str, o
   mask_outputs = [
     row for row in rows if row["prediction"].get("mask_polygons")
   ]
+  scene_rows = [
+    row
+    for row in rows
+    if row["prediction"].get("candidate_policy") == "scene_aware"
+  ]
+  scene_candidates: list[dict[str, object]] = []
+  for row in scene_rows:
+    prediction = row["prediction"]
+    if prediction.get("bbox_2d") is not None or prediction.get("scene_score") is not None:
+      scene_candidates.append(prediction)
+    alternatives = prediction.get("candidates")
+    if isinstance(alternatives, list):
+      scene_candidates.extend(
+        candidate for candidate in alternatives if isinstance(candidate, dict)
+      )
+  rejected_candidates = [
+    candidate for candidate in scene_candidates if candidate.get("rejection_reason")
+  ]
+  ambiguous_rows = [
+    row
+    for row in scene_rows
+    if isinstance(row["prediction"].get("ambiguity"), dict)
+    and bool(row["prediction"]["ambiguity"].get("is_ambiguous", False))
+  ]
+  scene_policy_times = [
+    float(row["prediction"]["timing_ms"]["scene_policy"])
+    for row in scene_rows
+    if isinstance(row["prediction"].get("timing_ms"), dict)
+    and row["prediction"]["timing_ms"].get("scene_policy") is not None
+  ]
   return {
     "sample_count": len(rows),
     "execution_error_count": sum(not row["execution_ok"] for row in rows),
     "confusion": counts,
+    "confusion_protocol": {
+      "name": "bbox_match",
+      "iou_threshold": match_iou_threshold,
+      "positive_found_without_match_is": "fn",
+    },
     "precision": round(precision, 6) if precision is not None else None,
     "recall": round(recall, 6) if recall is not None else None,
     "f1": round(f1, 6) if f1 is not None else None,
@@ -561,7 +700,33 @@ def _summary(rows: Sequence[dict[str, object]], warmup_runs: int) -> dict[str, o
     "mask_iou_sample_count": len(metric_values["mask_iou"]),
     "mean_center_error_px": _mean(metric_values["center_error_px"]),
     "center_error_sample_count": len(metric_values["center_error_px"]),
+    "ap50": _average_precision_by_query(rows, 0.50),
+    "ap75": _average_precision_by_query(rows, 0.75),
+    "map50_95": _average_precision_50_95(rows),
+    "ap_protocol": {
+      "name": "query_level_single_best_box",
+      "iou_thresholds": [round(float(value), 2) for value in np.arange(0.50, 0.951, 0.05)],
+      "interpolation": "101_point",
+      "warning": "Not COCO multi-instance mAP; preserve all candidates for that protocol.",
+    },
     "mask_output_rate": round(len(mask_outputs) / len(rows), 6) if rows else None,
+    "scene_aware": {
+      "sample_count": len(scene_rows),
+      "candidate_count": len(scene_candidates),
+      "scene_rejection_rate": (
+        round(len(rejected_candidates) / len(scene_candidates), 6)
+        if scene_candidates
+        else None
+      ),
+      "ambiguity_rate": (
+        round(len(ambiguous_rows) / len(scene_rows), 6) if scene_rows else None
+      ),
+      "policy_latency_ms": {
+        "mean": _mean(scene_policy_times),
+        "p50": _percentile(scene_policy_times, 50),
+        "p95": _percentile(scene_policy_times, 95),
+      },
+    },
     "latency_ms": {
       "warmup_runs_excluded": min(max(0, warmup_runs), len(rows)),
       "cold_first": wall_times[0] if wall_times else None,
@@ -605,6 +770,32 @@ def check_acceptance(
       failures.append(
         f"latency_ms.warm_p95={value} is above {thresholds.max_warm_p95_ms}"
       )
+  if thresholds.min_map50_95 is not None:
+    value = summary.get("map50_95")
+    if value is None:
+      failures.append("map50_95 is unavailable but a threshold was requested")
+    elif float(value) < thresholds.min_map50_95:
+      failures.append(f"map50_95={value} is below {thresholds.min_map50_95}")
+  scene_summary = summary.get("scene_aware") or {}
+  if thresholds.max_scene_rejection_rate is not None:
+    value = scene_summary.get("scene_rejection_rate")
+    if value is None:
+      failures.append(
+        "scene_rejection_rate is unavailable but a threshold was requested"
+      )
+    elif float(value) > thresholds.max_scene_rejection_rate:
+      failures.append(
+        "scene_rejection_rate="
+        f"{value} is above {thresholds.max_scene_rejection_rate}"
+      )
+  if thresholds.max_ambiguity_rate is not None:
+    value = scene_summary.get("ambiguity_rate")
+    if value is None:
+      failures.append("ambiguity_rate is unavailable but a threshold was requested")
+    elif float(value) > thresholds.max_ambiguity_rate:
+      failures.append(
+        f"ambiguity_rate={value} is above {thresholds.max_ambiguity_rate}"
+      )
   execution_errors = int(summary.get("execution_error_count", 0))
   if execution_errors:
     failures.append(f"{execution_errors} sample(s) failed during model execution")
@@ -621,12 +812,19 @@ def evaluate_manifest(
   require_masks: bool = False,
   box_threshold: float | None = None,
   text_threshold: float | None = None,
+  nms_iou_threshold: float | None = None,
   save_overlays: bool = False,
   warmup_runs: int = 1,
   thresholds: AcceptanceThresholds | None = None,
   tool_name: str = "vision.open_vocab_detect",
+  candidate_policy: str | None = None,
+  scene_profile: dict[str, object] | None = None,
+  match_iou_threshold: float = 0.5,
 ) -> EvaluationRun:
   """Validate a manifest, run one persistent backend, and save report artifacts."""
+
+  if not 0.0 <= match_iou_threshold <= 1.0:
+    raise ValueError("match_iou_threshold must be between 0 and 1")
 
   validation = validate_manifest(manifest_path, check_files=True)
   if not validation.valid:
@@ -651,7 +849,10 @@ def evaluate_manifest(
       require_masks=require_masks,
       box_threshold=box_threshold,
       text_threshold=text_threshold,
+      nms_iou_threshold=nms_iou_threshold,
       overlay_path=overlay_path,
+      candidate_policy=candidate_policy,
+      scene_profile=scene_profile,
     )
     started = time.perf_counter()
     try:
@@ -670,10 +871,15 @@ def evaluate_manifest(
         result,
         root=validation.manifest.parent,
         wall_clock_ms=elapsed_ms,
+        match_iou_threshold=match_iou_threshold,
       )
     )
 
-  summary = _summary(rows, warmup_runs)
+  summary = _summary(
+    rows,
+    warmup_runs,
+    match_iou_threshold=match_iou_threshold,
+  )
   failures = check_acceptance(summary, thresholds or AcceptanceThresholds())
   summary["acceptance"] = {
     "passed": not failures,

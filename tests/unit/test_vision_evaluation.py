@@ -187,6 +187,7 @@ def test_evaluate_manifest_writes_rows_and_summary(tmp_path: Path) -> None:
 
   assert evaluation.passed
   assert evaluation.summary["confusion"] == {"tp": 1, "fp": 1, "tn": 1, "fn": 0}
+  assert evaluation.summary["confusion_protocol"]["iou_threshold"] == 0.5
   assert evaluation.summary["precision"] == 0.5
   assert evaluation.summary["recall"] == 1.0
   assert evaluation.summary["mean_box_iou"] == 0.8
@@ -195,6 +196,207 @@ def test_evaluate_manifest_writes_rows_and_summary(tmp_path: Path) -> None:
   assert (output_dir / "results.jsonl").is_file()
   assert (output_dir / "summary.json").is_file()
   assert len((output_dir / "results.jsonl").read_text(encoding="utf-8").splitlines()) == 3
+  assert evaluation.summary["ap50"] == pytest.approx(1.0, abs=1e-6)
+  assert evaluation.summary["map50_95"] == pytest.approx(0.7, abs=1e-6)
+
+
+def test_evaluate_manifest_counts_found_wrong_bbox_as_fn(tmp_path: Path) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(manifest, [_sample("sample")])
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=lambda _: {
+      "success": True,
+      "output": {
+        "found": True,
+        "confidence": 0.9,
+        "bbox_2d": [20, 20, 30, 30],
+      },
+    },
+    output_dir=tmp_path / "out",
+  )
+
+  assert evaluation.summary["confusion"] == {"tp": 0, "fp": 0, "tn": 0, "fn": 1}
+  assert evaluation.summary["precision"] is None
+  assert evaluation.summary["recall"] == 0.0
+
+
+def test_evaluate_manifest_counts_iou_threshold_boundary_as_tp(tmp_path: Path) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(manifest, [_sample("sample")])
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=lambda _: {
+      "success": True,
+      "output": {
+        "found": True,
+        "confidence": 0.9,
+        "bbox_2d": [0, 0, 20, 10],
+      },
+    },
+    output_dir=tmp_path / "out",
+    match_iou_threshold=0.5,
+  )
+
+  assert evaluation.summary["confusion"]["tp"] == 1
+
+
+def test_evaluate_manifest_forwards_nms_iou_threshold(tmp_path: Path) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(manifest, [_sample("sample")])
+  received: dict[str, object] = {}
+
+  def runner(input_data: dict[str, object]) -> dict[str, object]:
+    received.update(input_data)
+    return {
+      "success": True,
+      "output": {
+        "found": True,
+        "confidence": 0.9,
+        "bbox_2d": [0, 0, 10, 10],
+      },
+    }
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=runner,
+    output_dir=tmp_path / "out",
+    nms_iou_threshold=0.55,
+  )
+
+  assert received["nms_iou_threshold"] == 0.55
+  assert evaluation.summary["execution_error_count"] == 0
+
+
+def test_evaluate_manifest_reports_ranked_ap_at_multiple_iou_thresholds(
+  tmp_path: Path,
+) -> None:
+  for name in ("good", "borderline", "negative"):
+    (tmp_path / f"{name}.jpg").write_bytes(b"fixture-" + name.encode())
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(
+    manifest,
+    [
+      _sample("good", query="gear", expected={"found": True, "bbox_2d": [0, 0, 10, 10]}),
+      _sample(
+        "borderline",
+        query="gear",
+        expected={"found": True, "bbox_2d": [0, 0, 10, 10]},
+      ),
+      _sample("negative", query="gear", expected={"found": False}),
+    ],
+  )
+
+  predictions = {
+    "good": ([0, 0, 10, 10], 0.95),
+    "borderline": ([0, 0, 6, 10], 0.90),
+    "negative": ([0, 0, 10, 10], 0.85),
+  }
+
+  def runner(input_data: dict[str, object]) -> dict[str, object]:
+    bbox, confidence = predictions[Path(str(input_data["image_path"])).stem]
+    return {"success": True, "output": {"found": True, "bbox_2d": bbox, "confidence": confidence}}
+
+  evaluation = evaluate_manifest(manifest, runner=runner, output_dir=tmp_path / "out")
+
+  assert evaluation.summary["ap50"] > evaluation.summary["ap75"]
+  assert evaluation.summary["map50_95"] < evaluation.summary["ap50"]
+  assert evaluation.summary["ap_protocol"]["name"] == "query_level_single_best_box"
+
+
+def test_evaluate_manifest_reports_scene_aware_rejection_and_ambiguity_metrics(
+  tmp_path: Path,
+) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(
+    manifest,
+    [_sample("sample", expected={"found": True, "bbox_2d": [2, 2, 8, 8]})],
+  )
+
+  def runner(input_data: dict[str, object]) -> dict[str, object]:
+    assert input_data["candidate_policy"] == "scene_aware"
+    assert input_data["scene_profile"] == {"name": "competition_tabletop_v1"}
+    return {
+      "success": True,
+      "output": {
+        "found": True,
+        "confidence": 0.9,
+        "bbox_2d": [2, 2, 8, 8],
+        "candidate_policy": "scene_aware",
+        "scene_score": 0.82,
+        "ambiguity": {
+          "is_ambiguous": False,
+          "score_margin": 0.2,
+          "required_margin": 0.03,
+        },
+        "timing_ms": {"scene_policy": 2.5},
+        "candidates": [
+          {
+            "found": True,
+            "confidence": 0.95,
+            "bbox_2d": [90, 90, 100, 100],
+            "rejection_reason": "outside_workspace_roi",
+          }
+        ],
+      },
+    }
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=runner,
+    output_dir=tmp_path / "out",
+    candidate_policy="scene_aware",
+    scene_profile={"name": "competition_tabletop_v1"},
+  )
+
+  scene_summary = evaluation.summary["scene_aware"]
+  assert scene_summary["sample_count"] == 1
+  assert scene_summary["candidate_count"] == 2
+  assert scene_summary["scene_rejection_rate"] == 0.5
+  assert scene_summary["ambiguity_rate"] == 0.0
+  assert scene_summary["policy_latency_ms"]["p50"] == 2.5
+
+
+def test_scene_aware_ambiguity_is_a_measured_rejection_not_execution_error(
+  tmp_path: Path,
+) -> None:
+  (tmp_path / "sample.jpg").write_bytes(b"fixture")
+  manifest = tmp_path / "dataset.jsonl"
+  _write_jsonl(manifest, [_sample("sample")])
+
+  evaluation = evaluate_manifest(
+    manifest,
+    runner=lambda _: {
+      "success": False,
+      "output": {
+        "found": False,
+        "confidence": 0.0,
+        "candidate_policy": "scene_aware",
+        "ambiguity": {
+          "is_ambiguous": True,
+          "score_margin": 0.01,
+          "required_margin": 0.03,
+        },
+        "timing_ms": {"scene_policy": 1.2},
+        "candidates": [
+          {"found": True, "confidence": 0.80, "scene_score": 0.70},
+          {"found": True, "confidence": 0.79, "scene_score": 0.69},
+        ],
+      },
+      "error": "OBJECT_AMBIGUOUS: two candidates are too close",
+    },
+    output_dir=tmp_path / "out",
+  )
+
+  assert evaluation.summary["execution_error_count"] == 0
+  assert evaluation.summary["scene_aware"]["ambiguity_rate"] == 1.0
+  assert evaluation.summary["scene_aware"]["candidate_count"] == 2
 
 
 def test_evaluate_manifest_records_runner_failure(tmp_path: Path) -> None:
@@ -234,16 +436,18 @@ def test_check_acceptance_fails_unavailable_or_out_of_range_metrics() -> None:
       min_recall=0.6,
       min_box_iou=0.5,
       min_mask_iou=0.5,
+      min_map50_95=0.9,
       max_center_error_px=10.0,
       max_warm_p95_ms=800.0,
     ),
   )
 
-  assert len(failures) == 4
+  assert len(failures) == 5
   assert any("precision" in failure for failure in failures)
   assert any("mean_box_iou is unavailable" in failure for failure in failures)
   assert any("mean_center_error_px" in failure for failure in failures)
   assert any("warm_p95" in failure for failure in failures)
+  assert any("map50_95" in failure for failure in failures)
 
 
 def test_evaluate_mask_iou_from_polygon(tmp_path: Path) -> None:

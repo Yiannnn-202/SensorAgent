@@ -29,6 +29,25 @@
       "camera_frame": {"type": "string"},
       "base_frame": {"type": "string"},
       "world_frame": {"type": "string"},
+      "candidate_policy": {"type": "string"},
+      "scene_profile": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "workspace_roi": {"type": "array", "items": {"type": "number"}},
+          "forbidden_rois": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}},
+          "image_size": {"type": "array", "items": {"type": "number"}},
+          "expected_width_px": {"type": "array", "items": {"type": "number"}},
+          "expected_height_px": {"type": "array", "items": {"type": "number"}},
+          "expected_aspect_ratio": {"type": "array", "items": {"type": "number"}},
+          "min_roi_coverage": {"type": "number"},
+          "min_boundary_coverage": {"type": "number"},
+          "max_forbidden_overlap": {"type": "number"},
+          "max_candidate_iou": {"type": "number"},
+          "min_scene_score": {"type": "number"},
+          "ambiguity_margin": {"type": "number"}
+        }
+      },
       "spatial_constraint": {
         "type": "object",
         "properties": {
@@ -92,6 +111,20 @@
         "properties": {
           "relation": {"type": "string"},
           "ordinal": {"type": "number"}
+        }
+      },
+      "candidate_policy": {"type": "string"},
+      "scene_profile": {"type": "string"},
+      "scene_score": {"type": "number"},
+      "scene_features": {"type": "object"},
+      "rejection_reason": {"type": "string"},
+      "ambiguity": {
+        "type": "object",
+        "properties": {
+          "is_ambiguous": {"type": "boolean"},
+          "score_margin": {"type": "number"},
+          "required_margin": {"type": "number"},
+          "runner_up_score": {"type": "number"}
         }
       }
     }

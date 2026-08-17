@@ -15,6 +15,7 @@ from sensoragent.schemas import (
   DecisionTreeResult,
   TraceContext,
 )
+from sensoragent.schemas.core import utc_now_iso
 from sensoragent.skills import SkillRuntime
 from sensoragent.tools import ToolRuntime
 from sensoragent.workflows.actionlists.runtime import ActionListRuntime
@@ -32,6 +33,285 @@ def _recovery_attempt_limit(context: dict[str, Any]) -> int:
   if isinstance(value, int) and not isinstance(value, bool) and value > 0:
     return value
   return _DEFAULT_MAX_RECOVERY_ATTEMPTS
+
+
+def _deep_merge(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+  """Merge nested dicts without mutating either input."""
+
+  merged = dict(left)
+  for key, value in right.items():
+    existing = merged.get(key)
+    if isinstance(existing, dict) and isinstance(value, dict):
+      merged[key] = _deep_merge(existing, value)
+    else:
+      merged[key] = value
+  return merged
+
+
+def _ensure_world_state(context: dict[str, Any]) -> dict[str, Any]:
+  """Return the run-local world state dict, creating missing sections."""
+
+  world = context.get("world_state")
+  if not isinstance(world, dict):
+    world = {}
+    context["world_state"] = world
+  objects = world.get("objects")
+  if not isinstance(objects, dict):
+    world["objects"] = {}
+  bins = world.get("bins")
+  if not isinstance(bins, dict):
+    world["bins"] = {}
+  current_task = world.get("current_task")
+  if not isinstance(current_task, dict):
+    world["current_task"] = {}
+  history = world.get("history")
+  if not isinstance(history, list):
+    world["history"] = []
+  return world
+
+
+def _world_record(context: dict[str, Any], event: str, **payload: Any) -> None:
+  world = _ensure_world_state(context)
+  world["history"].append({"event": event, "timestamp": utc_now_iso(), **payload})
+
+
+def _numeric_position(value: Any) -> list[float] | None:
+  if isinstance(value, dict):
+    for key in ("pose_3d", "position_base", "position", "object_position"):
+      position = _numeric_position(value.get(key))
+      if position is not None:
+        return position
+    return None
+  if not isinstance(value, list) or len(value) < 3:
+    return None
+  if not all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in value[:3]):
+    return None
+  return [float(item) for item in value[:3]]
+
+
+def _observed_failure_pose(context: dict[str, Any]) -> list[float] | None:
+  """Extract where the object was actually last seen during a failed run.
+
+  Checked in order of freshness: the live post-place re-detections, the
+  post-grasp lift re-detection, then the bin check output (deterministic
+  wrong-bin runs report the observed position). The world-state object record
+  is deliberately excluded: for a drop it still holds the pre-failure pose,
+  which is exactly the stale target pick-at-pose exists to avoid. Returns None
+  when nothing observed the object after the failure — the caller falls back
+  to re-detection recovery.
+  """
+
+  for key in ("observed_recovered_object", "observed_object", "lifted_object"):
+    position = _numeric_position(context.get(key))
+    if position is not None:
+      return position
+  # A failed verify writes its output into last_failure instead of save_as
+  # (save_as only fires on success), so the wrong-bin observation is read
+  # from there; bin_check covers the success-path mismatch case.
+  for key in ("last_failure", "bin_check"):
+    record = context.get(key)
+    output = record.get("output") if isinstance(record, dict) else None
+    if isinstance(output, dict) and output.get("in_target") is False:
+      position = _numeric_position(output)
+      if position is not None:
+        return position
+  return None
+
+
+def _active_object_id(context: dict[str, Any], output: dict[str, Any] | None = None) -> str | None:
+  output = output or {}
+  for candidate in (
+    output.get("object_id"),
+    output.get("instance_id"),
+    context.get("active_object_id"),
+    (context.get("object") or {}).get("object_id") if isinstance(context.get("object"), dict) else None,
+    context.get("object_query"),
+  ):
+    if isinstance(candidate, str) and candidate:
+      return candidate
+  return None
+
+
+def _observe_object(
+  context: dict[str, Any],
+  output: dict[str, Any],
+  *,
+  node_name: str,
+) -> None:
+  if output.get("found") is False:
+    return
+  object_id = _active_object_id(context, output)
+  if object_id is None:
+    return
+  position = _numeric_position(output)
+  world = _ensure_world_state(context)
+  existing = world["objects"].get(object_id)
+  target = (existing or {}).get("target") or context.get("target")
+  status = (existing or {}).get("status", "observed")
+  if status not in {"held", "placed"}:
+    status = "observed"
+  world["objects"][object_id] = {
+    **(existing or {}),
+    "object_id": object_id,
+    "label": output.get("label", (existing or {}).get("label", object_id)),
+    "pose_3d": position,
+    "confidence": output.get("confidence", (existing or {}).get("confidence")),
+    "source": output.get("source", (existing or {}).get("source", "unknown")),
+    "status": status,
+    "target": target,
+    "updated_at": utc_now_iso(),
+  }
+  world["current_task"].update(
+    {
+      "object_id": object_id,
+      "target": context.get("target"),
+      "step": "observed",
+      "last_node": node_name,
+    }
+  )
+  context["active_object_id"] = object_id
+  _world_record(
+    context,
+    "object_observed",
+    node=node_name,
+    object_id=object_id,
+    position=position,
+    confidence=output.get("confidence"),
+    source=output.get("source", "unknown"),
+  )
+
+
+def _mark_object_status(
+  context: dict[str, Any],
+  status: str,
+  *,
+  node_name: str,
+  output: dict[str, Any] | None = None,
+) -> None:
+  object_id = _active_object_id(context, output)
+  if object_id is None:
+    return
+  world = _ensure_world_state(context)
+  existing = world["objects"].get(object_id, {"object_id": object_id})
+  existing.update(
+    {
+      "status": status,
+      "target": existing.get("target") or context.get("target"),
+      "updated_at": utc_now_iso(),
+    }
+  )
+  if output:
+    existing["last_output"] = output
+  world["objects"][object_id] = existing
+  world["current_task"].update(
+    {
+      "object_id": object_id,
+      "target": context.get("target"),
+      "step": status,
+      "last_node": node_name,
+    }
+  )
+  _world_record(context, f"object_{status}", node=node_name, object_id=object_id)
+
+
+def _update_bin_state(
+  context: dict[str, Any],
+  output: dict[str, Any],
+  *,
+  node_name: str,
+  success: bool,
+) -> None:
+  target = output.get("target") or context.get("target")
+  if not isinstance(target, str) or not target:
+    return
+  object_id = _active_object_id(context)
+  position = _numeric_position(output)
+  world = _ensure_world_state(context)
+  existing = world["bins"].get(target, {"target": target})
+  if success and bool(output.get("in_target", True)):
+    existing.update(
+      {
+        "status": "occupied",
+        "occupied_by": object_id,
+        "observed_position": position,
+        "updated_at": utc_now_iso(),
+      }
+    )
+    world["bins"][target] = existing
+    _mark_object_status(context, "placed", node_name=node_name, output=output)
+    _world_record(
+      context,
+      "object_placed_in_target",
+      node=node_name,
+      object_id=object_id,
+      target=target,
+      observed_position=position,
+    )
+  else:
+    existing.update(
+      {
+        "status": "mismatch",
+        "occupied_by": existing.get("occupied_by"),
+        "observed_position": position,
+        "updated_at": utc_now_iso(),
+      }
+    )
+    world["bins"][target] = existing
+    _world_record(
+      context,
+      "object_not_in_target",
+      node=node_name,
+      object_id=object_id,
+      target=target,
+      observed_position=position,
+      error=output.get("error"),
+    )
+
+
+def _update_world_state(
+  node: DecisionNode,
+  result: DecisionNodeResult,
+  context: dict[str, Any],
+) -> None:
+  output = result.output if isinstance(result.output, dict) else {}
+  if result.success:
+    if node.target in {"vision.config_detect", "vision.open_vocab_detect", "vision.grounded_sam2"}:
+      _observe_object(context, output, node_name=node.name)
+    elif node.target == "robot.pick":
+      _mark_object_status(context, "held", node_name=node.name, output=output)
+    elif node.target == "robot.verify_grasp" and output.get("held") is True:
+      _mark_object_status(context, "held", node_name=node.name, output=output)
+    elif node.target == "robot.verify_place" and output.get("released") is True:
+      _mark_object_status(context, "released", node_name=node.name, output=output)
+    elif node.target == "vision.verify_object_in_bin":
+      _update_bin_state(context, output, node_name=node.name, success=True)
+    elif node.target == "recovery.classify_failure":
+      _world_record(
+        context,
+        "failure_classified",
+        node=node.name,
+        failure_type=output.get("failure_type"),
+        strategy=output.get("recommended_strategy"),
+      )
+    elif node.target == "recovery.plan":
+      _world_record(
+        context,
+        "recovery_planned",
+        node=node.name,
+        strategy=output.get("strategy"),
+        node_overrides=output.get("node_overrides") or {},
+      )
+  elif node.kind != DecisionNodeKind.TERMINAL:
+    if node.target == "vision.verify_object_in_bin":
+      _update_bin_state(context, output, node_name=node.name, success=False)
+    _world_record(
+      context,
+      "node_failed",
+      node=node.name,
+      target=node.target,
+      error=result.error,
+      output=output,
+    )
 
 
 class DecisionTreeRuntime:
@@ -79,19 +359,30 @@ class DecisionTreeRuntime:
       return self._actionlist_runtime.run(actionlist, rendered_input, trace)
     raise WorkflowExecutionError(f"Node kind is not invokable: {node.kind}")
 
-  def _run_invokable_node(
+  def _render_invokable_input(
     self,
     node: DecisionNode,
     context: dict[str, Any],
-    trace: TraceContext,
-  ) -> DecisionNodeResult:
+  ) -> dict:
     rendered_input = _render_value(node.input, context)
     if not isinstance(rendered_input, dict):
       raise WorkflowExecutionError(f"Node input must render to object: {node.name}")
+    overrides = context.get("node_input_overrides")
+    if isinstance(overrides, dict):
+      for key in (node.target, node.name):
+        override = overrides.get(key or "")
+        if isinstance(override, dict):
+          rendered_input = _deep_merge(rendered_input, override)
     # Optional inputs use None defaults so templates resolve without sending
     # null into tool contracts that require a concrete typed value.
-    rendered_input = {key: value for key, value in rendered_input.items() if value is not None}
+    return {key: value for key, value in rendered_input.items() if value is not None}
 
+  def _run_invokable_node(
+    self,
+    node: DecisionNode,
+    rendered_input: dict,
+    trace: TraceContext,
+  ) -> DecisionNodeResult:
     last_result = None
     attempts = max(0, node.max_retries) + 1
     for attempt in range(1, attempts + 1):
@@ -175,6 +466,20 @@ class DecisionTreeRuntime:
         )
         return final
 
+      # Recovery rerouting: when a planned recovery node cannot run (e.g. the
+      # observed pose for recover_pick_at_pose is missing), plan_recovery marks
+      # a substitute node here so the tree falls back to a runnable branch.
+      reroutes = context.get("reroute_recovery_node")
+      if isinstance(reroutes, dict) and current_name in reroutes:
+        replacement = reroutes.pop(current_name)
+        self._logger.log(
+          "decision_node_rerouted",
+          trace,
+          {"decision_tree": tree.name, "node": current_name, "replacement": replacement},
+        )
+        current_name = replacement
+        continue
+
       # Global recovery budget: each entry into recovery.classify_failure counts
       # as one recovery attempt; short-circuit to failure once the configured
       # limit is exceeded, complementing the max_decision_nodes hard cap.
@@ -229,7 +534,8 @@ class DecisionTreeRuntime:
           )
       else:
         try:
-          result = self._run_invokable_node(node, context, trace)
+          rendered_input = self._render_invokable_input(node, context)
+          result = self._run_invokable_node(node, rendered_input, trace)
         except Exception as exc:
           result = DecisionNodeResult(node=node.name, success=False, error=str(exc))
 
@@ -261,6 +567,64 @@ class DecisionTreeRuntime:
         if history:
           history[-1]["strategy"] = recovery_plan.get("strategy")
           history[-1]["next_step"] = recovery_plan.get("next_step")
+          history[-1]["node_overrides"] = recovery_plan.get("node_overrides") or {}
+        node_overrides = recovery_plan.get("node_overrides")
+        if isinstance(node_overrides, dict) and node_overrides:
+          # REPICK_FROM_OBSERVED_POSE only helps if something observed where the
+          # object ended up; the planner cannot see save_as keys, so the pose is
+          # resolved here and surfaced to the recover_pick_at_pose node.
+          observed_pose = None
+          if recovery_plan.get("strategy") == "repick_from_observed_pose":
+            observed_pose = _observed_failure_pose(context)
+            if observed_pose is not None:
+              context["recovered_observed_pose"] = observed_pose
+              overrides = dict(node_overrides)
+              overrides["recover_pick_at_pose"] = {
+                **(overrides.get("recover_pick_at_pose") or {}),
+                "pose_3d": observed_pose,
+                "observed_pose_applied": True,
+              }
+              node_overrides = overrides
+              object_id = _active_object_id(context)
+              if object_id is not None:
+                world = _ensure_world_state(context)
+                existing = world["objects"].get(object_id, {"object_id": object_id})
+                existing["pose_3d"] = observed_pose
+                existing["updated_at"] = utc_now_iso()
+                world["objects"][object_id] = existing
+              _world_record(
+                context,
+                "object_reobserved_from_failure",
+                node=node.name,
+                object_id=object_id,
+                observed_pose=observed_pose,
+              )
+            else:
+              # No observation of where the object ended up: picking at an
+              # unknown pose is impossible, so reroute to the re-detection
+              # recovery branch instead of rendering an unresolvable template.
+              context["reroute_recovery_node"] = {"recover_pick_at_pose": "recover_pick"}
+              context.setdefault("recovery_applied_overrides", []).append(
+                {
+                  "attempt": recovery_attempts,
+                  "strategy": recovery_plan.get("strategy"),
+                  "node_overrides": node_overrides,
+                  "observed_pose_applied": False,
+                  "not_applied_reason": "missing_observed_object_pose",
+                }
+              )
+          current_overrides = context.get("node_input_overrides")
+          if not isinstance(current_overrides, dict):
+            current_overrides = {}
+          context["node_input_overrides"] = _deep_merge(current_overrides, node_overrides)
+          context.setdefault("recovery_applied_overrides", []).append(
+            {
+              "attempt": recovery_attempts,
+              "strategy": recovery_plan.get("strategy"),
+              "node_overrides": node_overrides,
+            }
+          )
+      _update_world_state(node, result, context)
       if not result.success and node.kind != DecisionNodeKind.TERMINAL:
         context["last_failure"] = {
           "node": node.name,

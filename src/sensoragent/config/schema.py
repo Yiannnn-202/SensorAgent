@@ -57,6 +57,7 @@ class SceneConfig:
   """Static scene catalog used by config-driven detection and place targets."""
 
   objects: dict = field(default_factory=dict)
+  object_ontology: dict = field(default_factory=dict)
   release_profiles: dict = field(default_factory=dict)
   pick_profiles: dict = field(default_factory=dict)
   place_targets: dict = field(default_factory=dict)

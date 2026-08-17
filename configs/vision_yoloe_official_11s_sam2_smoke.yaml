@@ -1,0 +1,34 @@
+agent:
+  name: sensoragent
+  mode: vision_yoloe_official_11s_sam2_smoke
+
+tools:
+  enabled:
+    - vision.open_vocab_detect
+
+skills:
+  enabled: []
+
+integrations:
+  vision:
+    # Official Ultralytics YOLOE smoke weight only. This is not a
+    # competition/fine-tuned weight and must not be used for final metrics.
+    backend: yoloe
+    model_path: yoloe-11s-seg.pt
+    sam2_model_path: models/vision/sam2_t.pt
+    box_threshold: 0.25
+    text_threshold: 0.25
+    nms_iou_threshold: 0.55
+    refine_masks: true
+    require_masks: true
+    depth_scale: 1.0
+    camera_frame: camera_color_optical_frame
+    base_frame: base_link
+
+logging:
+  level: info
+  console: true
+  app_log: logs/app.log
+  task_dir: logs/tasks
+  trace_dir: logs/traces
+  error_dir: logs/errors

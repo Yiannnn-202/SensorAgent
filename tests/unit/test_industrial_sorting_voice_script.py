@@ -50,3 +50,9 @@ class IndustrialSortingVoiceScriptTest(TestCase):
     active_config = module._text_mode_config(config)
 
     self.assertEqual(active_config.tools.enabled, ["audio.transcribe", "robot.get_state"])
+  def test_parses_ninth_cell_in_physical_three_by_three_bin(self) -> None:
+    module = _load_module()
+    self.assertEqual(
+      module.parse_sorting_command("把螺母放到九号格"),
+      {"object_query": "六角螺母", "target": "bin_cell_9"},
+    )

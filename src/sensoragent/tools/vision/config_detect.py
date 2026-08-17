@@ -96,6 +96,7 @@ class VisionConfigDetectTool:
         "object_id": label,
         "pose_3d": pose_3d,
         "release_opening": _profile_float(profile, "opening", 0.0848),
+        "grasp_opening": _profile_float(profile, "grasp_opening", 0.032),
         "release_z": _profile_float(profile, "place_z", 0.25),
         "pick_offset_z": _profile_float(profile, "pick_offset_z", 0.04),
         "grasp_orientation": _profile_orientation(profile),
