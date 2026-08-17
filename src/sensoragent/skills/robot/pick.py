@@ -20,6 +20,7 @@ class RobotPickSkill:
     plan = PickPlan.from_dict(call.input.get("plan"))
     speed = call.input.get("speed", 0.2)
     descent_speed = call.input.get("descent_speed", speed)
+    lift_speed = call.input.get("lift_speed", speed)
     completed_steps: list[str] = []
     stage_results: list[dict] = []
     plan_output = plan.to_dict()
@@ -66,7 +67,7 @@ class RobotPickSkill:
           "speed": call.input.get("gripper_speed", 0.5),
         },
       ),
-      ("lift", "robot.move_linear", {"pose": plan.lift.to_dict(), "speed": speed}),
+      ("lift", "robot.move_linear", {"pose": plan.lift.to_dict(), "speed": lift_speed}),
     ])
 
     for step_name, tool_name, input_data in steps:
@@ -80,10 +81,8 @@ class RobotPickSkill:
       if not result.success and step_name == "close_gripper":
         state_result = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
         state = (state_result.output or {}).get("state", {}) if state_result.success else {}
-        opening = state.get("opening") if isinstance(state, dict) else None
-        min_opening = float(call.input.get("verify_min_opening", 0.002))
-        max_opening = float(call.input.get("verify_max_opening", 0.08))
-        if isinstance(opening, (int, float)) and min_opening <= float(opening) <= max_opening:
+        grasped = bool(state.get("grasped")) if isinstance(state, dict) else False
+        if grasped:
           stage_results.append(
             {
               "step": "close_gripper_state_check",
@@ -95,22 +94,75 @@ class RobotPickSkill:
             }
           )
           result = state_result
+        elif state_result.success:
+          stage_results.append(
+            {
+              "step": "close_gripper_state_check",
+              "tool": "gripper.get_state",
+              "input": {},
+              "success": False,
+              "output": state_result.output,
+              "error": "Gripper is not reporting a grasp; refusing to lift.",
+              "original_error": result.error,
+            }
+          )
       if (
         not result.success
         and step_name in {"move_pregrasp", "move_grasp", "lift"}
         and tool_name == "robot.move_linear"
       ):
-        stage_results.append(
-          {
-            "step": f"{step_name}_cartesian",
-            "tool": tool_name,
-            "input": input_data,
-            "success": False,
-            "output": result.output,
-            "error": result.error,
-          }
-        )
-        result = context.tool_runtime.invoke("robot.move_pose", input_data, call.trace)
+        # A timeout or cancellation can leave the underlying action active.
+        # Do not issue a fallback motion until that goal is known to be gone.
+        if not str(result.error or "").startswith("INCOMPLETE_CARTESIAN_PATH"):
+          context.tool_runtime.invoke("robot.stop", {}, call.trace)
+          stage_results.append(
+            {
+              "step": f"{step_name}_cartesian",
+              "tool": tool_name,
+              "input": input_data,
+              "success": False,
+              "output": result.output,
+              "error": result.error,
+            }
+          )
+          # Leave result failed so the common error path returns without
+          # submitting a second command against a possibly active goal.
+
+        elif step_name == "move_grasp" and not bool(call.input.get("fallback_move_pose_on_grasp_failure", True)):
+          context.tool_runtime.invoke("robot.stop", {}, call.trace)
+          stage_results.append(
+            {
+              "step": f"{step_name}_cartesian",
+              "tool": tool_name,
+              "input": input_data,
+              "success": False,
+              "output": result.output,
+              "error": result.error,
+            }
+          )
+          return SkillResult(
+            skill=self.spec.name,
+            success=False,
+            output={
+              "completed_steps": completed_steps,
+              "failed_step": step_name,
+              "plan": plan_output,
+              "stages": stage_results,
+            },
+            error=f"{step_name}: {result.error}",
+          )
+        else:
+          stage_results.append(
+            {
+              "step": f"{step_name}_cartesian",
+              "tool": tool_name,
+              "input": input_data,
+              "success": False,
+              "output": result.output,
+              "error": result.error,
+            }
+          )
+          result = context.tool_runtime.invoke("robot.move_pose", input_data, call.trace)
       stage_results.append(
         {
           "step": step_name,

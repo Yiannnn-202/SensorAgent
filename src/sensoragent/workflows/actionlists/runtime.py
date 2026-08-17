@@ -83,6 +83,8 @@ class ActionListRuntime:
       dict,
     ):
       context["spatial_constraint"] = {}
+    if "pick_profile" in actionlist.inputs and not isinstance(context.get("pick_profile"), str):
+      context["pick_profile"] = ""
     step_results: list[ActionStepResult] = []
     self._logger.log(
       "actionlist_started",
@@ -100,7 +102,18 @@ class ActionListRuntime:
         rendered_input = _render_value(step.input, context)
         if not isinstance(rendered_input, dict):
           raise WorkflowTemplateError(f"Step input must render to object: {step.name}")
-        result = self._invoke_step(step, rendered_input, trace)
+        rendered_target = _render_value(step.target, context)
+        if not isinstance(rendered_target, str):
+          raise WorkflowTemplateError(f"Step target must render to string: {step.name}")
+        rendered_step = ActionStep(
+          name=step.name,
+          kind=step.kind,
+          target=rendered_target,
+          input=step.input,
+          save_as=step.save_as,
+          stop_on_failure=step.stop_on_failure,
+        )
+        result = self._invoke_step(rendered_step, rendered_input, trace)
         step_result = ActionStepResult(
           step=step.name,
           success=result.success,

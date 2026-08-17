@@ -1,0 +1,22 @@
+sensoragent_hardware_bridge:
+  ros__parameters:
+    bind_host: 127.0.0.1
+    bind_port: 8766
+    # Motion must remain false until dry-run poses have been reviewed at the cell.
+    allow_motion: false
+    base_frame: base_link
+    tool_frame: Link6
+    arm_service_prefix: /task/arm
+    gripper_service_prefix: /task/op
+    gripper_state_topic: /omnipicker_state
+    max_speed: 4
+    # Keep the command slightly below the mechanical full-open endpoint to avoid
+    # the OmniPicker over-limit fault while still preserving the 120 mm stroke.
+    max_gripper_open_command: 0.996078431372549
+    workspace_min: [-0.55, -0.18, 0.0]
+    workspace_max: [-0.20, 0.18, 0.35]
+    # Leave empty. A one-time local approval file must register the exact target.
+    approved_approach_position: []
+    approved_approach_orientation: []
+    approach_position_tolerance_m: 0.002
+    approach_orientation_tolerance: 0.01

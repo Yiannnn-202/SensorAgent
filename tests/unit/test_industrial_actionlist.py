@@ -26,6 +26,7 @@ from sensoragent.workflows.actionlists.industrial import (
 from sensoragent.workflows.actionlists.industrial_vision import (
   build_industrial_vision_pick_place_actionlist,
 )
+from sensoragent.workflows.actionlists.hardware import build_hardware_pick_object_actionlist
 from sensoragent.workflows.actionlists.sorting_config import (
   build_sorting_config_pick_place_actionlist,
 )
@@ -469,6 +470,62 @@ class IndustrialVisionActionListTest(TestCase):
 
     self.assertTrue(result.success, msg=result.error)
     self.assertEqual(captured_detect_inputs[0]["spatial_constraint"], {})
+
+
+class HardwarePickActionListTest(TestCase):
+  def test_capture_grounded_sam_profile_pick_verify_and_observe(self) -> None:
+    tool_runtime = _StubRuntime({
+      "vision.capture_frame": lambda _i: {
+        "image_path": "rgb.npy", "png_path": "rgb.png", "cloud_path": "cloud.npy", "T_base_camera": [],
+      },
+      "vision.grounded_sam2": lambda input_data: {
+        "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
+        "mask_polygons": [], "center_px": [100.0, 100.0],
+        "spatial_constraint": input_data["spatial_constraint"],
+      },
+      "robot.select_pick_profile": lambda _i: {
+        "planner": "robot.plan_short_bolt_pick", "orientation": [0, 1, 0, 0],
+        "position_offset": [0, 0, 0.02], "approach_distance": 0.1,
+        "pregrasp_distance": 0.04, "lift_height": 0.12,
+        "close_opening": 0.0, "gripper_force": 1.0, "gripper_speed": 0.12,
+        "motion_speed": 0.35, "descent_speed": 0.25,
+        "tcp_offset": [0.0, 0.0, 0.0], "headward_offset": 0.015,
+        "camera_left_offset_px": 0.0, "camera_left_offset_m": 0.01, "minimum_safe_z": 0.14,
+        "workspace_min": [-0.55, -0.18, 0.0], "workspace_max": [-0.20, 0.18, 0.35],
+      },
+      "robot.plan_short_bolt_pick": lambda _i: {"plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}},
+      "robot.ensure_observe_pose": lambda _i: {"completed": True, "skipped": True},
+      "robot.move_joints": lambda _i: {"completed": True},
+    })
+    skill_runtime = _StubRuntime({
+      "robot.pick": lambda _i: {"picked": True},
+      "robot.verify_grasp": lambda _i: {"held": True},
+    })
+    runtime = ActionListRuntime(tool_runtime, skill_runtime, _NullLogger())
+
+    result = runtime.run(
+      build_hardware_pick_object_actionlist({"observe_joints": [0, 1, 2, 3, 4, 5]}),
+      {"object_query": "bolt", "pick_profile": "short_bolt", "spatial_constraint": {"relation": "left"}},
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual([step.step for step in result.steps], [
+      "ensure_observe_before_capture", "capture_frame", "detect_object", "select_pick_profile", "plan_pick", "pick", "verify_grasp", "observe_after_pick",
+    ])
+    self.assertIn(("robot.plan_short_bolt_pick", {
+      "pose_3d": [0.3, 0.1, 0.05], "cloud_path": "cloud.npy", "mask_polygons": [],
+      "center_px": [100.0, 100.0], "T_base_camera": [], "orientation": [0, 1, 0, 0],
+      "position_offset": [0, 0, 0.02], "approach_distance": 0.1,
+      "pregrasp_distance": 0.04, "lift_height": 0.12,
+      "tcp_offset": [0.0, 0.0, 0.0], "headward_offset": 0.015,
+      "camera_left_offset_px": 0.0, "camera_left_offset_m": 0.01, "minimum_safe_z": 0.14,
+      "workspace_min": [-0.55, -0.18, 0.0], "workspace_max": [-0.20, 0.18, 0.35],
+    }), tool_runtime.calls)
+    pick_input = next(input_data for name, input_data in skill_runtime.calls if name == "robot.pick")
+    self.assertEqual(pick_input["close_opening"], 0.0)
+    self.assertEqual(pick_input["gripper_force"], 1.0)
+    self.assertEqual(pick_input["gripper_speed"], 0.12)
 
 
 class IndustrialPickOnlyTest(TestCase):

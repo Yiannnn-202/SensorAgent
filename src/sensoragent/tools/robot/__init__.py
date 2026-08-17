@@ -4,6 +4,7 @@ from sensoragent.tools.robot.control import (
   GripperCloseTool,
   GripperGetStateTool,
   GripperOpenTool,
+  RobotEnsureObservePoseTool,
   RobotGetStateTool,
   RobotMoveJointsTool,
   RobotMoveLinearTool,
@@ -17,6 +18,7 @@ from sensoragent.tools.robot.place_targets import (
 from sensoragent.tools.robot.planning import (
   RobotPlanOrientedPickTool,
   RobotPlanPlaceTool,
+  RobotPlanShortBoltPickTool,
   RobotPlanTopDownPickTool,
 )
 
@@ -24,12 +26,14 @@ __all__ = [
   "GripperCloseTool",
   "GripperGetStateTool",
   "GripperOpenTool",
+  "RobotEnsureObservePoseTool",
   "RobotGetStateTool",
   "RobotMoveJointsTool",
   "RobotMoveLinearTool",
   "RobotMovePoseTool",
   "RobotPlanOrientedPickTool",
   "RobotPlanPlaceTool",
+  "RobotPlanShortBoltPickTool",
   "RobotPlanTopDownPickTool",
   "RobotResolvePlaceTargetTool",
   "RobotStopTool",

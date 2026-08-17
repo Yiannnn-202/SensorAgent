@@ -7,6 +7,7 @@ from sensoragent.skills.robot.planning import (
   build_place_plan,
   build_top_down_pick_plan,
   estimate_object_geometry,
+  estimate_shaft_grasp_point,
 )
 from sensoragent.skills.robot.verify import RobotVerifyGraspSkill, RobotVerifyPlaceSkill
 
@@ -19,4 +20,5 @@ __all__ = [
   "build_place_plan",
   "build_top_down_pick_plan",
   "estimate_object_geometry",
+  "estimate_shaft_grasp_point",
 ]

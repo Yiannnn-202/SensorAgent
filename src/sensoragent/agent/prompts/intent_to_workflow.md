@@ -27,9 +27,10 @@ Your job:
    `spatial` captures a disambiguating relation when the operator refers to one
    of several identical objects. Set it to `null` when no spatial qualifier is
    present. Extract `relation` from these keywords (Chinese or English):
-     - 左 / 左侧(的) / 左边(的) / left → `"left"`
-     - 右 / 右侧(的) / 右边(的) / right → `"right"`
-     - 前面(的) / front → `"front"`
+      - 左 / 左侧(的) / 左边(的) / left → `"left"`
+      - 右 / 右侧(的) / 右边(的) / right → `"right"`
+      - 中间 / 中间的 / middle / center → `"middle"`
+      - 前面(的) / front → `"front"`
      - 后面(的) / back → `"back"`
      - 最近(的) / nearest / closest → `"nearest"`
      - 最远(的) / farthest → `"farthest"`
@@ -55,8 +56,10 @@ Your job:
      and the operator asks for visual verification, post-place checking, recovery, or
      explicitly says to verify the result with vision
      → `industrial.recovery_pick_place_tree` with `target_kind="decision_tree"`
-   - `intent.action == "pick_place"` → `industrial.pick_place_actionlist`
-   - `intent.action == "pick"`       → `industrial.pick_only_actionlist`
+    - `intent.action == "pick_place"` → `industrial.pick_place_actionlist`
+    - `intent.action == "pick"` and `hardware.pick_object_actionlist` is available
+      → `hardware.pick_object_actionlist`
+    - `intent.action == "pick"`       → `industrial.pick_only_actionlist`
    - `intent.action == "place"`      → `industrial.place_only_actionlist`
    Fall back to `mock.pick_place_actionlist` only when no industrial target is available.
 3. Normalize the destination string. If `allowed_place_targets` is provided, `input.target`
@@ -71,9 +74,12 @@ Your job:
 4. Fill the workflow input parameters. Only include the fields the chosen workflow needs:
    - `industrial.pick_place_actionlist`: `{object_query, target}`
    - `industrial.pick_only_actionlist`:  `{object_query}`
-   - `industrial.place_only_actionlist`: `{target}`
-   - `industrial.vision_pick_place_actionlist`: `{object_query, target, spatial_constraint}`
-   - `industrial.recovery_pick_place_tree`: `{object_query, target, spatial_constraint}`
+    - `industrial.place_only_actionlist`: `{target}`
+    - `industrial.vision_pick_place_actionlist`: `{object_query, target, spatial_constraint}`
+    - `industrial.recovery_pick_place_tree`: `{object_query, target, spatial_constraint}`
+    - `hardware.pick_object_actionlist`: `{object_query, pick_profile, spatial_constraint}`
+      Use `pick_profile:"short_bolt"` when the object is 螺栓, 短螺栓, bolt, or short bolt;
+      otherwise use `pick_profile:""`.
    Include `spatial_constraint` only when `intent.spatial` is non-null; mirror it as
    `{"relation": ..., "ordinal": ...}`. Sensor inputs (`image_path`, `depth_path`,
    `camera_info_path`, `T_base_camera`) are supplied by the caller, not by you.
@@ -86,6 +92,7 @@ Return ONLY this JSON object, no prose:
   "target": "<one of allowed_targets>",
   "input": {
     "object_query": "<intent.object — modifier stripped>",
+    "pick_profile": "<hardware pick profile when required, otherwise omit>",
     "target": "<intent.target — normalized id from allowed_place_targets>",
     "spatial_constraint": {"relation": "<relation>", "ordinal": <int>} | null
   },

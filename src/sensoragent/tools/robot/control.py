@@ -76,6 +76,46 @@ class RobotMoveJointsTool:
     return _result(self.spec.name, result)
 
 
+class RobotEnsureObservePoseTool:
+  spec = ToolSpec(
+    name="robot.ensure_observe_pose",
+    description="Move to observe joints only when the TCP is not already at observe pose.",
+    tags=("robot", "motion", "observe"),
+    timeout_seconds=125.0,
+  )
+
+  def __init__(self, client: RobotControlClient) -> None:
+    self._client = client
+
+  def run(self, call: ToolCall) -> ToolResult:
+    joints = call.input.get("joints")
+    if not isinstance(joints, list) or len(joints) != 6:
+      raise ValueError("joints must contain six numeric values")
+    if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in joints):
+      raise ValueError("joints must contain numeric values")
+    observe_pose = call.input.get("pose")
+    state_result = self._client.get_state()
+    if state_result.success and isinstance(observe_pose, dict):
+      current_pose = state_result.state.get("arm", {}).get("pose", {})
+      current_position = current_pose.get("position") if isinstance(current_pose, dict) else None
+      target_position = observe_pose.get("position")
+      if isinstance(current_position, list) and isinstance(target_position, list) and len(current_position) >= 3 and len(target_position) >= 3:
+        tolerance = _number(call.input.get("position_tolerance"), "position_tolerance", 0.015)
+        distance = sum((float(current_position[index]) - float(target_position[index])) ** 2 for index in range(3)) ** 0.5
+        if distance <= tolerance:
+          return ToolResult(
+            tool=self.spec.name,
+            success=True,
+            output={"completed": True, "skipped": True, "distance": distance, "state": state_result.state},
+          )
+    result = self._client.move_joints(
+      [float(value) for value in joints],
+      speed=_number(call.input.get("speed"), "speed", 0.2),
+      wait=bool(call.input.get("wait", True)),
+    )
+    return _result(self.spec.name, result)
+
+
 class _RobotMovePoseTool:
   linear = False
 

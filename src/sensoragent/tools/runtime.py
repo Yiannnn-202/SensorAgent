@@ -68,6 +68,8 @@ class ToolRuntime:
           break
         except ToolTimeoutError as exc:
           last_error = exc
+          if tool_name != "robot.stop" and tool_name.startswith(("robot.", "gripper.")):
+            self._stop_motion(trace)
           self._logger.log(
             "tool_call_attempt_failed",
             trace,
@@ -109,3 +111,15 @@ class ToolRuntime:
       },
     )
     return result
+
+  def _stop_motion(self, trace: TraceContext) -> None:
+    """Best-effort stop for a timed-out physical motion command."""
+    try:
+      stop_tool = self._registry.get("robot.stop")
+      stop_tool.run(ToolCall(tool="robot.stop", input={}, trace=trace))
+    except Exception as exc:
+      self._logger.log(
+        "robot_stop_failed",
+        trace,
+        {"error": str(exc)},
+      )

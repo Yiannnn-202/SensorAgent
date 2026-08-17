@@ -233,11 +233,13 @@ class TabletopSceneProfile:
 
 
 _SPATIAL_IMAGE_X_RELATIONS = frozenset({"left", "right"})
+_SPATIAL_IMAGE_MIDDLE_RELATIONS = frozenset({"middle", "center"})
 _SPATIAL_IMAGE_Y_RELATIONS = frozenset({"front", "back"})
 _SPATIAL_IMAGE_AREA_RELATIONS = frozenset({"largest", "smallest"})
 _SPATIAL_BASE_RELATIONS = frozenset({"nearest", "farthest"})
 _SPATIAL_VALID_RELATIONS = (
     _SPATIAL_IMAGE_X_RELATIONS
+    | _SPATIAL_IMAGE_MIDDLE_RELATIONS
     | _SPATIAL_IMAGE_Y_RELATIONS
     | _SPATIAL_IMAGE_AREA_RELATIONS
     | _SPATIAL_BASE_RELATIONS
@@ -444,6 +446,7 @@ def _resolve_torch_device(device: str | None) -> str | None:
 _SPATIAL_MODIFIERS_CN = [
   "左侧的", "左边的", "左侧", "左边", "左面",
   "右侧的", "右边的", "右侧", "右边", "右面",
+  "中间的", "中间", "中部的", "中部",
   "前面的", "前边的", "前面", "前边",
   "后面的", "后边的", "后面", "后边",
   "最近的", "最近", "最远的", "最远",
@@ -451,7 +454,7 @@ _SPATIAL_MODIFIERS_CN = [
 ]
 _SPATIAL_MODIFIERS_EN = re.compile(
   r"\b(?:left|right|front|back|leftmost|rightmost|nearest|closest|"
-  r"farthest|largest|biggest|smallest)\b",
+  r"middle|center|centered|farthest|largest|biggest|smallest)\b",
   re.IGNORECASE,
 )
 _SPATIAL_ORDINAL_CN = re.compile(r"第\s*[一二三四五六七八九十0-9]+\s*(?:个|号)?")
@@ -1155,6 +1158,8 @@ def _image_relation_key(
     center = [(bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0]
   if relation in _SPATIAL_IMAGE_X_RELATIONS:
     return float(center[0])
+  if relation in _SPATIAL_IMAGE_MIDDLE_RELATIONS:
+    return float(center[0])
   if relation in _SPATIAL_IMAGE_Y_RELATIONS:
     return float(center[1])
   if relation in _SPATIAL_IMAGE_AREA_RELATIONS:
@@ -1193,6 +1198,14 @@ def _resolve_spatial(
     keyed.append((key, detection))
   if not keyed:
     return None, candidates, "ambiguous"
+  if relation in _SPATIAL_IMAGE_MIDDLE_RELATIONS:
+    keyed.sort(key=lambda item: item[0])
+    if len(keyed) % 2 == 0 or constraint.ordinal > 1:
+      return None, candidates, "ambiguous"
+    middle_index = len(keyed) // 2
+    winner = keyed[middle_index][1]
+    alternatives = [detection for _, detection in keyed if detection is not winner]
+    return winner, alternatives, None
   keyed.sort(key=lambda item: item[0], reverse=take_max)
   if constraint.ordinal > len(keyed):
     return None, candidates, "ambiguous"
@@ -1697,6 +1710,7 @@ class VisionOpenVocabularyDetectTool:
     detection: VisionDetection,
     *,
     depth_path: str | None,
+    cloud_path: str | None,
     camera_info_path: str | None,
     camera_info_inline: dict | None,
     t_base_camera: list[list[float]] | None,
@@ -1716,6 +1730,26 @@ class VisionOpenVocabularyDetectTool:
       return detection
     started = time.perf_counter()
     warnings = list(detection.warnings)
+    if cloud_path is not None:
+      cloud = np.load(cloud_path)
+      if cloud.ndim != 2 or cloud.shape[0] == 0 or cloud.shape[1] < 5:
+        raise ValueError("cloud_path must contain Nx5 xyzuv points")
+      center = detection.center_px or _mask_area_and_centroid([], detection.bbox_2d)[1]
+      distances = (cloud[:, 3] - center[0]) ** 2 + (cloud[:, 4] - center[1]) ** 2
+      point = cloud[int(np.argmin(distances)), :3]
+      position_base = _transform_to_base(point.tolist(), t_base_camera)
+      if position_base is None:
+        warnings.append("T_base_camera is missing; cloud point is not in base frame")
+        return replace(detection, warnings=warnings)
+      return replace(
+        detection,
+        pose_3d=[*position_base, 0.0, 0.0, 0.0],
+        position_base=position_base,
+        position_3d={"x": position_base[0], "y": position_base[1], "z": position_base[2], "frame_id": base_frame, "unit": "m"},
+        base_frame=base_frame,
+        timing_ms={**detection.timing_ms, "geometry": round((time.perf_counter() - started) * 1000.0, 3)},
+        warnings=warnings,
+      )
     depth = _load_depth(depth_path)
     camera_info = _load_camera_info(camera_info_path, camera_info_inline)
     if depth is None and camera_info is None:
@@ -2101,6 +2135,7 @@ class VisionOpenVocabularyDetectTool:
       detection = self._localize_detection(
         detection,
         depth_path=depth_path,
+        cloud_path=call.input.get("cloud_path"),
         camera_info_path=call.input.get(
           "camera_info_path",
           self._camera_info_path,

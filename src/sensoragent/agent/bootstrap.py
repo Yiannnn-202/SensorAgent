@@ -24,6 +24,7 @@ from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.audio import AudioAnnounceSkill, AudioListenCommandSkill
 from sensoragent.skills.mock import MockPickAndPlaceSkill
+from sensoragent.skills.hardware import HardwareStartupSkill
 from sensoragent.skills.robot import (
   RobotPickSkill,
   RobotPlaceSkill,
@@ -44,18 +45,22 @@ from sensoragent.tools.robot import (
   GripperCloseTool,
   GripperGetStateTool,
   GripperOpenTool,
+  RobotEnsureObservePoseTool,
   RobotGetStateTool,
   RobotMoveJointsTool,
   RobotMoveLinearTool,
   RobotMovePoseTool,
   RobotPlanOrientedPickTool,
   RobotPlanPlaceTool,
+  RobotPlanShortBoltPickTool,
   RobotPlanTopDownPickTool,
   RobotResolvePlaceTargetTool,
   RobotStopTool,
   default_place_target_registry,
 )
 from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
+from sensoragent.tools.hardware import HardwareStartStackTool
+from sensoragent.tools.robot.pick_profile import RobotSelectPickProfileTool
 from sensoragent.tools.vision import (
   VisionConfigDetectTool,
   VisionGroundedSam2Tool,
@@ -67,8 +72,10 @@ from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
   build_industrial_recovery_pick_place_tree,
+  build_hardware_pick_object_actionlist,
   build_industrial_pick_at_pose_actionlist,
   build_industrial_pick_only_actionlist,
+  build_industrial_pick_observed_object_actionlist,
   build_industrial_pick_place_actionlist,
   build_industrial_place_only_actionlist,
   build_industrial_vision_pick_place_actionlist,
@@ -91,10 +98,13 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
   "robot.mock_place": MockPlaceTool,
   "robot.plan_oriented_pick": RobotPlanOrientedPickTool,
   "robot.plan_place": RobotPlanPlaceTool,
+  "robot.plan_short_bolt_pick": RobotPlanShortBoltPickTool,
   "robot.plan_top_down_pick": RobotPlanTopDownPickTool,
+  "robot.select_pick_profile": RobotSelectPickProfileTool,
   "recovery.classify_failure": RecoveryClassifyFailureTool,
   "recovery.plan": RecoveryPlanTool,
   "vision.verify_object_lifted": VisionVerifyObjectLiftedTool,
+  "hardware.start_stack": HardwareStartStackTool,
 }
 
 
@@ -105,6 +115,7 @@ SCENE_TOOL_NAMES = {
   "vision.capture_frame",
   "vision.verify_object_in_bin",
   "robot.resolve_place_target",
+  "robot.select_pick_profile",
 }
 
 
@@ -180,6 +191,7 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       camera_info_topic=str(
         capture_config.get("camera_info_topic", "/industrial_camera/camera_info")
       ),
+      cloud_topic=capture_config.get("cloud_topic"),
       base_frame=str(capture_config.get("base_frame", "base_link")),
       world_frame=str(capture_config.get("world_frame", "world")),
       out_dir=str(capture_config.get("out_dir", "logs/vision/latest")),
@@ -190,6 +202,8 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
   if tool_name == "robot.resolve_place_target":
     targets = config.scene.place_targets or default_place_target_registry()
     return RobotResolvePlaceTargetTool(targets)
+  if tool_name == "robot.select_pick_profile":
+    return RobotSelectPickProfileTool(config.scene.pick_profiles)
   if tool_name == "vision.verify_object_in_bin":
     targets = config.scene.place_targets or default_place_target_registry()
     return VisionVerifyObjectInBinTool(targets)
@@ -203,9 +217,11 @@ AVAILABLE_SKILLS: dict[str, SkillFactory] = {
   "robot.place": RobotPlaceSkill,
   "robot.verify_grasp": RobotVerifyGraspSkill,
   "robot.verify_place": RobotVerifyPlaceSkill,
+  "hardware.startup": HardwareStartupSkill,
 }
 
 ROBOT_TOOL_FACTORIES = {
+  "robot.ensure_observe_pose": RobotEnsureObservePoseTool,
   "robot.get_state": RobotGetStateTool,
   "robot.move_joints": RobotMoveJointsTool,
   "robot.move_pose": RobotMovePoseTool,
@@ -254,6 +270,26 @@ def _build_microphone_recorder(config: SensorAgentConfig):
       max_utterance_sec=float(audio_config.get("vad_max_utterance_sec", 15.0)),
     )
   raise ValueError(f"Unknown microphone backend: {backend}")
+
+
+def _allowed_planner_targets(config: SensorAgentConfig, actionlists: dict, decision_trees: dict) -> tuple[str, ...]:
+  """Return workflow targets that the current config can actually execute."""
+
+  enabled_tools = set(config.tools.enabled or ())
+  enabled_skills = set(config.skills.enabled or ())
+  targets = list(actionlists.keys()) + list(decision_trees.keys())
+  if "hardware.pick_object_actionlist" in targets and not (
+    {
+      "vision.capture_frame",
+      "vision.grounded_sam2",
+      "robot.select_pick_profile",
+      "robot.plan_short_bolt_pick",
+    }
+    <= enabled_tools
+    and {"robot.pick", "robot.verify_grasp"} <= enabled_skills
+  ):
+    targets.remove("hardware.pick_object_actionlist")
+  return tuple(targets)
 
 
 def _build_vad_segmenter(config: SensorAgentConfig):
@@ -379,10 +415,12 @@ def build_agent(
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
     "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(joint_poses),
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(joint_poses),
+    "industrial.pick_observed_object_actionlist": build_industrial_pick_observed_object_actionlist(joint_poses),
     "industrial.pick_at_pose_actionlist": build_industrial_pick_at_pose_actionlist(joint_poses),
     "industrial.place_only_actionlist": build_industrial_place_only_actionlist(joint_poses),
     "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(joint_poses),
     "industrial.sorting_config_pick_place_actionlist": build_sorting_config_pick_place_actionlist(joint_poses),
+    "hardware.pick_object_actionlist": build_hardware_pick_object_actionlist(joint_poses),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,
@@ -405,7 +443,7 @@ def build_agent(
       OpenAICompatibleClient(load_llm_config_from_env()),
       # DecisionTree targets are dispatched separately by target_kind but share
       # the same LLM whitelist to prevent arbitrary workflow selection.
-      allowed_targets=tuple(actionlists.keys()) + tuple(decision_trees.keys()),
+      allowed_targets=_allowed_planner_targets(config, actionlists, decision_trees),
       allowed_place_targets=place_targets,
     )
   elif planner_mode != "static":

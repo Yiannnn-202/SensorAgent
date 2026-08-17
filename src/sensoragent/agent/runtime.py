@@ -29,6 +29,7 @@ def _validate_required_workflow_inputs(plan: AgentPlan, merged_input: dict) -> s
     "industrial.recovery_pick_place_tree": ("object_query", "target"),
     "industrial.pick_only_actionlist": ("object_query",),
     "industrial.place_only_actionlist": ("target",),
+    "hardware.pick_object_actionlist": ("object_query",),
     "mock.pick_place_actionlist": ("object_query", "target"),
   }
   missing = [

@@ -109,6 +109,31 @@ class LLMPlannerTest(TestCase):
     )
     self.assertEqual(plan.intent["spatial"], {"relation": "left", "ordinal": 1})
 
+  def test_llm_planner_accepts_hardware_pick_plan(self) -> None:
+    client = FakeJsonClient(
+      {
+        "target_kind": "actionlist",
+        "target": "hardware.pick_object_actionlist",
+        "input": {
+          "object_query": "螺栓",
+          "pick_profile": "short_bolt",
+          "spatial_constraint": {"relation": "middle", "ordinal": 1},
+        },
+        "intent": {
+          "object": "螺栓",
+          "action": "pick",
+          "target": "",
+          "spatial": {"relation": "middle", "ordinal": 1},
+        },
+        "reason": "Hardware pick for the middle bolt.",
+      }
+    )
+    planner = LLMPlanner(client, allowed_targets=("hardware.pick_object_actionlist",))
+    plan = planner.plan("抓中间的螺栓", {})
+    self.assertEqual(plan.target, "hardware.pick_object_actionlist")
+    self.assertEqual(plan.input["pick_profile"], "short_bolt")
+    self.assertEqual(plan.input["spatial_constraint"], {"relation": "middle", "ordinal": 1})
+
   def test_llm_planner_falls_back_to_intent_in_reason(self) -> None:
     """Legacy prompt v2 kept intent inside reason. Fallback path must still parse it."""
 

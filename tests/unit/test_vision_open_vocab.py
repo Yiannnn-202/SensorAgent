@@ -686,6 +686,41 @@ class VisionOpenVocabularyToolTest(TestCase):
     )
     self.assertEqual(largest.output["bbox_2d"], [100.0, 10.0, 130.0, 40.0])
 
+  def test_spatial_middle_picks_median_image_x(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.8, [10.0, 10.0, 30.0, 30.0]),
+        ("wrench", 0.7, [100.0, 10.0, 130.0, 40.0]),
+        ("wrench", 0.6, [200.0, 10.0, 230.0, 35.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "middle"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [100.0, 10.0, 130.0, 40.0])
+
+  def test_spatial_middle_even_count_is_ambiguous(self) -> None:
+    backend = _FakeMultiBoxBackend(
+      [
+        ("wrench", 0.8, [10.0, 10.0, 30.0, 30.0]),
+        ("wrench", 0.7, [100.0, 10.0, 130.0, 40.0]),
+      ]
+    )
+    result = VisionOpenVocabularyDetectTool(detector=backend).run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "wrench", "spatial_constraint": {"relation": "middle"}},
+        trace=TraceContext(),
+      )
+    )
+    self.assertFalse(result.success)
+    self.assertIn("OBJECT_AMBIGUOUS", result.error or "")
+
   def test_spatial_tie_returns_ambiguous(self) -> None:
     backend = _FakeMultiBoxBackend(
       [
