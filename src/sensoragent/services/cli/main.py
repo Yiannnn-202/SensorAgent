@@ -221,9 +221,16 @@ def _build_parser() -> argparse.ArgumentParser:
   )
   vision_detect.add_argument(
     "--tool",
-    choices=("vision.open_vocab_detect", "vision.grounded_sam2"),
+    choices=(
+      "vision.open_vocab_detect",
+      "vision.grounded_sam2",
+      "vision.yolo11_seg_detect",
+    ),
     default="vision.open_vocab_detect",
-    help="Vision Tool to invoke. The Grounded SAM2 Tool always requires masks.",
+    help=(
+      "Vision Tool to invoke. Grounded SAM2 and YOLO11-seg always require "
+      "native/refined masks."
+    ),
   )
   vision_detect.add_argument("--image", type=Path, required=True)
   vision_detect.add_argument("--query", required=True)
@@ -576,12 +583,15 @@ def _run_vision_detect(args: argparse.Namespace) -> int:
     raise SystemExit("--spatial-ordinal must be >= 1")
   log_path = args.log_path or _default_task_log_path("vision_detect")
   bundle = build_agent_from_env(args.config, log_path=log_path)
-  strict_grounded_sam2 = args.tool == "vision.grounded_sam2"
+  strict_mask_tool = args.tool in {
+    "vision.grounded_sam2",
+    "vision.yolo11_seg_detect",
+  }
   input_data = {
     "query": args.query,
     "image_path": str(args.image),
-    "refine_masks": True if strict_grounded_sam2 else not args.no_refine,
-    "require_masks": True if strict_grounded_sam2 else args.require_masks,
+    "refine_masks": True if args.tool == "vision.grounded_sam2" else not args.no_refine,
+    "require_masks": True if strict_mask_tool else args.require_masks,
   }
   optional = {
     "depth_path": str(args.depth) if args.depth is not None else None,

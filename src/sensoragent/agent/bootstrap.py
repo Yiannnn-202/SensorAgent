@@ -66,6 +66,7 @@ from sensoragent.tools.vision import (
   VisionConfigDetectTool,
   VisionGroundedSam2Tool,
   VisionOpenVocabularyDetectTool,
+  VisionYolo11SegDetectTool,
 )
 from sensoragent.tools.vision import VisionCaptureFrameTool
 from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
@@ -114,6 +115,7 @@ SCENE_TOOL_NAMES = {
   "vision.config_detect",
   "vision.grounded_sam2",
   "vision.open_vocab_detect",
+  "vision.yolo11_seg_detect",
   "vision.capture_frame",
   "vision.verify_object_in_bin",
   "robot.resolve_place_target",
@@ -144,7 +146,11 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
   if tool_name == "vision.config_detect":
     catalog = config.scene.objects or {}
     return VisionConfigDetectTool(catalog, config.scene.release_profiles)
-  if tool_name in {"vision.grounded_sam2", "vision.open_vocab_detect"}:
+  if tool_name in {
+    "vision.grounded_sam2",
+    "vision.open_vocab_detect",
+    "vision.yolo11_seg_detect",
+  }:
     vision_config = config.integrations.vision
     common_settings = dict(
       model_path=str(vision_config.get("model_path", "models/vision/yoloe.pt")),
@@ -174,6 +180,8 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
     )
     if tool_name == "vision.grounded_sam2":
       return VisionGroundedSam2Tool(**common_settings)
+    if tool_name == "vision.yolo11_seg_detect":
+      return VisionYolo11SegDetectTool(**common_settings)
     return VisionOpenVocabularyDetectTool(
       backend=str(vision_config.get("backend", "yoloe")),
       refine_masks=vision_config.get("refine_masks"),

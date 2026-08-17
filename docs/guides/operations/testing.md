@@ -21,7 +21,7 @@ $env:PYTHONPATH = "$(Get-Location)\src"
 python -m pytest -q tests\unit
 ```
 
-The 2026-08-17 Windows baseline completed **357 passed, 1 skipped**. It covers
+The 2026-08-17 Windows baseline completed **360 passed, 1 skipped**. It covers
 config loading, planner validation, tool/skill runtimes, ActionLists,
 DecisionTrees, audio fakes, contract validation, simulation and hardware
 adapter wiring, robot planning/control adapters, open-vocabulary vision error

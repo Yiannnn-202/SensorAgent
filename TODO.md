@@ -15,7 +15,7 @@ adapter are implemented. Current competition progress is better described as
 - The main blockers are repeatable Gazebo reset and batch acceptance, a unified
   live-perception world state, fixed evaluation datasets and metrics, and
   physical place/sort/recovery acceptance.
-- The current offline unit baseline is 357 passed and 1 skipped. It does not
+- The current offline unit baseline is 360 passed and 1 skipped. It does not
   constitute ROS, Gazebo, camera, or physical-hardware acceptance.
 
 Do not start reinforcement-learning work or expand service surfaces at the

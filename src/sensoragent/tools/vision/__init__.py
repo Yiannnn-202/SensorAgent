@@ -3,6 +3,7 @@
 from sensoragent.tools.vision.capture import VisionCaptureFrameTool
 from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 from sensoragent.tools.vision.grounded_sam2 import VisionGroundedSam2Tool
+from sensoragent.tools.vision.yolo11_seg import VisionYolo11SegDetectTool
 from sensoragent.tools.vision.open_vocab import (
   SPATIAL_RELATIONS,
   GroundingDinoBackend,
@@ -34,6 +35,7 @@ __all__ = [
   "VisionGroundedSam2Tool",
   "VisionInferenceOptions",
   "VisionOpenVocabularyDetectTool",
+  "VisionYolo11SegDetectTool",
   "VisionVerifyObjectInBinTool",
   "VisionVerifyObjectLiftedTool",
 ]

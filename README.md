@@ -63,6 +63,7 @@ live-perception world-state fusion, and physical-cell validation.
 | Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
 | Gazebo RGB-D frame capture Tool (`vision.capture_frame`) | Implemented; requires a ROS 2 Python interpreter on Ubuntu |
 | Strict Grounding DINO + SAM 2 Tool (`vision.grounded_sam2`) | Implemented with a pretrained baseline and a local single-class `red_block_v0` fine-tuning run; multi-class and industrial acceptance remain pending |
+| YOLOE and YOLO11-seg backup Tools | Implemented as optional alternatives; `vision.open_vocab_detect` retains YOLOE, while `vision.yolo11_seg_detect` requires a local fixed-class YOLO11-seg checkpoint and native masks |
 | Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
 | Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
 | Unified competition world state | Task-local object/bin/task state implemented for the oracle multi-instance session; durable live-perception fusion remains pending |

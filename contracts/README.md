@@ -62,7 +62,8 @@ errors
 
 ## Current coverage
 
-Contracts exist for the mock, audio, vision, recovery, arm, and gripper tools
+Contracts exist for the mock, audio, vision (including the optional YOLO11-seg
+backup), recovery, arm, and gripper tools
 listed above. The following implemented helpers intentionally have no contract
 file because their interface remains repository-internal:
 

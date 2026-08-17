@@ -33,6 +33,7 @@ vision.config_detect
 vision.capture_frame
 vision.open_vocab_detect
 vision.grounded_sam2
+vision.yolo11_seg_detect  # Backup fixed-class model; not enabled in shipped workflows.
 robot.mock_pick
 robot.mock_place
 robot.get_state

@@ -179,7 +179,7 @@
 
 ```text
 python -m pytest -q tests/unit
-357 passed, 1 skipped
+360 passed, 1 skipped
 
 competition batch:
 run_count=5
