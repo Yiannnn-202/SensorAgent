@@ -2,11 +2,13 @@
 
 SensorAgent is the agent-side orchestration repository for embodied tasks. It
 focuses on task understanding, skill/tool orchestration, workflow execution,
-local VAD/ASR/TTS, structured logging, and RM65-B simulation development.
+local VAD/ASR/TTS, structured logging, RM65-B simulation development, and a
+safety-gated physical-hardware adapter.
 
-It does **not** own production robot drivers, firmware, physical safety, or hardware
-bringup. The included ROS 2 workspace provides a local Gazebo and MoveIt 2
-development stack, not the production robot runtime.
+It does **not** own robot firmware, vendor drivers, or physical-cell safety
+certification. The included ROS 2 workspace contains both a local Gazebo/MoveIt
+development stack and an adapter to externally installed physical-hardware ROS
+packages. Physical motion remains opt-in and is disabled by default.
 
 ## Role in the System
 
@@ -30,22 +32,23 @@ SensorAgent is responsible for:
 - Local Silero VAD and SenseVoice ASR command intake.
 - Local file-based TTS generation through supported sherpa-onnx models.
 - Reproducible local RM65-B + Robotiq 2F-85 Gazebo and MoveIt 2 integration.
+- Safety-gated HTTP integration with an externally installed RM65 + OmniPicker
+  physical-hardware ROS stack.
 
 SensorAgent is not responsible for:
 
 - Isaac Sim scene deployment.
-- Production ROS 2 runtime ownership.
-- Mechanical arm drivers or low-level control.
-- Physical robot safety.
-- Camera or hardware bringup.
+- Vendor driver, firmware, or low-level controller ownership.
+- Physical-cell safety certification, emergency-stop integration, or operator
+  procedures.
+- Camera calibration and physical-hardware acceptance evidence.
 
 ## Current Status
 
-As of 2026-08-05, the repository is beyond framework scaffolding and has a
-working simulation-oriented prototype. The Agent and workflow framework is at
-an integration-ready level, while competition acceptance is still limited by
-repeatable Gazebo testing, measured vision quality, unified world state, and the
-absence of physical-robot integration.
+As of 2026-08-17, the repository is beyond framework scaffolding. It has
+simulation and physical-hardware execution adapters, but competition acceptance
+is still limited by repeatable Gazebo testing, measured vision quality,
+live-perception world-state fusion, and physical-cell validation.
 
 | Area | Status |
 | --- | --- |
@@ -63,9 +66,11 @@ absence of physical-robot integration.
 | Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
 | Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
 | Unified competition world state | Task-local object/bin/task state implemented for the oracle multi-instance session; durable live-perception fusion remains pending |
+| Physical RM65 + OmniPicker bridge | Implemented through externally installed ROS packages on `127.0.0.1:8766`; motion is disabled by default and only single-object pick/verify is wired |
+| Hardware RGB-D capture and short-bolt planning | Implemented; uses synchronized RGB/point cloud capture, Grounded SAM2, a configured profile, and bounded workspace checks |
+| Experimental generic mask/point-cloud planner | Implemented as `robot.plan_mask_pointcloud_pick`; not enabled in shipped configs or any ActionList |
 | Batch simulation evaluation and repeatable scene reset | Not implemented |
 | HTTP/WebSocket/MCP service entry points | Not implemented; only the CLI exists |
-| Physical robot connection | Not connected |
 | Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
 | Multi-instance competition sorting session | Implemented with text/real-voice input, semantic grounding, ambiguity rejection, oracle instance selection, state tracking, and bounded recovery |
 | Gymnasium RL environment | Not implemented |
@@ -74,10 +79,12 @@ The reusable robot control surface now includes state, joint motion, pose motion
 linear motion, stop, gripper control, deterministic pick/place planning, named
 place-target resolution, and `robot.pick` / `robot.place` / verification Skills.
 `configs/robot_mock.yaml` selects the deterministic fake backend, while
-`configs/robot_sim.yaml` selects `HttpRobotControlClient`, scene objects,
-place targets, optional open-vocabulary vision, visual verification, recovery
-classification tools, and `industrial.recovery_pick_place_tree`. The physical
-robot is not connected.
+`configs/robot_sim.yaml` selects the simulation HTTP bridge on port `8765`.
+`configs/robot_hardware_sensoragent_v1i_baseline.yaml` selects the physical
+hardware bridge on port `8766`; it supports capture, detect, profile selection,
+pick, and grasp verification, but not physical place/sort/recovery workflows.
+See the [hardware guide](docs/guides/hardware/physical-rm65-omnipicker.md)
+before enabling any physical motion.
 
 ## Quick Start
 
@@ -100,11 +107,11 @@ Run the default offline test suite:
 
 ```powershell
 $env:PYTHONPATH = "$(Get-Location)\src"
-python -m unittest discover -s tests -p 'test_*.py'
+python -m pytest -q tests\unit
 ```
 
 See the [testing guide](docs/guides/operations/testing.md) for the suite's scope and its
-current known issues.
+current validation scope.
 
 ## Repository Layout
 
@@ -115,8 +122,8 @@ sensoragent/
 ├── docs/                    # Architecture, team documents, and guides
 ├── logs/                    # Ignored task logs, traces, audio, and captures
 ├── models/                  # Ignored local ASR, TTS, and vision weights
-├── scripts/                 # Windows mock runner, vision evaluation, Linux Gazebo runners
-├── ros2_ws/                 # Local ROS 2 simulation workspace
+├── scripts/                 # Vision evaluation and Linux simulation/hardware runners
+├── ros2_ws/                 # ROS 2 simulation and physical-hardware adapter workspace
 │   └── src/
 │       ├── rm_description/                  # Locally imported RM65-B model
 │       ├── rm_gazebo/                       # Locally imported arm-only Gazebo stack
@@ -124,6 +131,7 @@ sensoragent/
 │       ├── robotiq_description/             # Vendored Robotiq 2F-85 model
 │       ├── sensoragent_rm65_b_bringup/      # Combined arm/gripper stack, worlds, models
 │       ├── sensoragent_robot_bridge/        # HTTP-to-ROS 2 simulation bridge
+│       ├── sensoragent_hardware_bridge/     # Safety-gated HTTP-to-physical ROS bridge
 │       └── sensoragent_rm65_b_{description,gazebo,moveit_config}/  # Reserved, empty
 ├── simulation/              # Reserved Gazebo worlds, models, and scenarios
 ├── reinforcement_learning/  # Future RL environments and policies
@@ -157,6 +165,7 @@ script) currently exposes:
 | `run-task` | Run a natural-language task through the static or LLM planner |
 | `listen-task` | Record one utterance, transcribe it, and plan from the transcript |
 | `vision-detect` | Run open-vocabulary detection on one RGB(-D) image and print the Tool result |
+| `run-actionlist` | Directly run a registered ActionList, including configured hardware experiments |
 
 Gazebo workflows are driven by `scripts/linux/` runners instead of CLI
 subcommands. See the [testing guide](docs/guides/operations/testing.md) for the full list.
@@ -179,6 +188,7 @@ Key SensorAgent documents:
 - [Audio guide](docs/guides/audio/local-audio.md)
 - [RM65-B Gazebo quickstart](docs/guides/simulation/rm65b-quickstart.md)
 - [Simulation robot HTTP bridge](docs/guides/simulation/robot-bridge.md)
+- [Physical RM65 + OmniPicker guide](docs/guides/hardware/physical-rm65-omnipicker.md)
 - [Industrial intent to ActionList guide](docs/guides/workflows/intent-to-actionlist.md)
 - [Failure detection and recovery guide](docs/guides/workflows/failure-recovery.md)
 - [Open-vocabulary vision guide](docs/guides/vision/open-vocabulary.md)

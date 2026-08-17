@@ -191,7 +191,8 @@ classify_failure
 | 分支 | 触发失败 | 动作 |
 | --- | --- | --- |
 | `recover_redetect` | `OBJECT_NOT_FOUND`、`LOW_CONFIDENCE`、`POSE_INVALID` | 重新执行 `vision.config_detect`，成功后回到 `plan_pick` |
-| `recover_pick` | `PICK_PLAN_FAILED`、`PICK_EXEC_FAILED`、`GRASP_EMPTY`、`DROPPED_OBJECT`、`WRONG_BIN` | 执行 `industrial.pick_only_actionlist`，成功后重新进入放置阶段 |
+| `recover_pick` | `PICK_PLAN_FAILED`、`PICK_EXEC_FAILED`、`GRASP_EMPTY` | 执行 `industrial.pick_only_actionlist`，成功后重新进入放置阶段 |
+| `recover_pick_at_pose` | `DROPPED_OBJECT`、`WRONG_BIN` | 使用失败验证中的观察位姿执行 `industrial.pick_at_pose_actionlist`，避免回到陈旧的配置坐标 |
 | `recover_place` | `PLACE_PLAN_FAILED`、`PLACE_EXEC_FAILED` | 执行 `industrial.place_only_actionlist`，成功后验证目标格 |
 | `recover_release` | `RELEASE_FAILED`、`GRIPPER_FAILED` | 以保守速度重开夹爪，然后 retreat 和再验证 |
 | `recover_bridge` | `BRIDGE_ERROR`、`ROBOT_NOT_READY` | 调用 `robot.stop`，然后重新感知和重规划 |

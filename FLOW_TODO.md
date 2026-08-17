@@ -10,6 +10,10 @@
 感知更新状态 -> 状态驱动决策 -> 决策改变动作 -> 执行后再感知验证 -> 失败后有针对性恢复
 ```
 
+> **2026-08-17 状态说明：**`DecisionTreeRuntime` 已接入 recovery
+> `node_overrides`、运行内 world state，以及掉落/放错格的观测位姿重抓。以下清单
+> 保留尚未覆盖的策略差异和验收工作，不能将未勾选条目理解为基础 override 未实现。
+
 ## P0 - 恢复策略真实生效
 
 ### 1. 消费 `recovery.plan.updated_input`
@@ -50,11 +54,11 @@
 
 ### 3. 打通 `quantity == all` 和多实例任务队列
 
-- [ ] 将 `grounding.py` 中 `BATCH_TASK_NOT_ENABLED` 改为生成可执行的 batch intent，或新增专门 batch workflow。
-- [ ] 支持“所有某类零件依次入格”。
-- [ ] 支持“第 N 个 / 左侧 / 右侧 / 最近 / 最远”实例选择。
-- [ ] 支持自动选择下一个空格。
-- [ ] 支持已放置实例从候选集中排除。
+- [x] 将 `quantity == all` 生成可执行的 batch intent 和任务队列。
+- [x] 支持“所有某类零件依次入格”。
+- [x] 支持“第 N 个 / 左侧 / 右侧 / 最近 / 最远”实例选择。
+- [x] 支持自动选择下一个空格。
+- [x] 支持已放置实例从候选集中排除。
 
 **验收标准：**
 
@@ -135,13 +139,11 @@
 
 ## 建议实施顺序
 
-1. P0-1：让 `recovery.plan.updated_input` 真实生效。
-2. P0-2：统一世界状态更新点。
-3. P1-3：支持多实例任务队列。
-4. P1-6：补典型失败恢复动作差异。
-5. P1-5：统一 config 与 live RGB-D 流程接口。
-6. P2-8：从真实日志自动汇总流程指标。
-7. P2-7：补轻量多 Agent 调度展示。
+1. P1-6：补典型失败恢复动作差异。
+2. P1-5：统一 config 与 live RGB-D 流程接口。
+3. P2-8：从真实日志自动汇总流程指标。
+4. P1-4：支持“最多区域装箱”的最小版本。
+5. P2-7：补轻量多 Agent 调度展示。
 
 ## 以 Gazebo 验证点划分的阶段
 
@@ -176,9 +178,8 @@
 **已完成验证：**
 
 ```text
-python -m unittest discover -s tests -p 'test_*.py'
-Ran 315 tests
-OK (skipped=1)
+python -m pytest -q tests/unit
+357 passed, 1 skipped
 
 competition batch:
 run_count=5
@@ -250,13 +251,13 @@ success=5/5
 
 ### Phase G3 - 多实例 / 任务队列 Gazebo 验证点
 
-**触发条件：**G1 通过，且 P1-3 代码完成。
+**触发条件：**G1 通过；P1-3 的队列代码已完成，G3 验证其 Gazebo 行为。
 
 **目标：**从单个 pick-place 升级到多实例任务队列。
 
 **对应 TODO：**
 
-- [ ] P1-3：打通 `quantity == all` 和多实例任务队列。
+- [x] P1-3：打通 `quantity == all` 和多实例任务队列（待 Gazebo 验收）。
 - [ ] P1-4：支持“最多区域装箱”的最小版本。
 - [ ] P0-2 后续：后续 plan 使用最新 world state。
 

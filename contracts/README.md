@@ -63,18 +63,24 @@ errors
 ## Current coverage
 
 Contracts exist for the mock, audio, vision, recovery, arm, and gripper tools
-listed above. Four implemented tools intentionally have no contract file yet
-because their interface is still repository-internal:
+listed above. The following implemented helpers intentionally have no contract
+file because their interface remains repository-internal:
 
 ```text
-vision.capture_frame        Gazebo RGB-D capture helper tied to local ROS 2 topics
+hardware.start_stack        Local physical-stack launcher
+vision.capture_frame        Gazebo or physical RGB-D capture helper tied to local ROS 2 topics
+robot.ensure_observe_pose   Hardware observation-pose guard
 robot.plan_top_down_pick    Deterministic planning helper over RobotPose/PickPlan
 robot.plan_oriented_pick    Deterministic planning helper over RobotPose/PickPlan
+robot.plan_short_bolt_pick  Hardware-specific mask/point-cloud helper
+robot.plan_mask_pointcloud_pick  Experimental generic mask/point-cloud helper
 robot.plan_place            Deterministic planning helper over RobotPose/PlacePlan
+robot.select_pick_profile   Repository-local configuration selector
 ```
 
-Add a contract for any of them before another module or language calls it
-directly.
+Add a contract before another module or language calls any of these helpers
+directly. In particular, experimental planners must not be exposed as external
+tools without a stable contract.
 
 ## Usage
 

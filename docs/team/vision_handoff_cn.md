@@ -6,7 +6,7 @@
 验证到哪一步、其他模块还需要给我什么，都统一写在这里。具体安装和命令细节仍以
 [开放词汇视觉接入说明](../guides/vision/open-vocabulary.md)为准，这里不重复维护另一套
 操作手册。公开数据集的筛选、许可证和转换命令见[视觉公开数据集选择与使用](../guides/vision/public-datasets.md)，
-最新节点安排见[8 月 10 日视觉交付计划](vision_aug10_delivery_cn.md)，SAM3 是否适合替换
+历史节点安排见[8 月 10 日视觉交付计划](../planning/vision-aug10-delivery.md)，SAM3 是否适合替换
 当前方案见[SAM3 适配性评估](../guides/vision/sam3-assessment.md)，7 月 31 日的公开数据
 和训练实测证据见[视觉任务执行记录](../archive/progress-logs/2026-07-31-vision.md)。
 

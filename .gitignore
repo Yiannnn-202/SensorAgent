@@ -40,6 +40,9 @@ venv/
 .env.*
 !.env.example
 
+# Machine-specific physical-hardware calibration and operating limits
+configs/robot_hardware.local.yaml
+
 # Build outputs
 build/
 dist/

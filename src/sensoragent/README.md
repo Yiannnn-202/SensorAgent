@@ -32,6 +32,7 @@ vision.mock_detect
 vision.config_detect
 vision.capture_frame
 vision.open_vocab_detect
+vision.grounded_sam2
 robot.mock_pick
 robot.mock_place
 robot.get_state
@@ -40,9 +41,12 @@ robot.move_pose
 robot.move_linear
 robot.plan_top_down_pick
 robot.plan_oriented_pick
-robot.plan_mask_pointcloud_pick  # Experimental; not wired into an ActionList.
+robot.plan_short_bolt_pick
+robot.plan_mask_pointcloud_pick  # Experimental; not enabled in shipped configs.
 robot.plan_place
 robot.resolve_place_target
+robot.ensure_observe_pose
+robot.select_pick_profile
 robot.stop
 gripper.open
 gripper.close
@@ -56,6 +60,7 @@ audio.listen_transcribe
 audio.listen_vad_transcribe
 audio.transcribe
 audio.speak
+hardware.start_stack
 ```
 
 Tools are registered from the `tools.enabled` list in the active config.
@@ -74,6 +79,7 @@ robot.pick
 robot.place
 robot.verify_grasp
 robot.verify_place
+hardware.startup
 ```
 
 ActionLists:
@@ -85,6 +91,7 @@ industrial.pick_place_actionlist
 industrial.pick_only_actionlist
 industrial.place_only_actionlist
 industrial.vision_pick_place_actionlist
+hardware.pick_object_actionlist
 ```
 
 DecisionTree support is implemented and tested with mock retry and not-found
@@ -104,7 +111,7 @@ post-place re-detection.
 ## CLI entry point
 
 `services/cli/main.py` exposes `mock-pick-place`, `run-task`, `listen-task`, and
-`vision-detect`. `services/api/` is reserved for the future HTTP/WebSocket/MCP
+`vision-detect`, and `run-actionlist`. `services/api/` is reserved for the future HTTP/WebSocket/MCP
 service and contains no implementation yet.
 
 ## Audio path
@@ -126,16 +133,20 @@ intentionally disabled.
 `tools/robot/` and `skills/robot/` contain backend-neutral robot control,
 planning, pick/place, and verification behavior. `configs/robot_mock.yaml` uses
 `FakeRobotControlClient`; `configs/robot_sim.yaml` uses
-`HttpRobotControlClient` to talk to the ROS 2 bridge on `127.0.0.1:8765`.
+`HttpRobotControlClient` to talk to the simulation bridge on `127.0.0.1:8765`.
+The hardware configuration uses the same client against `127.0.0.1:8766`, where
+`sensoragent_hardware_bridge` adapts to externally installed RM65 and
+OmniPicker ROS packages. Its motion gate defaults to disabled.
 
-The working RM65-B and Robotiq control stack is a separate ROS 2 package:
+The simulation RM65-B and Robotiq control stack is a separate ROS 2 package:
 
 ```text
 ros2_ws/src/sensoragent_rm65_b_bringup
 ```
 
 The Agent process does not import ROS 2 directly. Robot execution crosses the
-HTTP bridge into `ros2_ws/src/sensoragent_robot_bridge`.
+HTTP bridge into `ros2_ws/src/sensoragent_robot_bridge` for simulation or
+`ros2_ws/src/sensoragent_hardware_bridge` for physical hardware.
 
 ## Runtime compatibility
 

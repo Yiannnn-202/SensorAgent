@@ -1,8 +1,7 @@
 # Testing Guide
 
-The default suite uses mocks and fixtures; it does not require ROS 2, a robot,
-microphone access, or local model weights. Three known issues are listed under
-[Known issues](#known-issues).
+The default unit suite uses mocks and fixtures; it does not require ROS 2, a
+robot, microphone access, or local model weights.
 
 ## Dependencies
 
@@ -11,35 +10,31 @@ python -m pip install -r requirements.txt
 python -m pip install pytest
 ```
 
-`pytest` is not declared in `requirements.txt` or `pyproject.toml`, but
-`tests/unit/test_vision_evaluation.py` imports it, so `unittest discover` reports
-a collection error without it. Tests that need `onnxruntime`, model weights, or a
+`pytest` is used by the unit suite but is not declared as an install dependency,
+so install it explicitly. Tests that need `onnxruntime`, model weights, or a
 microphone skip themselves when those assets are missing.
 
 ## Run the suite
 
 ```powershell
 $env:PYTHONPATH = "$(Get-Location)\src"
-python -m unittest discover -s tests -p 'test_*.py'
+python -m pytest -q tests\unit
 ```
 
-The 2026-07-31 Windows run executed 224 tests covering config loading, planner
-validation, tool/skill runtimes, ActionLists, DecisionTrees, audio fakes,
-contract validation, robot planning/control adapters, open-vocabulary vision
-error handling, and recovery planning. Discovery of the vision evaluation
-module still fails when `pytest` is absent. The suite does not start ROS 2 or
-Gazebo.
+The 2026-08-17 Windows baseline completed **357 passed, 1 skipped**. It covers
+config loading, planner validation, tool/skill runtimes, ActionLists,
+DecisionTrees, audio fakes, contract validation, simulation and hardware
+adapter wiring, robot planning/control adapters, open-vocabulary vision error
+handling, and recovery planning. The suite does not start ROS 2, Gazebo, or
+physical hardware.
 
-## Known issues
+## Scope and limitations
 
-| Test | Symptom | Cause |
-| --- | --- | --- |
-| `tests/unit/test_vision_evaluation.py` | Import error during discovery | `pytest` is not installed or not declared as a dependency |
-| `tests/unit/test_gazebo_recovery_demo_script.py::GazeboRecoveryDemoScriptTest::test_wrong_table_demo_runs_without_gazebo` | `ROBOT_BRIDGE_UNAVAILABLE` on `127.0.0.1:8765` | The case runs the demo with `--execute`, so it uses the `http` robot backend from `configs/robot_sim.yaml` and needs a live bridge despite its name |
-| `tests/unit/test_failure_recovery.py::DecisionTreeLastFailureTest::test_failed_node_is_available_to_recovery_tools` | `failed_step` is `found_check` instead of `not_found` | The current DecisionTree overwrites failure evidence at the condition node; the intended recovery evidence semantics need a decision |
-
-All three are tracked in `TODO.md`. The current offline baseline is therefore
-known but not clean; new failures should still be treated as regressions.
+The offline unit baseline is clean, but it is not physical-system acceptance.
+ROS 2, Gazebo, camera, local-model, grasp-stability, calibration, and
+physical-hardware checks remain environment-specific. See the
+[hardware guide](../hardware/physical-rm65-omnipicker.md) before attempting
+physical motion.
 
 ## Mock task pipeline
 
