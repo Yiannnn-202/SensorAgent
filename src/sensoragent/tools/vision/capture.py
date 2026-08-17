@@ -50,6 +50,7 @@ class VisionCaptureFrameTool:
     image_topic: str = "/industrial_camera/image",
     depth_topic: str = "/industrial_camera/depth_image",
     camera_info_topic: str = "/industrial_camera/camera_info",
+    cloud_topic: str | None = None,
     base_frame: str = "base_link",
     world_frame: str = "world",
     out_dir: str = DEFAULT_OUT_DIR,
@@ -63,6 +64,7 @@ class VisionCaptureFrameTool:
     self._image_topic = str(image_topic)
     self._depth_topic = str(depth_topic)
     self._camera_info_topic = str(camera_info_topic)
+    self._cloud_topic = str(cloud_topic) if cloud_topic else None
     self._base_frame = str(base_frame)
     self._world_frame = str(world_frame)
     self._out_dir = str(out_dir)
@@ -123,6 +125,16 @@ class VisionCaptureFrameTool:
     call: ToolCall,
     timeout: float,
   ) -> list[str]:
+    if self._cloud_topic:
+      return [
+        python_executable,
+        self._script,
+        "--out-dir", str(out_dir),
+        "--image-topic", str(call.input.get("image_topic", self._image_topic)),
+        "--cloud-topic", str(call.input.get("cloud_topic", self._cloud_topic)),
+        "--base-frame", str(call.input.get("base_frame", self._base_frame)),
+        "--timeout", str(timeout),
+      ]
     return [
       python_executable,
       self._script,

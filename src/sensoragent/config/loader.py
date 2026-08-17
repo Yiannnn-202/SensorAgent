@@ -80,6 +80,7 @@ def load_config(path: str | Path) -> SensorAgentConfig:
     scene=SceneConfig(
       objects=_as_mapping(scene.get("objects"), "scene.objects"),
       release_profiles=_as_mapping(scene.get("release_profiles"), "scene.release_profiles"),
+      pick_profiles=_as_mapping(scene.get("pick_profiles"), "scene.pick_profiles"),
       place_targets=_as_mapping(scene.get("place_targets"), "scene.place_targets"),
       robot_joint_order=_as_string_list(
         scene.get("robot_joint_order"),

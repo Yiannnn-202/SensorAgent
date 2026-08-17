@@ -121,6 +121,38 @@ def _find_handle_center(points: np.ndarray, axis: np.ndarray) -> np.ndarray:
   return np.mean(handle_points, axis=0)
 
 
+def estimate_shaft_grasp_point(
+  points: Iterable[Iterable[float]],
+  *,
+  headward_offset: float = 0.015,
+) -> tuple[float, float, float]:
+  """Estimate a shaft grasp point shifted toward the thicker bolt head."""
+
+  point_array = _as_points(points)
+  geometry = estimate_object_geometry(point_array)
+  axis = _normalize(np.asarray(geometry.principal_axis, dtype=np.float64))
+  projection = point_array @ axis
+  median = np.median(projection)
+  positive = point_array[projection >= median]
+  negative = point_array[projection < median]
+  if len(positive) < 10 or len(negative) < 10:
+    center = np.mean(point_array, axis=0)
+    return tuple(float(value) for value in center)
+
+  def mean_radius(region: np.ndarray) -> float:
+    center = np.mean(region, axis=0)
+    centered = region - center
+    perpendicular = centered - (centered @ axis)[:, None] * axis
+    return float(np.mean(np.linalg.norm(perpendicular, axis=1)))
+
+  head_is_positive = mean_radius(positive) >= mean_radius(negative)
+  shaft = negative if head_is_positive else positive
+  shaft_center = np.mean(shaft, axis=0)
+  head_direction = axis if head_is_positive else -axis
+  grasp = shaft_center + float(headward_offset) * head_direction
+  return tuple(float(value) for value in grasp)
+
+
 def build_oriented_pick_plan_from_points(
   points: Iterable[Iterable[float]],
   *,
@@ -129,6 +161,7 @@ def build_oriented_pick_plan_from_points(
   pregrasp_distance: float = 0.03,
   lift_height: float = 0.10,
   tcp_offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
+  grasp_point: tuple[float, float, float] | None = None,
 ) -> PickPlan:
   """Build an oriented pick plan from object point-cloud samples.
 
@@ -141,7 +174,11 @@ def build_oriented_pick_plan_from_points(
   point_array = _as_points(points)
   geometry = estimate_object_geometry(point_array)
   axis = _normalize(np.asarray(geometry.principal_axis, dtype=np.float64))
-  handle_center = _find_handle_center(point_array, axis)
+  handle_center = (
+    np.asarray(grasp_point, dtype=np.float64)
+    if grasp_point is not None
+    else _find_handle_center(point_array, axis)
+  )
 
   world_up = np.array([0.0, 0.0, 1.0], dtype=np.float64)
   tool_y = axis

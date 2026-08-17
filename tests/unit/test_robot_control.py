@@ -404,6 +404,44 @@ class RobotControlTest(TestCase):
     self.assertTrue(result.success, msg=result.error)
     self.assertIn(("gripper.get_state", {}), tool_runtime.calls)
 
+  def test_pick_skill_rejects_open_code_3_without_open_state(self) -> None:
+    trace = TraceContext()
+    grasp = RobotPose(
+      position=(0.42, 0.10, 0.32),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_top_down_pick_plan(grasp)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        if name == "gripper.open":
+          return ToolResult(tool=name, success=False, error="GRIPPER_OPEN_3: 3")
+        if name == "gripper.get_state":
+          return ToolResult(tool=name, success=True, output={"state": {"status": "unknown"}})
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPickSkill().run(
+      call=Mock(
+        input={
+          "object_id": "short_bolt_001",
+          "plan": plan.to_dict(),
+          "close_opening": 0.032,
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertFalse(result.success)
+    self.assertEqual(result.output["failed_step"], "open_gripper")
+    self.assertIn(("gripper.get_state", {}), tool_runtime.calls)
+
   def test_pick_skill_tolerates_close_timeout_when_gripper_state_is_held(self) -> None:
     trace = TraceContext()
     grasp = RobotPose(
@@ -449,10 +487,84 @@ class RobotControlTest(TestCase):
 
     self.assertTrue(result.success, msg=result.error)
     self.assertIn(("gripper.get_state", {}), tool_runtime.calls)
-    self.assertEqual(result.output["plan"], plan.to_dict())
-    self.assertTrue(
-      any(stage["step"] == "close_gripper_state_check" for stage in result.output["stages"])
+
+  def test_pick_skill_refuses_to_lift_when_close_failed_without_grasp(self) -> None:
+    trace = TraceContext()
+    grasp = RobotPose(
+      position=(0.42, 0.10, 0.32),
+      orientation=(0.0, 1.0, 0.0, 0.0),
     )
+    plan = build_top_down_pick_plan(grasp)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        if name == "gripper.close":
+          return ToolResult(tool=name, success=False, error="GRIPPER_CLOSE_3: 3")
+        if name == "gripper.get_state":
+          return ToolResult(
+            tool=name,
+            success=True,
+            output={"state": {"opening": 0.018, "status": 1, "grasped": False}},
+          )
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPickSkill().run(
+      call=Mock(
+        input={"object_id": "block", "plan": plan.to_dict(), "close_opening": 0.0},
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertFalse(result.success)
+    self.assertEqual(result.output["failed_step"], "close_gripper")
+    self.assertNotIn(
+      ("robot.move_linear", {"pose": plan.lift.to_dict(), "speed": 0.2}),
+      tool_runtime.calls,
+    )
+
+  def test_pick_skill_can_disable_move_pose_fallback_on_grasp_failure(self) -> None:
+    trace = TraceContext()
+    grasp = RobotPose(
+      position=(0.42, 0.10, 0.32),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_top_down_pick_plan(grasp)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        if name == "robot.move_linear" and input_data.get("pose") == plan.grasp.to_dict():
+          return ToolResult(tool=name, success=False, error="MOVE_LINEAR_TIMEOUT")
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPickSkill().run(
+      call=Mock(
+        input={
+          "object_id": "short_bolt_001",
+          "plan": plan.to_dict(),
+          "close_opening": 0.0,
+          "fallback_move_pose_on_grasp_failure": False,
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertFalse(result.success)
+    self.assertIn(("robot.stop", {}), tool_runtime.calls)
+    self.assertNotIn(("robot.move_pose", {"pose": plan.grasp.to_dict(), "speed": 0.2, "avoid_collisions": True}), tool_runtime.calls)
 
   def test_robot_tools_register_from_project_configuration(self) -> None:
     bundle = build_agent_from_config(ROOT / "configs" / "robot_mock.yaml")

@@ -1,0 +1,86 @@
+agent:
+  name: sensoragent
+  mode: robot_hardware
+
+tools:
+  enabled:
+    - hardware.start_stack
+    - robot.ensure_observe_pose
+    - robot.get_state
+    - robot.move_joints
+    - robot.move_pose
+    - robot.move_linear
+    - robot.plan_top_down_pick
+    - robot.plan_oriented_pick
+    - robot.plan_short_bolt_pick
+    - robot.stop
+    - gripper.open
+    - gripper.close
+    - gripper.get_state
+    - vision.grounded_sam2
+    - vision.capture_frame
+    - robot.select_pick_profile
+    - vision.open_vocab_detect
+
+skills:
+  enabled:
+    - hardware.startup
+    - robot.pick
+    - robot.verify_grasp
+
+integrations:
+  robot:
+    backend: http
+    endpoint: http://127.0.0.1:8766
+    timeout_seconds: 120.0
+  vision:
+    backend: grounding_dino
+    grounding_dino_model: models/vision/grounding-dino/grounding-dino-tiny
+    sam2_model_path: models/vision/sam2_t.pt
+    box_threshold: 0.35
+    text_threshold: 0.25
+    refine_masks: false
+    capture:
+      script: scripts/linux/capture_hardware_rgb_cloud.py
+      cloud_topic: /vision/cloud
+      image_topic: /vision/raw
+      out_dir: logs/vision/hardware_latest
+
+# Copy this ignored template to a local hardware configuration only after the
+# camera-to-base transform and safe operating envelope are measured.
+scene:
+  joint_poses:
+    observe_joints: [0.00574105, -0.13940805, 1.25550997, -0.00015705, 1.71753371, 0.00137855]
+    observe_pose:
+      position: [-0.196744, -0.001111, 0.449013]
+      orientation: [0.98824, 0.002022, -0.152897, 0.000599]
+      frame_id: base_link
+  pick_profiles:
+    default:
+      planner: robot.plan_top_down_pick
+      open_opening: 0.12
+      gripper_force: 0.5
+    short_bolt:
+      planner: robot.plan_short_bolt_pick
+      open_opening: 0.12
+      lift_speed: 0.6
+      close_opening: 0.0
+      gripper_force: 0.6
+      gripper_speed: 0.4
+      motion_speed: 0.35
+      descent_speed: 0.25
+      # Offset from Link6 to the gripper contact TCP, in the local tool frame.
+      tcp_offset: [0.0, 0.0, 0.131]
+      headward_offset: 0.015
+      camera_left_offset_px: 0.0
+      camera_left_offset_m: 0.01
+      minimum_safe_z: 0.14
+      workspace_min: [-0.55, -0.18, 0.0]
+      workspace_max: [-0.20, 0.18, 0.35]
+      # This profile is calibrated for the bolt shaft/head viewed camera-left.
+      orientation: [0.0, 1.0, 0.0, 0.0]
+  workspace:
+    frame: base_link
+    x: [-0.55, -0.20]
+    y: [-0.18, 0.18]
+    z: [0.0, 0.35]

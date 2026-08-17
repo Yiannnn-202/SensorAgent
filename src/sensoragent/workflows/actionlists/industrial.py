@@ -48,6 +48,9 @@ def optional_move_joints_step(
   name: str,
   joints: list[float] | None,
   speed: float,
+  *,
+  stop_on_failure: bool = True,
+  wait: bool = True,
 ) -> list[ActionStep]:
   if joints is None:
     return []
@@ -59,8 +62,9 @@ def optional_move_joints_step(
       input={
         "joints": joints,
         "speed": speed,
-        "wait": True,
+        "wait": wait,
       },
+      stop_on_failure=stop_on_failure,
     )
   ]
 
@@ -217,6 +221,59 @@ def build_industrial_pick_only_actionlist(
         input={"query": "{{ object_query }}"},
         save_as="object",
       ),
+      ActionStep(
+        name="plan_pick",
+        kind=ActionStepKind.TOOL,
+        target="robot.plan_top_down_pick",
+        input={
+          "pose_3d": "{{ object.pose_3d }}",
+          "position_offset": PICK_POSITION_OFFSET,
+          "approach_distance": PICK_APPROACH_DISTANCE,
+          "pregrasp_distance": PICK_PREGRASP_DISTANCE,
+          "lift_height": PICK_LIFT_HEIGHT,
+        },
+        save_as="pick_plan",
+      ),
+      *optional_move_joints_step("pick_staging_joints", pick_staging, PICK_SPEED),
+      ActionStep(
+        name="pick",
+        kind=ActionStepKind.SKILL,
+        target="robot.pick",
+        input={
+          "plan": "{{ pick_plan.plan }}",
+          "object_id": "{{ object.object_id }}",
+          "speed": PICK_SPEED,
+          "descent_speed": PICK_DESCENT_SPEED,
+          "close_opening": GRIPPER_CLOSE_OPENING,
+          "gripper_force": GRIPPER_PICK_FORCE,
+        },
+        save_as="pick_result",
+      ),
+      ActionStep(
+        name="verify_grasp",
+        kind=ActionStepKind.SKILL,
+        target="robot.verify_grasp",
+        input={},
+        save_as="grasp_check",
+      ),
+      *optional_move_joints_step("carry_joints", carry, PICK_SPEED),
+    ],
+  )
+
+
+def build_industrial_pick_observed_object_actionlist(
+  joint_poses: Mapping[str, Any] | None = None,
+) -> ActionList:
+  """Pick a target from a fresh vision observation instead of re-detecting it."""
+  pick_staging = pick_staging_joints(joint_poses)
+  carry = carry_joints(joint_poses)
+
+  return ActionList(
+    name="industrial.pick_observed_object_actionlist",
+    description="Pick a freshly observed object pose for wrong-bin recovery.",
+    inputs={"object": "object"},
+    tags=("industrial", "pick", "recovery", "vision"),
+    steps=[
       ActionStep(
         name="plan_pick",
         kind=ActionStepKind.TOOL,

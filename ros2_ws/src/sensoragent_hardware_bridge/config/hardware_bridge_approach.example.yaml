@@ -1,0 +1,8 @@
+sensoragent_hardware_bridge:
+  ros__parameters:
+    # Copy to an ignored local file only after reviewing a freshly captured plan.
+    allow_motion: false
+    approved_approach_position: [0.0, 0.0, 0.0]
+    approved_approach_orientation: [0.0, 0.0, 0.0, 1.0]
+    approach_position_tolerance_m: 0.002
+    approach_orientation_tolerance: 0.01

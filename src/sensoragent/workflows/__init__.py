@@ -2,7 +2,9 @@
 
 from sensoragent.workflows.actionlists import (
   ActionListRuntime,
+  build_hardware_pick_object_actionlist,
   build_industrial_pick_only_actionlist,
+  build_industrial_pick_observed_object_actionlist,
   build_industrial_pick_place_actionlist,
   build_industrial_place_only_actionlist,
   build_industrial_vision_pick_place_actionlist,
@@ -20,7 +22,9 @@ from sensoragent.workflows.decision_trees import (
 __all__ = [
   "ActionListRuntime",
   "DecisionTreeRuntime",
+  "build_hardware_pick_object_actionlist",
   "build_industrial_pick_only_actionlist",
+  "build_industrial_pick_observed_object_actionlist",
   "build_industrial_pick_place_actionlist",
   "build_industrial_place_only_actionlist",
   "build_industrial_recovery_pick_place_tree",

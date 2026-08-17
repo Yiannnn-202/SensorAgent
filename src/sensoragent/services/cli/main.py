@@ -12,7 +12,7 @@ from typing import Sequence
 from sensoragent.agent import build_agent_from_config, build_agent_from_env
 from sensoragent.config import load_config, resolve_config_path
 from sensoragent.mcp import MockMcpEndpoint
-from sensoragent.schemas import TraceContext
+from sensoragent.schemas import AgentRequest, TraceContext
 from sensoragent.tools.vision import SPATIAL_RELATIONS
 
 
@@ -87,6 +87,46 @@ def _build_parser() -> argparse.ArgumentParser:
     type=Path,
     default=None,
     help="Path to the JSONL task log. Defaults to logs/tasks/*.jsonl.",
+  )
+
+  run_actionlist = subparsers.add_parser(
+    "run-actionlist",
+    help="Run one named ActionList directly.",
+  )
+  run_actionlist.add_argument("actionlist", help="Registered ActionList name.")
+  run_actionlist.add_argument(
+    "--config",
+    type=Path,
+    default=None,
+    help="Path to a SensorAgent config file.",
+  )
+  run_actionlist.add_argument(
+    "--object-query",
+    required=True,
+    help="Object query passed to the ActionList.",
+  )
+  run_actionlist.add_argument(
+    "--pick-profile",
+    default="",
+    help="Optional configured pick profile, for example short_bolt.",
+  )
+  run_actionlist.add_argument(
+    "--spatial-relation",
+    choices=tuple(sorted(SPATIAL_RELATIONS)),
+    default=None,
+    help="Optional spatial selection relation.",
+  )
+  run_actionlist.add_argument(
+    "--spatial-ordinal",
+    type=int,
+    default=1,
+    help="Ordinal used with --spatial-relation.",
+  )
+  run_actionlist.add_argument(
+    "--log-path",
+    type=Path,
+    default=None,
+    help="Path to the JSONL task log.",
   )
 
   listen_task = subparsers.add_parser(
@@ -295,6 +335,42 @@ def _run_task(args: argparse.Namespace) -> int:
   print(json.dumps(task.to_dict(), ensure_ascii=False, indent=2))
   print(f"Task log: {log_path}")
   return 0 if task.error is None else 1
+
+
+def _run_actionlist(args: argparse.Namespace) -> int:
+  log_path = args.log_path or _default_task_log_path("actionlist")
+  bundle = build_agent_from_env(args.config, log_path=log_path)
+  input_data = {
+    "object_query": args.object_query,
+    "pick_profile": args.pick_profile,
+  }
+  if args.spatial_relation is not None:
+    input_data["spatial_constraint"] = {
+      "relation": args.spatial_relation,
+      "ordinal": args.spatial_ordinal,
+    }
+  try:
+    response = bundle.agent.handle(AgentRequest(
+      actionlist=args.actionlist,
+      input=input_data,
+      trace=TraceContext(),
+    ))
+  except KeyboardInterrupt:
+    # Interrupting the HTTP wait must also stop the physical controller.
+    stop_result = bundle.tool_runtime.invoke("robot.stop", {}, TraceContext())
+    print(
+      f"Interrupted; robot.stop success={stop_result.success} "
+      f"error={stop_result.error}",
+      file=sys.stderr,
+    )
+    return 130
+  print(json.dumps({
+    "actionlist": args.actionlist,
+    "success": response.success,
+    "result": response.result,
+    "error": response.error,
+  }, ensure_ascii=False, indent=2))
+  return 0 if response.success else 1
 
 
 def _run_listen_task(args: argparse.Namespace) -> int:
@@ -580,6 +656,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return _run_mock_pick_place(args)
   if args.command == "run-task":
     return _run_task(args)
+  if args.command == "run-actionlist":
+    return _run_actionlist(args)
   if args.command == "listen-task":
     return _run_listen_task(args)
   if args.command == "vision-detect":

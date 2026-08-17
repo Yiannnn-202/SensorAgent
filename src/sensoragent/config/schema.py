@@ -58,6 +58,7 @@ class SceneConfig:
 
   objects: dict = field(default_factory=dict)
   release_profiles: dict = field(default_factory=dict)
+  pick_profiles: dict = field(default_factory=dict)
   place_targets: dict = field(default_factory=dict)
   robot_joint_order: list[str] = field(default_factory=list)
   joint_poses: dict = field(default_factory=dict)

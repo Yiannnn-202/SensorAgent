@@ -18,6 +18,7 @@ from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyOb
 from sensoragent.workflows.actionlists import (
   ActionListRuntime,
   build_industrial_pick_only_actionlist,
+  build_industrial_pick_observed_object_actionlist,
   build_industrial_place_only_actionlist,
 )
 from sensoragent.workflows.decision_trees.industrial import (
@@ -576,7 +577,8 @@ class LiveDetectRecoveryTreeTest(TestCase):
 
     node_names = [node.node for node in result.nodes]
     self.assertIn("redetect_post_place", node_names)
-    self.assertIn("recover_pick", node_names)
+    self.assertIn("recover_observed_pick", node_names)
+    self.assertNotIn("recover_pick", node_names)
     self.assertEqual(result.output["classification"]["failure_type"], "WRONG_BIN")
     verify_inputs = [
       input_data for name, input_data in tool_runtime.calls if name == "vision.verify_object_in_bin"
@@ -590,6 +592,12 @@ class LiveDetectRecoveryTreeTest(TestCase):
       "WRONG_BIN",
       str(result.output["classification"]["evidence"]["error"]),
     )
+    recovery_pick_inputs = [
+      input_data
+      for name, input_data in tool_runtime.calls
+      if name == "robot.plan_top_down_pick"
+    ]
+    self.assertEqual(recovery_pick_inputs[-1]["pose_3d"][:3], [0.55, -0.30, 0.31])
 
   def test_default_tree_still_uses_commanded_pose(self) -> None:
     runtime, tool_runtime, _ = _make_runtime(real_verify_in_bin=True)
@@ -832,6 +840,7 @@ def _make_runtime(
   })
   actionlists = {
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(),
+    "industrial.pick_observed_object_actionlist": build_industrial_pick_observed_object_actionlist(),
     "industrial.place_only_actionlist": build_industrial_place_only_actionlist(),
   }
   actionlist_runtime = ActionListRuntime(tool_runtime, skill_runtime, _NullLogger())

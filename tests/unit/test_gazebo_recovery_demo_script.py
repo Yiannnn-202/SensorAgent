@@ -120,9 +120,10 @@ class GazeboRecoveryDemoScriptTest(TestCase):
           tool=self.spec.name,
           success=True,
           output={
-            "found": True,
-            "label": call.input["query"],
-            "confidence": 1.0,
+              "found": True,
+              "label": call.input["query"],
+              "object_id": f"{call.input['query']}_001",
+              "confidence": 1.0,
             "pose_3d": module.TABLETOP_OBJECT_POSE_3D,
             "source": "test_live_detect",
           },
