@@ -487,6 +487,7 @@ class HardwarePickActionListTest(TestCase):
         "planner": "robot.plan_short_bolt_pick", "orientation": [0, 1, 0, 0],
         "position_offset": [0, 0, 0.02], "approach_distance": 0.1,
         "pregrasp_distance": 0.04, "lift_height": 0.12,
+        "lift_speed": 0.35, "open_opening": 0.12,
         "close_opening": 0.0, "gripper_force": 1.0, "gripper_speed": 0.12,
         "motion_speed": 0.35, "descent_speed": 0.25,
         "tcp_offset": [0.0, 0.0, 0.0], "headward_offset": 0.015,
@@ -524,6 +525,8 @@ class HardwarePickActionListTest(TestCase):
     }), tool_runtime.calls)
     pick_input = next(input_data for name, input_data in skill_runtime.calls if name == "robot.pick")
     self.assertEqual(pick_input["close_opening"], 0.0)
+    self.assertEqual(pick_input["open_opening"], 0.12)
+    self.assertEqual(pick_input["lift_speed"], 0.35)
     self.assertEqual(pick_input["gripper_force"], 1.0)
     self.assertEqual(pick_input["gripper_speed"], 0.12)
 

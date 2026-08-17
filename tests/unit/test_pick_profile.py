@@ -25,6 +25,7 @@ def test_short_bolt_profile_uses_verified_gripper_parameters() -> None:
     "name": "short_bolt", "planner": "robot.plan_short_bolt_pick",
     "orientation": [0.0, 1.0, 0.0, 0.0], "position_offset": [0.0, 0.0, 0.02],
     "approach_distance": 0.1, "pregrasp_distance": 0.04, "lift_height": 0.12,
+    "lift_speed": 0.35, "open_opening": 0.12,
     "close_opening": 0.032, "gripper_force": 0.6, "gripper_speed": 0.4,
     "motion_speed": 0.35, "descent_speed": 0.25,
     "tcp_offset": [0.0, 0.0, 0.161], "headward_offset": 0.015,

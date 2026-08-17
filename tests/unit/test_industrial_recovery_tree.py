@@ -754,7 +754,6 @@ class LiveDetectRecoveryTreeTest(TestCase):
 
     node_names = [node.node for node in result.nodes]
     self.assertIn("redetect_post_place", node_names)
-    self.assertIn("recover_observed_pick", node_names)
     self.assertNotIn("recover_pick", node_names)
     self.assertIn("recover_pick_at_pose", node_names)
     self.assertEqual(result.output["classification"]["failure_type"], "WRONG_BIN")

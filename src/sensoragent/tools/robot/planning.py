@@ -11,6 +11,7 @@ from sensoragent.skills.robot import (
   build_oriented_pick_plan_from_points,
   build_place_plan,
   build_top_down_pick_plan,
+  estimate_object_geometry,
   estimate_shaft_grasp_point,
 )
 
@@ -169,7 +170,12 @@ def _nearest_cloud_point(cloud_path: object, pixel: tuple[float, float]) -> np.n
   return cloud[int(np.argmin(distances)), :3].astype(np.float64)
 
 
-def _validate_waypoints(plan, input_data: dict) -> None:
+def _validate_safe_waypoints(
+  plan,
+  input_data: dict,
+  *,
+  error_prefix: str,
+) -> None:
   minimum_z = float(input_data.get("minimum_safe_z", 0.14))
   workspace_min = input_data.get("workspace_min", [-0.55, -0.18, 0.0])
   workspace_max = input_data.get("workspace_max", [-0.20, 0.18, 0.35])
@@ -180,9 +186,18 @@ def _validate_waypoints(plan, input_data: dict) -> None:
   for name in ("approach", "pregrasp", "grasp", "lift"):
     position = np.asarray(getattr(plan, name).position, dtype=np.float64)
     if position[2] < minimum_z:
-      raise ValueError(f"SHORT_BOLT_SAFETY: {name}.z={position[2]:.4f} below minimum_safe_z={minimum_z:.4f}")
+      raise ValueError(
+        f"{error_prefix}_SAFETY: {name}.z={position[2]:.4f} "
+        f"below minimum_safe_z={minimum_z:.4f}"
+      )
     if np.any(position < lower) or np.any(position > upper):
-      raise ValueError(f"SHORT_BOLT_WORKSPACE: {name} position is outside configured workspace")
+      raise ValueError(
+        f"{error_prefix}_WORKSPACE: {name} position is outside configured workspace"
+      )
+
+
+def _validate_waypoints(plan, input_data: dict) -> None:
+  _validate_safe_waypoints(plan, input_data, error_prefix="SHORT_BOLT")
 
 
 def _plan_within_workspace(plan, input_data: dict) -> bool:
@@ -236,6 +251,123 @@ def _fit_plan_z_window(plan, input_data: dict):
     grasp=plan.grasp.offset_z(-delta),
     lift=plan.lift.offset_z(-delta),
   )
+
+
+def _has_base_transform(value: object) -> bool:
+  if isinstance(value, list):
+    return np.asarray(value, dtype=np.float64).shape == (4, 4)
+  if isinstance(value, dict):
+    translation = value.get("translation")
+    rotation = value.get("rotation_xyzw")
+    return (
+      isinstance(translation, list)
+      and len(translation) == 3
+      and isinstance(rotation, list)
+      and len(rotation) == 4
+    )
+  return False
+
+
+class RobotPlanMaskPointCloudPickTool:
+  """Experimental generic PCA pick planner for mask-selected point clouds.
+
+  This tool is deliberately not referenced by a production ActionList. It is a
+  reusable fallback candidate for elongated, rigid objects whose point-cloud
+  geometry supports a stable principal axis.
+  """
+
+  spec = ToolSpec(
+    name="robot.plan_mask_pointcloud_pick",
+    description=(
+      "Experimental mask-and-point-cloud PCA grasp planner with a safe "
+      "top-down fallback."
+    ),
+    tags=("robot", "planning", "pick", "point-cloud", "experimental"),
+  )
+
+  def run(self, call: ToolCall) -> ToolResult:
+    minimum_points = call.input.get("minimum_points", 20)
+    if not isinstance(minimum_points, int) or isinstance(minimum_points, bool):
+      raise ValueError("minimum_points must be an integer")
+    if minimum_points < 3:
+      raise ValueError("minimum_points must be at least 3")
+
+    transform = call.input.get("T_base_camera")
+    point_frame = str(call.input.get("point_frame", "camera"))
+    raw_points = _masked_cloud_points(
+      call.input.get("cloud_path"),
+      call.input.get("mask_polygons"),
+    )
+    fallback_reason: str | None = None
+    if point_frame != "base_link" and not _has_base_transform(transform):
+      points = np.empty((0, 3), dtype=np.float64)
+      fallback_reason = "MISSING_BASE_TRANSFORM"
+    else:
+      points = _transform_camera_points(raw_points, transform)
+
+    if len(points) >= minimum_points:
+      geometry = estimate_object_geometry(points)
+      offset = np.asarray(
+        _number_list(call.input.get("position_offset", [0.0, 0.0, 0.0]), "position_offset", 3)[:3],
+        dtype=np.float64,
+      )
+      grasp_point = tuple(np.asarray(geometry.center, dtype=np.float64) + offset)
+      tcp_offset = tuple(
+        _number_list(call.input.get("tcp_offset", [0.0, 0.0, 0.0]), "tcp_offset", 3)[:3]
+      )
+      plan = build_oriented_pick_plan_from_points(
+        points,
+        frame_id=str(call.input.get("frame_id", "base_link")),
+        approach_distance=float(call.input.get("approach_distance", 0.10)),
+        pregrasp_distance=float(call.input.get("pregrasp_distance", 0.04)),
+        lift_height=float(call.input.get("lift_height", 0.12)),
+        tcp_offset=tcp_offset,
+        grasp_point=grasp_point,
+      )
+      plan = _lift_plan(
+        plan,
+        minimum_safe_z=float(call.input.get("minimum_safe_z", 0.14)),
+      )
+      plan = _fit_plan_z_window(plan, call.input)
+      if _plan_within_workspace(plan, call.input):
+        _validate_safe_waypoints(
+          plan,
+          call.input,
+          error_prefix="MASK_POINTCLOUD",
+        )
+        return ToolResult(
+          tool=self.spec.name,
+          success=True,
+          output={
+            "plan": plan.to_dict(),
+            "mode": "mask_pca_center",
+            "point_count": int(len(points)),
+          },
+        )
+      fallback_reason = "PCA_PLAN_OUTSIDE_SAFE_WORKSPACE"
+    elif fallback_reason is None:
+      fallback_reason = "INSUFFICIENT_MASKED_POINTS"
+
+    grasp = _grasp_pose_from_input(call.input)
+    plan = build_top_down_pick_plan(
+      grasp,
+      approach_distance=float(call.input.get("approach_distance", 0.10)),
+      pregrasp_distance=float(call.input.get("pregrasp_distance", 0.04)),
+      lift_height=float(call.input.get("lift_height", 0.12)),
+    )
+    plan = _lift_plan(plan, minimum_safe_z=float(call.input.get("minimum_safe_z", 0.14)))
+    plan = _fit_plan_z_window(plan, call.input)
+    _validate_safe_waypoints(plan, call.input, error_prefix="MASK_POINTCLOUD")
+    return ToolResult(
+      tool=self.spec.name,
+      success=True,
+      output={
+        "plan": plan.to_dict(),
+        "mode": "pose_fallback",
+        "point_count": int(len(points)),
+        "fallback_reason": fallback_reason,
+      },
+    )
 
 
 class RobotPlanShortBoltPickTool:

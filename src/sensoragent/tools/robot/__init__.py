@@ -16,6 +16,7 @@ from sensoragent.tools.robot.place_targets import (
   default_place_target_registry,
 )
 from sensoragent.tools.robot.planning import (
+  RobotPlanMaskPointCloudPickTool,
   RobotPlanOrientedPickTool,
   RobotPlanPlaceTool,
   RobotPlanShortBoltPickTool,
@@ -31,6 +32,7 @@ __all__ = [
   "RobotMoveJointsTool",
   "RobotMoveLinearTool",
   "RobotMovePoseTool",
+  "RobotPlanMaskPointCloudPickTool",
   "RobotPlanOrientedPickTool",
   "RobotPlanPlaceTool",
   "RobotPlanShortBoltPickTool",

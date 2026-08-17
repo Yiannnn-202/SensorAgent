@@ -40,6 +40,7 @@ robot.move_pose
 robot.move_linear
 robot.plan_top_down_pick
 robot.plan_oriented_pick
+robot.plan_mask_pointcloud_pick  # Experimental; not wired into an ActionList.
 robot.plan_place
 robot.resolve_place_target
 robot.stop
