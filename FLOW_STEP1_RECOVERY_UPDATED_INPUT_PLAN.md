@@ -1,5 +1,8 @@
 # 第一步修改方案：让恢复策略真实影响后续执行
 
+> **状态：已实施的历史方案。**恢复 `node_overrides` 与观测位姿重抓已进入当前
+> `DecisionTreeRuntime`；后续未完成的策略差异以 `FLOW_TODO.md` 为准。
+
 ## 背景
 
 当前流程里 `recovery.plan` 已经能根据失败类型输出 `updated_input`，例如：
@@ -438,4 +441,3 @@ robot.plan_place -> failure
    - place plan failed -> place 输入变化。
 4. `industrial.sorting_config_pick_place_actionlist` 完全不受影响。
 5. 全量 Python 测试仍通过。
-

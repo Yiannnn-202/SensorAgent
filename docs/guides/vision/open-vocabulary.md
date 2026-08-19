@@ -445,9 +445,23 @@ python scripts\vision_eval.py run `
 
 任何公开数据进入训练前都要记录下载页、许可证、原始类别、映射后的比赛类别和处理
 脚本。比赛现场图片是否允许上传公共仓库由团队确认；未确认前只提交清单模板和脚本，
-不提交原图。公开数据集的详细筛选、下载入口、许可证和 COCO 转换命令见[视觉公开数据集选择与使用](vision_public_datasets_cn.md)。
+不提交原图。公开数据集的详细筛选、下载入口、许可证和 COCO 转换命令见[视觉公开数据集选择与使用](public-datasets.md)。
 
 ## 11. 当前主模型、掩码模块与后续 SAM3 对照
+
+### 11.0 三条可选视觉路径
+
+当前主路径是严格的 `vision.grounded_sam2`（Grounding DINO 检测框 + 必需的
+SAM 2 掩码）。两个备用路径不会接入默认 ActionList：
+
+| Tool | 模型定位 | 配置 |
+| --- | --- | --- |
+| `vision.open_vocab_detect` | YOLOE 开放词汇实验路径 | `configs/vision_yoloe.yaml` |
+| `vision.yolo11_seg_detect` | 本地固定类别 YOLO11-seg 备用路径；必须返回模型原生实例掩码 | `configs/vision_yolo11_seg.example.yaml` |
+
+YOLO11-seg 的类别表必须与冻结的项目 ontology 一致；它不是开放词汇模型。
+先通过独立图像/数据集评测后，才可考虑接入工作流。没有指标和现场验证时，三个
+Tool 的存在不构成模型质量或抓取能力证据。
 
 当前阶段先直接微调主模型：
 

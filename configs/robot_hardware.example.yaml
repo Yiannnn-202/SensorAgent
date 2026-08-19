@@ -46,8 +46,9 @@ integrations:
       image_topic: /vision/raw
       out_dir: logs/vision/hardware_latest
 
-# Copy this ignored template to a local hardware configuration only after the
-# camera-to-base transform and safe operating envelope are measured.
+# Copy this template to configs/robot_hardware.local.yaml, which is ignored by
+# Git, only after the camera-to-base transform and safe operating envelope are
+# measured.
 scene:
   joint_poses:
     observe_joints: [0.00574105, -0.13940805, 1.25550997, -0.00015705, 1.71753371, 0.00137855]

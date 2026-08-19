@@ -1,0 +1,81 @@
+{
+  "name": "vision.yolo11_seg_detect",
+  "version": "0.1.0",
+  "description": "Detect an object with a fixed-class YOLO11 segmentation checkpoint, require its native mask, and optionally estimate RGB-D position.",
+  "input_schema": {
+    "type": "object",
+    "required": ["query"],
+    "properties": {
+      "query": {"type": "string"},
+      "image_path": {"type": "string"},
+      "depth_path": {"type": "string"},
+      "cloud_path": {"type": "string"},
+      "camera_info_path": {"type": "string"},
+      "overlay_path": {"type": "string"},
+      "camera_info": {"type": "object"},
+      "T_base_camera": {
+        "type": "array",
+        "items": {"type": "array", "items": {"type": "number"}}
+      },
+      "T_world_camera": {
+        "type": "array",
+        "items": {"type": "array", "items": {"type": "number"}}
+      },
+      "position_base_offset": {"type": "array", "items": {"type": "number"}},
+      "depth_window": {"type": "number"},
+      "depth_scale": {"type": "number"},
+      "box_threshold": {"type": "number"},
+      "nms_iou_threshold": {"type": "number"},
+      "device": {"type": "string"},
+      "camera_frame": {"type": "string"},
+      "base_frame": {"type": "string"},
+      "world_frame": {"type": "string"},
+      "candidate_policy": {"type": "string"},
+      "scene_profile": {"type": "object"},
+      "spatial_constraint": {
+        "type": "object",
+        "properties": {
+          "relation": {"type": "string"},
+          "ordinal": {"type": "number"},
+          "reference": {"type": "string"},
+          "tolerance_px": {"type": "number"}
+        }
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["found", "label", "confidence", "source"],
+    "properties": {
+      "found": {"type": "boolean"},
+      "label": {"type": "string"},
+      "confidence": {"type": "number"},
+      "source": {"type": "string"},
+      "object_id": {"type": "string"},
+      "bbox_2d": {"type": "array", "items": {"type": "number"}},
+      "mask_polygons": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {"type": "array", "items": {"type": "number"}}
+        }
+      },
+      "mask_area_px": {"type": "number"},
+      "center_px": {"type": "array", "items": {"type": "number"}},
+      "pose_3d": {"type": "array", "items": {"type": "number"}},
+      "position_base": {"type": "array", "items": {"type": "number"}},
+      "position_3d": {"type": "object"},
+      "model": {"type": "string"},
+      "timing_ms": {"type": "object"},
+      "warnings": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "errors": [
+    "VISION_MODEL_NOT_READY",
+    "VISION_BACKEND_UNAVAILABLE",
+    "VISION_BACKEND_ERROR",
+    "VISION_INPUT_ERROR",
+    "OBJECT_NOT_FOUND",
+    "OBJECT_AMBIGUOUS"
+  ]
+}

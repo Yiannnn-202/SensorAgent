@@ -2,20 +2,21 @@
 
 This file tracks SensorAgent development progress by framework maturity. The current priority is to build a reliable Agent architecture before adding competition-specific workflows.
 
-## 2026-07-31 project snapshot
+## 2026-08-17 project snapshot
 
-The generic Agent framework is largely implemented. Current competition progress
-is better described as **core software L2- and overall system L1+**:
+The generic Agent framework, simulation adapter, and safety-gated hardware
+adapter are implemented. Current competition progress is better described as
+**core software L2- and overall system L1+**:
 
-- Agent planning, registered workflows, robot Tools, the HTTP simulation bridge,
-  RGB-D capture, open-vocabulary vision, and classified recovery are connected.
+- Agent planning, registered workflows, robot Tools, HTTP bridges, RGB-D
+  capture, open-vocabulary vision, and classified recovery are connected.
 - The deterministic industrial ActionList still uses configured object poses;
   live RGB-D perception is an explicit vision ActionList and recovery-tree mode.
 - The main blockers are repeatable Gazebo reset and batch acceptance, a unified
-  world-state model, fixed evaluation datasets and metrics, and physical-robot
-  integration.
-- The 2026-07-31 offline run collected 224 tests and ended with one failure and
-  two errors listed under [Known issues](#known-issues).
+  live-perception world state, fixed evaluation datasets and metrics, and
+  physical place/sort/recovery acceptance.
+- The current offline unit baseline is 360 passed and 1 skipped. It does not
+  constitute ROS, Gazebo, camera, or physical-hardware acceptance.
 
 Do not start reinforcement-learning work or expand service surfaces at the
 expense of the first repeatable simulation acceptance loop.
@@ -243,7 +244,10 @@ Goal: connect SensorAgent to modules owned by other teams through stable adapter
 - [x] Add the HTTP-to-ROS 2 simulation runtime adapter.
 - [x] Connect the existing robot Tools to Gazebo/MoveIt through the HTTP bridge.
 - [ ] Complete Ubuntu ROS 2 runtime acceptance for the Gazebo/MoveIt HTTP bridge.
-- [ ] Connect the existing robot Tools to the physical robot.
+- [x] Add a safety-gated physical RM65 + OmniPicker adapter, startup path, RGB-D
+  capture, profile-driven single-object pick, and grasp verification.
+- [ ] Complete supervised physical-hardware acceptance, including calibration,
+  place/sort/recovery workflows, and repeated success/failure evidence.
 - [ ] Add mocked integration tests.
 - [ ] Add contract tests for external adapters.
 
@@ -279,7 +283,7 @@ Goal: implement competition-specific task logic after the generic framework is s
   rule/HTN ActionList, LLM + DecisionTree, and LLM + DecisionTree + visual
   verification baselines on the same fixture set.
 - [ ] Add a demo CLI/API command for the competition task that can run in mock,
-  Gazebo/MoveIt, and later physical-robot modes.
+  Gazebo/MoveIt, and a validated physical place/sort mode.
 - [x] Add a Gazebo failure-recovery demo runner for wrong-bin, place-plan, and
   release-failure injection.
 - [ ] Save report-ready CSV/JSONL summaries and failure-case artifacts for the
@@ -401,34 +405,20 @@ reinforcement-learning tasks.
 - [ ] Define the Gymnasium observation, action, reward, and termination contract.
 - [ ] Implement the first RL environment and scripted baseline.
 
-## Known issues
+## Current limitations
 
-Observed on 2026-07-31 with `python -m unittest discover -s tests -p 'test_*.py'`
-(224 tests run, 1 failure and 2 errors) on a Windows machine without ROS 2:
-
-- [ ] `tests/unit/test_vision_evaluation.py` imports `pytest`, which is not declared
-  in `requirements.txt` or `pyproject.toml`. Either declare a test dependency set
-  or port the module to `unittest`.
-- [ ] `test_gazebo_recovery_demo_script.GazeboRecoveryDemoScriptTest.test_wrong_table_demo_runs_without_gazebo`
-  runs the demo with `--execute`, so it keeps the `http` robot backend from
-  `configs/robot_sim.yaml` and fails with `ROBOT_BRIDGE_UNAVAILABLE` unless the
-  bridge is running. The case needs a fake robot backend and a stateful fake
-  detector to match its name, or it should be moved out of the default suite.
-- [ ] `DecisionTreeLastFailureTest.test_failed_node_is_available_to_recovery_tools`
-  expects `last_failure.failed_step` to remain `not_found`, but the current
-  runtime reports the subsequent `found_check` condition node. The intended
-  failure-evidence semantics must be fixed or the test expectation deliberately
-  updated.
-- [ ] `vision.capture_frame` and the `robot.plan_*` planning tools have no files
-  under `contracts/tools/`.
-- [ ] `src/sensoragent/services/api/` is still an empty placeholder while the
-  README and architecture describe API/MCP entry points as future work.
+- [ ] ROS 2, Gazebo, local-model, camera, and physical-hardware acceptance are
+  environment-specific and outside the default Python unit suite.
+- [ ] `vision.capture_frame`, hardware helpers, and planning helpers remain
+  repository-internal and have no cross-module contract files.
+- [ ] `src/sensoragent/services/api/` is an empty placeholder; only CLI and
+  local HTTP robot bridges are implemented.
 
 ## Notes
 
 - Logger is framework infrastructure, not a normal skill.
-- Low-level robot control, production ROS 2 drivers, and physical safety belong to
-  external runtime modules. The local RM65-B workspace is a development simulation
-  integration.
+- Low-level robot control, production ROS 2 drivers, and physical safety belong
+  to external runtime modules. This repository includes simulation and
+  safety-gated physical adapters, not vendor-driver ownership or cell safety.
 - SensorAgent collaborates with external modules through API, MCP, WebSocket, or documented adapters.
 - Internal Python schemas are not the same as cross-module contracts; contracts should be language-neutral.

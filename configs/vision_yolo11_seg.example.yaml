@@ -1,0 +1,33 @@
+agent:
+  name: sensoragent
+  mode: vision_yolo11_seg_backup
+
+# Backup fixed-class segmentation path. It is intentionally not enabled by the
+# shipped simulation, sorting, or hardware workflows; Grounded SAM2 remains the
+# primary perception Tool.
+tools:
+  enabled:
+    - vision.yolo11_seg_detect
+
+skills:
+  enabled: []
+
+integrations:
+  vision:
+    # Put a locally trained YOLO11 segmentation checkpoint here. The class names
+    # in the checkpoint must match the frozen project ontology (for example
+    # roller, hex_nut, short_bolt).
+    model_path: models/vision/yolo11-seg/industrial-best.pt
+    box_threshold: 0.35
+    nms_iou_threshold: 0.55
+    depth_scale: 1.0
+    camera_frame: camera_color_optical_frame
+    base_frame: base_link
+
+logging:
+  level: info
+  console: true
+  app_log: logs/app.log
+  task_dir: logs/tasks
+  trace_dir: logs/traces
+  error_dir: logs/errors

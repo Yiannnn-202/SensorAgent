@@ -45,6 +45,7 @@ the same status or design.
 
 ### Simulation and robot integration
 
+- [Physical RM65 + OmniPicker](guides/hardware/physical-rm65-omnipicker.md)
 - [RM65-B Gazebo quickstart](guides/simulation/rm65b-quickstart.md)
 - [RM65-B named joint poses](guides/simulation/rm65b-joint-poses.md)
 - [Robot HTTP bridge](guides/simulation/robot-bridge.md)
@@ -91,8 +92,9 @@ the same status or design.
 - `assets/`: PDFs, spreadsheets, and other supporting files.
 
 Archived records are evidence, not current status sources. Current project
-status belongs in the root README, current work belongs in TODO, and schedule
-status belongs in `planning/schedule.md`.
+status belongs in the root README, current work belongs in TODO, and
+`planning/schedule.md` preserves the competition planning baseline and dated
+progress assessments.
 
 ## Maintenance rules
 
@@ -101,7 +103,7 @@ status belongs in `planning/schedule.md`.
 | Repository-wide design or ownership | `architecture.md` |
 | Current capabilities and quick start | `README.md` |
 | Incomplete work or newly discovered blocker | `TODO.md` |
-| Competition module levels and dates | `docs/planning/schedule.md` |
+| Competition plan, milestones, and dated progress assessments | `docs/planning/schedule.md` |
 | Durable setup, operation, or verification | Existing file under `docs/guides/` |
 | Cross-module payload or error contract | `contracts/` |
 | Historical progress record | `docs/archive/progress-logs/` |

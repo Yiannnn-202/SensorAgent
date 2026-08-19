@@ -7,14 +7,13 @@ belong under `docs/guides/`; schedules and competition plans belong under
 
 SensorAgent is an embodied-agent orchestration repository for an RM65-B robotic
 arm system with local speech input, open-vocabulary perception, task planning,
-workflow execution, and ROS 2 simulation integration. The system is organized as
-three layers: perception, decision, and execution. Configuration, contracts,
-logging, and tests support all three layers.
+workflow execution, and ROS 2 simulation and physical-hardware integration. The
+system is organized as three layers: perception, decision, and execution.
+Configuration, contracts, logging, and tests support all three layers.
 
 This document describes the engineering target for the current repository. It
 distinguishes implemented code from planned integration points so the design can
-be used for development, demos, and later hardware migration without overstating
-the current status.
+be used for development and demos without overstating the current validation level.
 
 ```mermaid
 flowchart LR
@@ -22,7 +21,7 @@ flowchart LR
   perception --> decision["Decision layer"]
   decision --> execution["Execution layer"]
   execution --> sim["ROS 2 / MoveIt / Gazebo"]
-  execution --> hw["Future hardware runtime"]
+  execution --> hw["Safety-gated physical ROS bridge"]
 
   cfg["configs/"] --> perception
   cfg --> decision
@@ -40,9 +39,17 @@ orchestration, local model adapters, and the Agent-facing robot control boundary
 It does not own robot firmware, production safety systems, vendor hardware
 drivers, or final physical-cell bringup.
 
-The ROS 2 workspace in `ros2_ws/` is a reproducible development and simulation
-stack. It combines RM65-B, Robotiq 2F-85, Gazebo, MoveIt 2, and an HTTP bridge so
-the Python Agent process can stay separate from the ROS 2 Humble process.
+The ROS 2 workspace in `ros2_ws/` contains two process boundaries. The
+simulation stack combines RM65-B, Robotiq 2F-85, Gazebo, MoveIt 2, and
+`sensoragent_robot_bridge`. The physical-hardware stack uses
+`sensoragent_hardware_bridge` to call externally installed RM65, arm-control,
+OmniPicker, and camera ROS packages. Both keep the Python Agent process separate
+from ROS 2 Humble.
+
+The physical bridge is an adapter, not a vendor driver or safety-certified cell
+runtime. It binds to localhost, defaults `allow_motion` to `false`, applies
+workspace and speed limits, and supports an approved dry-run approach. It does
+not replace emergency-stop procedures, calibration, or site safety controls.
 
 ## Perception layer
 
@@ -118,6 +125,13 @@ interpreter (probed through `SENSORAGENT_ROS_PYTHON`, `ROS_PYTHON`, then
 transform through TF with a configured fallback, and writes an image, depth,
 camera-info, and transform manifest under `logs/vision/`.
 
+For physical capture, the same Tool runs
+`scripts/linux/capture_hardware_rgb_cloud.py`. It synchronizes `/vision/raw`
+with `/vision/cloud`, resolves the timestamped transform into `base_link`, and
+writes RGB, `xyzuv` point cloud, and transform metadata under
+`logs/vision/hardware_latest/`. The physical path is wired for hardware pick
+experiments; its calibration and model accuracy still require separate evidence.
+
 Model quality is measured offline instead of by single-image confidence.
 `src/sensoragent/evaluation/` and `scripts/vision_eval.py` validate a portable
 JSONL dataset manifest, run either `vision.open_vocab_detect` or
@@ -176,7 +190,10 @@ execution path.
 
 ActionLists are deterministic ordered workflows. The industrial path currently
 includes config-based pick/place, open-vocabulary vision pick/place, pick-only,
-and place-only workflows. They are defined in
+and place-only workflows. `hardware.pick_object_actionlist` is a separate
+physical workflow: observe, capture, detect, select a pick profile, plan, pick,
+verify grasp, and return to observe. It does not yet perform physical place,
+sorting, or recovery. Workflows are defined in
 `src/sensoragent/workflows/actionlists/`.
 
 DecisionTrees add conditional branches, retries, and recovery. The current
@@ -207,10 +224,12 @@ flowchart LR
   skills --> tools["Tools"]
   tools --> client["RobotControlClient"]
   client --> fake["Fake backend"]
-  client --> http["HTTP robot bridge"]
-  http --> moveit["MoveIt 2"]
+  client --> sim_http["Simulation HTTP bridge :8765"]
+  sim_http --> moveit["MoveIt 2"]
   moveit --> rosctrl["ros2_control"]
   rosctrl --> gazebo["Gazebo RM65-B + Robotiq"]
+  client --> hw_http["Hardware HTTP bridge :8766"]
+  hw_http --> vendor["External RM65 + OmniPicker ROS services"]
 ```
 
 ### Skills and tools
@@ -235,6 +254,11 @@ message types in the Agent process.
 tests. `configs/robot_sim.yaml` selects `HttpRobotControlClient`, which calls the
 ROS 2 bridge on `http://127.0.0.1:8765` by default.
 
+`configs/robot_hardware_sensoragent_v1i_baseline.yaml` selects the same
+`HttpRobotControlClient` against `http://127.0.0.1:8766`. The selected bridge,
+not the Python client, determines whether a command reaches Gazebo or physical
+hardware.
+
 ### ROS 2 simulation bridge
 
 `sensoragent_robot_bridge` is the process boundary between Python 3.12 Agent code
@@ -258,6 +282,15 @@ The combined Gazebo and MoveIt bringup lives in
 models are installed by that package so launch files can switch worlds through
 `world_file:=...` without changing Agent code.
 
+### ROS 2 physical-hardware bridge
+
+`sensoragent_hardware_bridge` receives the same HTTP motion and gripper routes
+as the simulation bridge. It maps joint, Cartesian, and linear requests to
+`MoveJDeg`, `MoveToPose`, and `MoveL`; maps gripper commands to OmniPicker
+services; reads pose and gripper state; and publishes the RM65 stop topic. The
+bridge and its launch file are in `ros2_ws/src/sensoragent_hardware_bridge/`.
+Its upstream ROS packages are external installation dependencies.
+
 ## Support modules
 
 Configuration files under `configs/` select enabled tools, skills, integrations,
@@ -275,7 +308,7 @@ without becoming part of the source tree.
 
 ## Current implementation status
 
-As of 2026-08-01, the decision and execution framework is integrated, but the
+As of 2026-08-17, the decision and execution framework is integrated, but the
 competition system has not passed repeatable end-to-end acceptance. The
 deterministic industrial ActionList uses configured object poses; the separate
 vision ActionList and live recovery-tree mode provide the actual RGB-D path.
@@ -297,16 +330,21 @@ Implemented in the repository:
   tools.
 - RM65-B + Robotiq Gazebo and MoveIt simulation stack with an HTTP robot bridge.
 - Industrial pick/place workflows and a recovery DecisionTree.
+- RM65 + OmniPicker physical-hardware HTTP bridge, startup path, RGB-D capture,
+  profile-driven single-object pick, and grasp verification.
+- Experimental `robot.plan_mask_pointcloud_pick` for safe, mask-selected PCA
+  planning; it is intentionally not used by shipped ActionLists or configs.
 
 Planned or environment-dependent:
 
 - Team-fine-tuned Grounding DINO checkpoint and industrial validation of the
   Grounded SAM2 stack on frozen competition-camera data.
 - Automated Gazebo acceptance tests and repeatable scene reset.
-- A unified world-state model for object instances, robot/gripper state, target
-  areas, source timestamps, and replay.
+- Durable live-perception fusion of object instances, robot/gripper state,
+  target areas, source timestamps, and replay.
 - Batch experiment execution and report-ready task/recovery metrics.
-- Physical robot adapter and hardware safety integration.
+- Physical place/sort/recovery workflows, calibration evidence, site safety
+  procedures, and repeatable physical-hardware acceptance.
 - A larger selectable scene library for demo comparison and benchmark coverage.
 - Reinforcement-learning environment, reward definition, and evaluation harness.
 - External service API and MCP-style integration beyond the local CLI paths.
@@ -325,8 +363,9 @@ The intended runtime split is:
 ```text
 Python 3.12 SensorAgent process
 → HTTP RobotControlClient
-→ localhost ROS 2 bridge
-→ ROS 2 Humble / MoveIt 2 / Gazebo or future hardware adapter
+→ localhost ROS 2 simulation bridge (:8765) → MoveIt 2 / Gazebo
+  or
+→ localhost hardware bridge (:8766) → external RM65 / OmniPicker ROS services
 ```
 
 This split avoids importing ROS 2 Python packages into the Agent process and
