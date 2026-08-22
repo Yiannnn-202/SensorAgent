@@ -29,10 +29,17 @@ class _StubToolResult:
 
 
 class _StubToolRuntime:
-  def __init__(self, opening: float | None, success: bool = True, error: str | None = None) -> None:
+  def __init__(
+    self,
+    opening: float | None,
+    success: bool = True,
+    error: str | None = None,
+    grasped: bool | None = None,
+  ) -> None:
     self._opening = opening
     self._success = success
     self._error = error
+    self._grasped = grasped
     self.calls: list[str] = []
 
   def invoke(self, tool_name: str, input_data: dict, trace: TraceContext) -> _StubToolResult:
@@ -42,6 +49,8 @@ class _StubToolRuntime:
     state: dict = {}
     if self._opening is not None:
       state["opening"] = self._opening
+    if self._grasped is not None:
+      state["grasped"] = self._grasped
     return _StubToolResult(success=True, output={"state": state, "completed": True, "message": ""})
 
 
@@ -50,8 +59,13 @@ class _NullLogger:
     return None
 
 
-def _skill_context(opening: float | None, success: bool = True, error: str | None = None) -> tuple[SkillContext, _StubToolRuntime]:
-  runtime = _StubToolRuntime(opening=opening, success=success, error=error)
+def _skill_context(
+  opening: float | None,
+  success: bool = True,
+  error: str | None = None,
+  grasped: bool | None = None,
+) -> tuple[SkillContext, _StubToolRuntime]:
+  runtime = _StubToolRuntime(opening=opening, success=success, error=error, grasped=grasped)
   return SkillContext(tool_runtime=runtime, logger=_NullLogger()), runtime
 
 
@@ -83,6 +97,21 @@ class VerifyGraspSkillTest(TestCase):
     result = RobotVerifyGraspSkill().run(_skill_call("robot.verify_grasp"), context)
     self.assertFalse(result.success)
     self.assertEqual(result.error, "GRIPPER_UNAVAILABLE")
+
+  def test_grasp_failure_when_bridge_reports_no_contact_despite_in_range_opening(self) -> None:
+    # A gripper that closed on nothing still ends at its narrow target opening;
+    # the physics-level grasped=False must win over the opening heuristic.
+    context, _ = _skill_context(opening=0.0197, grasped=False)
+    result = RobotVerifyGraspSkill().run(_skill_call("robot.verify_grasp"), context)
+    self.assertFalse(result.success)
+    self.assertFalse(result.output["held"])
+    self.assertIn("grasped=False", result.error)
+
+  def test_grasp_success_when_bridge_reports_contact(self) -> None:
+    context, _ = _skill_context(opening=0.0197, grasped=True)
+    result = RobotVerifyGraspSkill().run(_skill_call("robot.verify_grasp"), context)
+    self.assertTrue(result.success)
+    self.assertTrue(result.output["held"])
 
 
 class VerifyPlaceSkillTest(TestCase):

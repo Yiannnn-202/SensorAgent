@@ -32,12 +32,18 @@ class RobotVerifyGraspSkill:
     ok, opening, state, error = _read_gripper_opening(context, call)
     if not ok:
       return SkillResult(skill=self.spec.name, success=False, error=error)
-    held = state.get("grasped") is True or min_opening <= opening <= max_opening
+    if isinstance(state.get("grasped"), bool):
+      # The bridge reports physics-level grasp contact; an explicit False must
+      # not be overridden by the opening heuristic (a gripper that closed on
+      # nothing reaches its narrow target opening and would pass it).
+      held = state["grasped"]
+    else:
+      held = min_opening <= opening <= max_opening
     return SkillResult(
       skill=self.spec.name,
       success=held,
       output={"held": held, "opening": opening},
-      error=None if held else f"grasp not detected (opening={opening:.4f})",
+      error=None if held else f"grasp not detected (grasped={state.get('grasped')}, opening={opening:.4f})",
     )
 
 
