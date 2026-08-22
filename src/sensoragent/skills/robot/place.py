@@ -69,6 +69,33 @@ class RobotPlaceSkill:
         target_opening = float(input_data.get("opening", 0.0848))
         if isinstance(opening, (int, float)) and float(opening) >= target_opening - 0.003:
           result = state_result
+      if (
+        not result.success
+        and tool_name == "robot.move_linear"
+        and str(result.error or "").startswith("INCOMPLETE_CARTESIAN_PATH")
+        and step_name in {"move_place", "post_release_lift", "retreat"}
+      ):
+        # The object is already released; mirror the pick skill and finish the
+        # descent or retreat with a joint-space motion instead of failing.
+        result = context.tool_runtime.invoke("robot.move_pose", input_data, call.trace)
+      if (
+        not result.success
+        and tool_name == "robot.move_joints"
+        and step_name == "retreat_joints"
+      ):
+        # Planning to the staging pose can abort with the gripper inside the
+        # bin; fall back to the lifted retreat pose, then continue.
+        result = context.tool_runtime.invoke(
+          "robot.move_linear",
+          {"pose": lifted_retreat.to_dict(), "speed": speed},
+          call.trace,
+        )
+        if not result.success and str(result.error or "").startswith("INCOMPLETE_CARTESIAN_PATH"):
+          result = context.tool_runtime.invoke(
+            "robot.move_pose",
+            {"pose": lifted_retreat.to_dict(), "speed": speed},
+            call.trace,
+          )
       if not result.success:
         return SkillResult(
           skill=self.spec.name,

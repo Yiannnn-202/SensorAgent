@@ -577,6 +577,156 @@ class RobotControlTest(TestCase):
     self.assertIn("robot.pick", bundle.skill_registry.names())
     self.assertIn("robot.place", bundle.skill_registry.names())
 
+  def test_place_skill_falls_back_to_move_pose_when_post_release_lift_fails(self) -> None:
+    trace = TraceContext()
+    place = RobotPose(
+      position=(0.50, -0.20, 0.36),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_place_plan(place)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        if name == "robot.move_linear" and len([c for c in self.calls if c[0] == name]) == 2:
+          return ToolResult(
+            tool=name,
+            success=False,
+            error="INCOMPLETE_CARTESIAN_PATH: Cartesian path fraction 0.667 is below 0.980.",
+          )
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPlaceSkill().run(
+      call=Mock(
+        input={
+          "object_id": "hex_nut_02",
+          "target": "bin_cell_5",
+          "plan": plan.to_dict(),
+          "retreat_joints": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(
+      result.output["completed_steps"],
+      ["move_approach", "move_place", "open_gripper", "post_release_lift", "retreat_joints"],
+    )
+    linear_calls = [c for c in tool_runtime.calls if c[0] == "robot.move_linear"]
+    # move_place succeeded, only the post_release_lift linear call failed.
+    self.assertEqual(len(linear_calls), 2)
+    fallback = [c for c in tool_runtime.calls if c[0] == "robot.move_pose"]
+    # move_approach plus the post_release_lift joint-space fallback.
+    self.assertEqual(len(fallback), 2)
+    self.assertEqual(fallback[1][1]["pose"]["position"], linear_calls[1][1]["pose"]["position"])
+
+  def test_place_skill_falls_back_to_lifted_retreat_when_retreat_joints_fail(self) -> None:
+    trace = TraceContext()
+    place = RobotPose(
+      position=(0.50, -0.20, 0.36),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_place_plan(place)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        if name == "robot.move_joints":
+          return ToolResult(
+            tool=name,
+            success=False,
+            error="MOVEIT_-2: ACTION_ABORTED: MoveIt planning or execution failed.",
+          )
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPlaceSkill().run(
+      call=Mock(
+        input={
+          "object_id": "roller_01",
+          "target": "bin_cell_2",
+          "plan": plan.to_dict(),
+          "retreat_joints": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(
+      result.output["completed_steps"],
+      ["move_approach", "move_place", "open_gripper", "post_release_lift", "retreat_joints"],
+    )
+    # retreat_joints is the only move_joints call and it failed; the recovery
+    # must go through the lifted retreat pose.
+    self.assertEqual([c[0] for c in tool_runtime.calls if c[0] == "robot.move_joints"], ["robot.move_joints"])
+    final_linear = tool_runtime.calls[-1]
+    self.assertEqual(final_linear[0], "robot.move_linear")
+    self.assertGreaterEqual(final_linear[1]["pose"]["position"][2], plan.place.position[2] + 0.06)
+
+  def test_place_skill_falls_back_to_move_pose_when_place_descent_fails(self) -> None:
+    trace = TraceContext()
+    place = RobotPose(
+      position=(0.50, -0.20, 0.36),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_place_plan(place)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        # Fail the descent (move_place) but let everything else succeed.
+        if name == "robot.move_linear":
+          return ToolResult(
+            tool=name,
+            success=False,
+            error="INCOMPLETE_CARTESIAN_PATH: Cartesian path fraction 0.556 is below 0.980.",
+          )
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPlaceSkill().run(
+      call=Mock(
+        input={
+          "object_id": "short_bolt_02",
+          "target": "bin_cell_3",
+          "plan": plan.to_dict(),
+          "retreat_joints": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual(
+      result.output["completed_steps"],
+      ["move_approach", "move_place", "open_gripper", "post_release_lift", "retreat_joints"],
+    )
+    # Every linear motion failed, so each one must have completed through the
+    # joint-space fallback: fallbacks[0] is the move_approach pose call and the
+    # later ones mirror the failed linear targets (descent, then lifted retreat).
+    fallbacks = [c for c in tool_runtime.calls if c[0] == "robot.move_pose"]
+    self.assertEqual(len(fallbacks), 3)
+    self.assertEqual(fallbacks[1][1]["pose"]["position"], list(plan.place.position))
+    self.assertEqual(fallbacks[2][1]["pose"]["position"][2], max(plan.retreat.position[2], plan.place.position[2] + 0.06))
+
   def test_place_skill_accepts_pre_approach_joints(self) -> None:
     client, runtime = _build_runtime()
     trace = TraceContext()
