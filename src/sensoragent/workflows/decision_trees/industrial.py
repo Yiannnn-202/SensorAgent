@@ -145,6 +145,7 @@ def build_industrial_recovery_pick_place_tree(
     on_success="success",
     on_failure="failure",
   )
+  live_wrong_bin_recovery = bool(live_verify and capture_tool)
 
   inputs = {
     "object_query": "string",
@@ -347,6 +348,22 @@ def build_industrial_recovery_pick_place_tree(
         max_retries=1,
         on_success="resolve_place_target",
         on_failure="failure",
+      ),
+      *(
+        [
+          DecisionNode(
+            name="recover_observed_pick",
+            kind=DecisionNodeKind.ACTIONLIST,
+            target="industrial.pick_observed_object_actionlist",
+            input={"object": "{{ observed_object }}"},
+            save_as="recovered_pick",
+            max_retries=1,
+            on_success="resolve_place_target",
+            on_failure="failure",
+          )
+        ]
+        if live_wrong_bin_recovery
+        else []
       ),
       DecisionNode(
         name="recover_pick_at_pose",

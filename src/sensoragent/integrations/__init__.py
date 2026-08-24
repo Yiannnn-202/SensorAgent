@@ -5,6 +5,7 @@ from sensoragent.integrations.llm import (
   LlmError,
   OpenAICompatibleClient,
   load_llm_config_from_env,
+  load_vlm_config_from_env,
 )
 from sensoragent.integrations.microphone import (
   FakeMicrophoneRecorder,
@@ -56,4 +57,5 @@ __all__ = [
   "VadError",
   "VadSegmenter",
   "load_llm_config_from_env",
+  "load_vlm_config_from_env",
 ]

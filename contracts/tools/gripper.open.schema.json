@@ -6,7 +6,8 @@
     "type": "object",
     "properties": {
       "opening": {"type": "number"},
-      "speed": {"type": "number"}
+      "speed": {"type": "number"},
+      "release": {"type": "boolean"}
     }
   },
   "output_schema": {

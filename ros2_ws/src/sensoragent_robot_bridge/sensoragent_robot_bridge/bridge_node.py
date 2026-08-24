@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import math
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -230,6 +231,19 @@ class RobotBridgeNode(Node):
     def _has_active_goal(self) -> bool:
         with self._active_lock:
             return bool(self._active_goals or self._pending_actions)
+
+    def _gripper_opening_reached(self, target_opening_m: float) -> bool:
+        state = self._gripper_state()
+        opening = state.get("opening") if isinstance(state, dict) else None
+        return isinstance(opening, (int, float)) and float(opening) >= target_opening_m - 0.003
+
+    def _wait_for_gripper_opening(self, target_opening_m: float, timeout: float = 1.5) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._gripper_opening_reached(target_opening_m):
+                return True
+            time.sleep(0.05)
+        return self._gripper_opening_reached(target_opening_m)
 
     def _cancellation_finished(self, key: str, goal_handle, future) -> None:
         try:
@@ -737,6 +751,16 @@ class RobotBridgeNode(Node):
                         self._gripper_status = "error"
                 return _response(False, error_code=error, message=error)
 
+            if not closing and not self._wait_for_gripper_opening(opening, timeout=min(self._gripper_timeout, 8.0)):
+                with self._state_lock:
+                    self._gripper_status = "error"
+                return _response(
+                    False,
+                    error_code="GRIPPER_MOTION_INCOMPLETE",
+                    message="Gripper service returned success, but feedback did not reach the requested open state.",
+                    state=self._state(),
+                )
+
             with self._state_lock:
                 self._gripper_grasped = bool(closing and result.stalled)
                 if result.stalled:
@@ -747,6 +771,11 @@ class RobotBridgeNode(Node):
                     self._gripper_status = "error"
 
             success = bool(result.reached_goal or (closing and result.stalled))
+            if not closing and not success:
+                success = self._wait_for_gripper_opening(opening, timeout=min(self._gripper_timeout, 8.0))
+                if success:
+                    with self._state_lock:
+                        self._gripper_status = "open"
             return _response(
                 success,
                 error_code="OK" if success else "GRIPPER_FAILED",

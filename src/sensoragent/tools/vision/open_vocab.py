@@ -516,6 +516,10 @@ class UltralyticsOpenVocabularyBackend:
     return str(path)
 
   def _set_classes_if_supported(self, query: str) -> bool:
+    # ``yolo_seg`` is a fixed-class model. Its trained class names must remain
+    # active so Chinese operator queries can be matched after inference.
+    if self._backend == "yolo_seg":
+      return False
     classes = [query]
     try:
       text_embeddings = self._model.get_text_pe(classes)
@@ -660,6 +664,33 @@ class UltralyticsOpenVocabularyBackend:
     if not found:
       return candidates[0]
     return max(found, key=lambda detection: detection.confidence)
+
+  def detect_all_classes(
+    self,
+    *,
+    image_path: str,
+    options: VisionInferenceOptions,
+  ) -> list[VisionDetection]:
+    """Return every fixed-class YOLO detection for the operator preview."""
+
+    arguments: dict[str, object] = {
+      "source": self._load_image(image_path),
+      "verbose": False,
+      "conf": options.box_threshold,
+    }
+    if options.device is not None:
+      arguments["device"] = options.device
+    started = time.perf_counter()
+    results = self._model.predict(**arguments)
+    elapsed_ms = round((time.perf_counter() - started) * 1000.0, 3)
+    if not results:
+      return []
+    detections = self._all_detections(
+      results[0],
+      self._backend,
+      self._model_path.as_posix(),
+    )
+    return [replace(detection, timing_ms={"detector": elapsed_ms}) for detection in detections]
 
 
 class GroundingDinoBackend:
@@ -1241,6 +1272,63 @@ def _within_workspace(
   return True
 
 
+def _normalize_xy_polygon(value: object) -> list[tuple[float, float]]:
+  """Validate a configured base-frame polygon used to admit pick candidates."""
+
+  if not isinstance(value, list) or len(value) < 3:
+    raise ValueError("allowed_xy_polygon requires at least three [x, y] vertices")
+  points: list[tuple[float, float]] = []
+  for vertex in value:
+    if not isinstance(vertex, list) or len(vertex) != 2:
+      raise ValueError("allowed_xy_polygon vertices must be [x, y]")
+    x, y = float(vertex[0]), float(vertex[1])
+    if not np.isfinite(x) or not np.isfinite(y):
+      raise ValueError("allowed_xy_polygon vertices must be finite")
+    points.append((x, y))
+  return points
+
+
+def _distance_to_segment(
+  point: tuple[float, float],
+  start: tuple[float, float],
+  end: tuple[float, float],
+) -> float:
+  """Return the planar distance from a point to a polygon edge."""
+
+  dx, dy = end[0] - start[0], end[1] - start[1]
+  length_squared = dx * dx + dy * dy
+  if length_squared == 0.0:
+    return float(np.hypot(point[0] - start[0], point[1] - start[1]))
+  ratio = max(0.0, min(1.0, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length_squared))
+  return float(np.hypot(point[0] - (start[0] + ratio * dx), point[1] - (start[1] + ratio * dy)))
+
+
+def _within_allowed_xy_polygon(
+  point: tuple[float, float] | None,
+  polygon: Sequence[tuple[float, float]],
+  boundary_margin_m: float,
+) -> bool:
+  """Return True only for points safely inside the configured source polygon."""
+
+  if point is None:
+    return False
+  x, y = point
+  inside = False
+  for index, start in enumerate(polygon):
+    end = polygon[(index + 1) % len(polygon)]
+    if (start[1] > y) != (end[1] > y):
+      crossing_x = (end[0] - start[0]) * (y - start[1]) / (end[1] - start[1]) + start[0]
+      if x < crossing_x:
+        inside = not inside
+  if not inside:
+    return False
+  return all(
+    _distance_to_segment(point, start, polygon[(index + 1) % len(polygon)])
+    >= boundary_margin_m
+    for index, start in enumerate(polygon)
+  )
+
+
 def _rect_area(rect: Sequence[float]) -> float:
   return max(0.0, float(rect[2]) - float(rect[0])) * max(
     0.0, float(rect[3]) - float(rect[1])
@@ -1445,8 +1533,11 @@ class VisionOpenVocabularyDetectTool:
     base_frame: str = "base_link",
     world_frame: str = "world",
     workspace: dict | None = None,
+    allowed_xy_polygon: list[list[float]] | None = None,
+    allowed_xy_margin_m: float = 0.0,
     candidate_policy: str = "baseline",
     scene_profile: dict | str | TabletopSceneProfile | None = None,
+    first_detection_preview_gui: bool = False,
     detector: OpenVocabularyVisionBackend | None = None,
     mask_refiner: MaskRefinementBackend | None = None,
   ) -> None:
@@ -1469,11 +1560,21 @@ class VisionOpenVocabularyDetectTool:
     self._base_frame = base_frame
     self._world_frame = world_frame
     self._workspace = dict(workspace or {})
+    self._allowed_xy_polygon = (
+      _normalize_xy_polygon(allowed_xy_polygon)
+      if allowed_xy_polygon is not None
+      else None
+    )
+    self._allowed_xy_margin_m = float(allowed_xy_margin_m)
+    if self._allowed_xy_margin_m < 0.0:
+      raise ValueError("allowed_xy_margin_m must be non-negative")
     normalized_policy = str(candidate_policy).strip().casefold()
     if normalized_policy not in {"baseline", "scene_aware"}:
       raise ValueError("candidate_policy must be baseline or scene_aware")
     self._candidate_policy = normalized_policy
     self._scene_profile = TabletopSceneProfile.from_value(scene_profile)
+    self._first_detection_preview_gui = first_detection_preview_gui
+    self._first_detection_preview_shown = False
     try:
       self._table_z = float(self._workspace.get("table_z", 0.12))
     except (TypeError, ValueError):

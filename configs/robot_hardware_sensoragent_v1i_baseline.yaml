@@ -4,6 +4,7 @@ agent:
 
 tools:
   enabled:
+    - audio.listen_vad_transcribe
     - hardware.start_stack
     - robot.ensure_observe_pose
     - robot.get_state
@@ -13,22 +14,45 @@ tools:
     - robot.plan_top_down_pick
     - robot.plan_oriented_pick
     - robot.plan_short_bolt_pick
+    - robot.plan_place
+    - robot.resolve_place_target
     - robot.stop
     - gripper.open
     - gripper.close
     - gripper.get_state
     - vision.grounded_sam2
+    - vision.open_vocab_detect
+    - vision.list_source_candidates
+    - vision.resolve_reference
     - vision.capture_frame
     - robot.select_pick_profile
-    - vision.open_vocab_detect
 
 skills:
   enabled:
     - hardware.startup
     - robot.pick
     - robot.verify_grasp
+    - robot.verify_place
 
 integrations:
+  audio:
+    backend: local
+    asr_model_dir: models/asr/sense-voice
+    tts_model_dir: models/tts
+    asr_provider: cpu
+    asr_num_threads: 4
+    listen_duration_seconds: 15
+    listen_language: zh
+    vad_model_path: models/asr/vad/silero_vad.onnx
+    vad_threshold: 0.55
+    vad_min_rms: 0.0
+    vad_min_speech_windows: 2
+    vad_pre_roll_ms: 600
+    vad_post_roll_ms: 1000
+    vad_tail_padding_ms: 700
+    vad_max_utterance_sec: 15
+  microphone:
+    backend: sounddevice_vad
   robot:
     backend: http
     endpoint: http://127.0.0.1:8766
@@ -40,11 +64,23 @@ integrations:
     box_threshold: 0.25
     text_threshold: 0.25
     refine_masks: false
+    require_masks: true
+    # Only objects localized inside this manually recorded foam-sheet polygon
+    # may be selected for picking. The 15 mm inset rejects edge candidates.
+    source_region:
+      frame_id: base_link
+      polygon:
+        - [-0.514430495, -0.013285950]
+        - [-0.510575318, 0.216445581]
+        - [-0.224190402, 0.243478061]
+        - [-0.239917787, 0.002981890]
+      boundary_margin_m: 0.015
     capture:
       script: scripts/linux/capture_hardware_rgb_cloud.py
       cloud_topic: /vision/cloud
       image_topic: /vision/raw
       out_dir: logs/vision/hardware_latest
+      timeout_seconds: 30.0
 
 scene:
   joint_poses:
@@ -56,33 +92,86 @@ scene:
   pick_profiles:
     default:
       planner: robot.plan_top_down_pick
-      open_opening: 0.12
-      gripper_force: 0.5
+      open_opening: 0.084
+      gripper_force: 1.0
     short_bolt:
       planner: robot.plan_short_bolt_pick
-      open_opening: 0.12
-      lift_speed: 0.6
+      # Keep the initial open close to the hardware's currently stable release
+      # range so the driver can settle instead of timing out on a larger target.
+      open_opening: 0.070
+      open_min_opening: 0.064
+      lift_speed: 1.0
       close_opening: 0.0
       # These values were verified against the installed OmniPicker firmware.
-      gripper_force: 0.6
-      gripper_speed: 0.4
-      motion_speed: 0.35
-      descent_speed: 0.25
+      gripper_force: 1.0
+      gripper_speed: 0.75
+      require_grasp_confirmation: true
+      motion_speed: 1.0
+      descent_speed: 1.0
       # Offset from the Link6 pose to the gripper contact TCP, in the local
       # tool frame. The wrist must stay above the detected object by this
       # distance while the fingers reach the grasp point.
       tcp_offset: [0.0, 0.0, 0.131]
-      headward_offset: 0.015
+      # Lift the detected contact point slightly above the point-cloud surface.
+      position_offset: [0.005, 0.0, 0.018]
+      # Shift the grasp point slightly toward the bolt head, but keep enough
+      # clearance from the head for short shafts.
+      headward_offset: 0.020
       # Positive values shift toward the left side of the camera image.
       camera_left_offset_px: 0.0
       camera_left_offset_m: 0.01
       minimum_safe_z: 0.14
-      workspace_min: [-0.55, -0.18, 0.0]
+      workspace_min: [-0.55, -0.26, 0.0]
       workspace_max: [-0.20, 0.18, 0.35]
-      # This profile is calibrated for the bolt shaft/head viewed camera-left.
-      orientation: [0.0, 1.0, 0.0, 0.0]
+      # Keep orientation unlocked so the short-bolt planner aligns yaw to the
+      # current mask/point-cloud principal axis instead of a stale fixed pose.
+      orientation: [0.9701729603935373, -0.22579509473245177, -0.08591384657474996, -0.01999532652229979]
+      lock_orientation: false
+    hex_nut:
+      # A hex nut has no stable PCA long axis. Use the recorded observe yaw so
+      # repeated captures cannot select opposite principal-axis directions.
+      planner: robot.plan_short_bolt_pick
+      grasp_point_mode: centroid
+      position_offset: [0.0, 0.0, 0.027]
+      orientation: [0.98824, 0.002022, -0.152897, 0.000599]
+      lock_orientation: true
+      approach_distance: 0.12
+      pregrasp_distance: 0.04
+      lift_height: 0.12
+      motion_speed: 1.0
+      descent_speed: 1.0
+      lift_speed: 1.0
+      gripper_force: 1.0
+      close_opening: 0.0
+      gripper_speed: 0.75
+      require_grasp_confirmation: true
+      tcp_offset: [0.0, 0.0, 0.131]
+      minimum_safe_z: 0.14
+      workspace_min: [-0.55, -0.26, 0.0]
+      workspace_max: [-0.20, 0.18, 0.35]
   workspace:
     frame: base_link
     x: [-0.55, -0.20]
-    y: [-0.18, 0.18]
+    y: [-0.26, 0.18]
     z: [0.0, 0.35]
+    # Average TCP height measured at the four foam-sheet corners. Vision uses
+    # this plane to project detector candidates into the source-region XY map.
+    table_z: 0.084
+  # Physical four-cell bin release poses recorded on the real robot.
+  place_targets:
+    bin_cell_1:
+      position: [-0.4194349944591522, -0.2104800045490265, 0.20580099523067474]
+      orientation: [0.9434083104133606, 0.08401872217655182, -0.2649679183959961, 0.18086907267570496]
+      frame_id: base_link
+    bin_cell_2:
+      position: [-0.425913006067276, -0.10991399735212326, 0.22200199961662292]
+      orientation: [0.9683216214179993, 0.10873351991176605, -0.2207828313112259, 0.04224957898259163]
+      frame_id: base_link
+    bin_cell_3:
+      position: [-0.28432199358940125, -0.24251100420951843, 0.2190839946269989]
+      orientation: [0.9478201270103455, 0.2961658835411072, -0.08335641026496887, 0.0835140198469162]
+      frame_id: base_link
+    bin_cell_4:
+      position: [-0.307347, -0.132989, 0.234225]
+      orientation: [0.979567, 0.201119, 0.000160, 0.000780]
+      frame_id: base_link

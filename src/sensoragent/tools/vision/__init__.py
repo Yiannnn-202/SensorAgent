@@ -1,6 +1,8 @@
 """Vision tool adapters."""
 
 from sensoragent.tools.vision.capture import VisionCaptureFrameTool
+from sensoragent.tools.vision.candidates import VisionListSourceCandidatesTool
+from sensoragent.tools.vision.reference import VisionResolveReferenceTool
 from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 from sensoragent.tools.vision.grounded_sam2 import VisionGroundedSam2Tool
 from sensoragent.tools.vision.yolo11_seg import VisionYolo11SegDetectTool
@@ -34,7 +36,9 @@ __all__ = [
   "VisionDetection",
   "VisionGroundedSam2Tool",
   "VisionInferenceOptions",
+  "VisionListSourceCandidatesTool",
   "VisionOpenVocabularyDetectTool",
+  "VisionResolveReferenceTool",
   "VisionYolo11SegDetectTool",
   "VisionVerifyObjectInBinTool",
   "VisionVerifyObjectLiftedTool",

@@ -1,9 +1,14 @@
 # Runtime logs
 logs/
-/runs/vision/
+/runs/
 
 # Local vision datasets and annotations
 /data/vision/
+/ScrewdriverAndWrench.v5-v2.coco-segmentation(1)/
+/ScrewdriverAndWrench.v5-v2.coco-segmentation(1).zip
+
+# Per-cell physical-motion approval pose. Keep only the reviewed template in Git.
+/ros2_ws/src/sensoragent_hardware_bridge/config/hardware_bridge_approach.local.yaml
 
 # Local model weights and runtime assets. Keep directory structure and docs.
 /models/**/*

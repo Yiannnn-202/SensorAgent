@@ -14,6 +14,7 @@ if str(SRC) not in sys.path:
 from sensoragent.agent import build_agent_from_config, build_agent_from_env
 from sensoragent.agent.bootstrap import _allowed_planner_targets
 from sensoragent.config import load_config
+from sensoragent.schemas import TraceContext
 
 
 class ConfigLoaderTest(TestCase):
@@ -78,29 +79,134 @@ class ConfigLoaderTest(TestCase):
     self.assertIn("robot.pick", config.skills.enabled)
     self.assertIn("bin_cell_3", config.scene.place_targets)
 
+  def test_hardware_baseline_enables_local_voice_input(self) -> None:
+    config = load_config(
+      ROOT / "configs" / "robot_hardware_sensoragent_v1i_baseline.yaml"
+    )
+
+    self.assertEqual(config.integrations.audio["backend"], "local")
+    self.assertEqual(config.integrations.audio["listen_language"], "zh")
+    self.assertEqual(
+      config.integrations.microphone["backend"], "sounddevice_vad"
+    )
+    self.assertIn("audio.listen_vad_transcribe", config.tools.enabled)
+    self.assertEqual(config.integrations.vision["backend"], "grounding_dino")
+    self.assertIn("vision.grounded_sam2", config.tools.enabled)
+    self.assertEqual(
+      config.integrations.vision["source_region"]["frame_id"], "base_link"
+    )
+    self.assertEqual(
+      len(config.integrations.vision["source_region"]["polygon"]), 4
+    )
+    self.assertEqual(config.scene.workspace["table_z"], 0.084)
+    self.assertEqual(config.scene.pick_profiles["short_bolt"]["descent_speed"], 1.0)
+    self.assertEqual(config.scene.pick_profiles["short_bolt"]["lift_speed"], 1.0)
+    self.assertEqual(config.scene.pick_profiles["short_bolt"]["gripper_speed"], 0.75)
+    self.assertEqual(
+      config.scene.pick_profiles["hex_nut"]["position_offset"],
+        [0.0, 0.0, 0.027],
+    )
+    self.assertTrue(config.scene.pick_profiles["hex_nut"]["lock_orientation"])
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["motion_speed"], 1.0)
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["descent_speed"], 1.0)
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["gripper_force"], 1.0)
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["close_opening"], 0.0)
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["gripper_speed"], 0.75)
+    self.assertIn("hardware.pick_place_actionlist", _allowed_planner_targets(
+      config,
+      {"hardware.pick_place_actionlist": object()},
+      {},
+    ))
+
+  def test_yolo_seg_hardware_config_inherits_short_bolt_baseline(self) -> None:
+    config = load_config(ROOT / "configs" / "robot_hardware_yolo_seg.yaml")
+
+    self.assertEqual(config.integrations.vision["backend"], "yolo_seg")
+    self.assertEqual(
+      config.integrations.vision["model_path"],
+      "/home/hcn/Island-Arm/models/combined.pt",
+    )
+    self.assertTrue(config.integrations.vision["first_detection_preview_gui"])
+    self.assertEqual(config.scene.pick_profiles["short_bolt"]["gripper_force"], 1.0)
+    self.assertTrue(config.scene.pick_profiles["roller"]["enabled"])
+    self.assertEqual(config.scene.pick_profiles["roller"]["position_offset"], [0.015, 0.0, 0.018])
+    self.assertFalse(config.scene.pick_profiles["roller"]["lock_orientation"])
+    self.assertEqual(config.scene.pick_profiles["roller"]["orientation_mode"], "yaw_only")
+    self.assertTrue(config.scene.pick_profiles["hex_nut"]["enabled"])
+    self.assertEqual(
+      config.scene.pick_profiles["hex_nut"]["position_offset"],
+        [0.0, 0.0, 0.027],
+    )
+    self.assertTrue(config.scene.pick_profiles["hex_nut"]["lock_orientation"])
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["motion_speed"], 1.0)
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["gripper_force"], 1.0)
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["close_opening"], 0.0)
+    self.assertEqual(config.scene.pick_profiles["hex_nut"]["gripper_speed"], 0.75)
+    self.assertEqual(config.scene.pick_profiles["roller"]["descent_speed"], 1.0)
+    self.assertEqual(config.scene.pick_profiles["roller"]["gripper_force"], 1.0)
+    self.assertIn("vision.open_vocab_detect", config.tools.enabled)
+    self.assertIn("vision.resolve_reference", config.tools.enabled)
+
   def test_hardware_config_enables_pick_actionlist_dependencies(self) -> None:
     config = load_config(ROOT / "configs" / "robot_hardware.example.yaml")
 
     self.assertIn("vision.capture_frame", config.tools.enabled)
     self.assertIn("vision.grounded_sam2", config.tools.enabled)
     self.assertIn("robot.select_pick_profile", config.tools.enabled)
+    self.assertIn("robot.resolve_place_target", config.tools.enabled)
+    self.assertIn("robot.plan_place", config.tools.enabled)
     self.assertIn("robot.verify_grasp", config.skills.enabled)
+    self.assertIn("robot.verify_place", config.skills.enabled)
     self.assertIn("robot.ensure_observe_pose", config.tools.enabled)
     self.assertEqual(config.scene.pick_profiles["short_bolt"]["gripper_force"], 0.6)
     self.assertEqual(config.scene.pick_profiles["short_bolt"]["close_opening"], 0.0)
     self.assertEqual(config.scene.pick_profiles["short_bolt"]["tcp_offset"], [0.0, 0.0, 0.131])
     self.assertEqual(config.scene.pick_profiles["short_bolt"]["camera_left_offset_m"], 0.01)
 
-  def test_planner_targets_include_hardware_pick_only_when_config_can_run_it(self) -> None:
+  def test_planner_targets_include_hardware_workflows_only_when_config_can_run_them(self) -> None:
     hardware_config = load_config(ROOT / "configs" / "robot_hardware.example.yaml")
     sim_config = load_config(ROOT / "configs" / "robot_sim.yaml")
-    actionlists = {"hardware.pick_object_actionlist": object(), "industrial.pick_only_actionlist": object()}
+    actionlists = {
+      "hardware.pick_object_actionlist": object(),
+      "hardware.pick_place_actionlist": object(),
+      "industrial.pick_only_actionlist": object(),
+    }
 
     self.assertIn(
       "hardware.pick_object_actionlist",
       _allowed_planner_targets(hardware_config, actionlists, {}),
     )
     self.assertNotIn(
+      "hardware.pick_place_actionlist",
+      _allowed_planner_targets(hardware_config, actionlists, {}),
+    )
+    hardware_config.scene.place_targets["bin_cell_1"] = {
+      "position": [0.4, 0.0, 0.25],
+      "orientation": [0.0, 1.0, 0.0, 0.0],
+      "frame_id": "base_link",
+    }
+    self.assertIn(
+      "hardware.pick_place_actionlist",
+      _allowed_planner_targets(hardware_config, actionlists, {}),
+    )
+    self.assertNotIn(
       "hardware.pick_object_actionlist",
       _allowed_planner_targets(sim_config, actionlists, {}),
     )
+    self.assertNotIn(
+      "hardware.pick_place_actionlist",
+      _allowed_planner_targets(sim_config, actionlists, {}),
+    )
+
+  def test_hardware_config_does_not_expose_default_place_targets(self) -> None:
+    bundle = build_agent_from_config(
+      ROOT / "configs" / "robot_hardware.example.yaml",
+    )
+
+    result = bundle.tool_runtime.invoke(
+      "robot.resolve_place_target",
+      {"target": "bin_cell_3"},
+      TraceContext(),
+    )
+    self.assertFalse(result.success)
+    self.assertIn("unknown place target", result.error or "")

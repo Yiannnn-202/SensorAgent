@@ -144,6 +144,7 @@ def test_fixed_class_match_supports_competition_chinese_aliases() -> None:
   assert matches("hex_nut", "六角螺母")
   assert matches("short_bolt", "螺栓")
   assert matches("stepped_shaft", "阶梯轴")
+  assert matches("roller", "滚轮")
 
 
 class _FakeVisionBackend:
@@ -704,11 +705,13 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertTrue(result.success)
     self.assertEqual(result.output["bbox_2d"], [100.0, 10.0, 130.0, 40.0])
 
-  def test_spatial_middle_even_count_is_ambiguous(self) -> None:
+  def test_spatial_middle_even_count_picks_second_from_left(self) -> None:
     backend = _FakeMultiBoxBackend(
       [
         ("wrench", 0.8, [10.0, 10.0, 30.0, 30.0]),
         ("wrench", 0.7, [100.0, 10.0, 130.0, 40.0]),
+        ("wrench", 0.6, [200.0, 10.0, 230.0, 35.0]),
+        ("wrench", 0.5, [300.0, 10.0, 330.0, 35.0]),
       ]
     )
     result = VisionOpenVocabularyDetectTool(detector=backend).run(
@@ -718,8 +721,8 @@ class VisionOpenVocabularyToolTest(TestCase):
         trace=TraceContext(),
       )
     )
-    self.assertFalse(result.success)
-    self.assertIn("OBJECT_AMBIGUOUS", result.error or "")
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [100.0, 10.0, 130.0, 40.0])
 
   def test_spatial_tie_returns_ambiguous(self) -> None:
     backend = _FakeMultiBoxBackend(
@@ -814,6 +817,86 @@ class VisionOpenVocabularyToolTest(TestCase):
     # Without filtering, left would pick the (0,0) box. Workspace filtering
     # drops it (base x=0 < 0.15), leaving the in-reach box at center (200,0).
     self.assertEqual(result.output["bbox_2d"], [190.0, -10.0, 210.0, 10.0])
+
+  def test_source_region_excludes_bin_candidates_before_spatial_selection(self) -> None:
+    # Identity T_base_camera + the table-plane estimator maps x pixels to
+    # base-frame metres at 0.12 * u / 100. The highest-confidence candidate
+    # is outside the source polygon, representing an already placed bin part.
+    backend = _FakeMultiBoxBackend(
+      [
+        ("bolt", 0.99, [390.0, -10.0, 410.0, 10.0]),  # base x=0.48: outside
+        ("bolt", 0.80, [140.0, -10.0, 160.0, 10.0]),  # base x=0.18: inside
+        ("bolt", 0.70, [240.0, -10.0, 260.0, 10.0]),  # base x=0.30: inside
+      ]
+    )
+    tool = VisionOpenVocabularyDetectTool(
+      detector=backend,
+      camera_info={"fx": 100.0, "fy": 100.0, "cx": 0.0, "cy": 0.0},
+      t_base_camera=[
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+      ],
+      workspace={"table_z": 0.12},
+      allowed_xy_polygon=[[0.15, -0.10], [0.35, -0.10], [0.35, 0.10], [0.15, 0.10]],
+      allowed_xy_margin_m=0.01,
+    )
+
+    unconstrained = tool.run(
+      ToolCall(tool="vision.open_vocab_detect", input={"query": "bolt"}, trace=TraceContext())
+    )
+    right = tool.run(
+      ToolCall(
+        tool="vision.open_vocab_detect",
+        input={"query": "bolt", "spatial_constraint": {"relation": "right"}},
+        trace=TraceContext(),
+      )
+    )
+
+    self.assertTrue(unconstrained.success)
+    self.assertEqual(unconstrained.output["bbox_2d"], [140.0, -10.0, 160.0, 10.0])
+    self.assertTrue(right.success)
+    self.assertEqual(right.output["bbox_2d"], [240.0, -10.0, 260.0, 10.0])
+
+  def test_source_region_prefers_hardware_cloud_over_plane_projection(self) -> None:
+    import tempfile
+
+    backend = _FakeMultiBoxBackend(
+      [
+        ("bolt", 0.99, [390.0, -10.0, 410.0, 10.0]),
+        ("bolt", 0.80, [140.0, -10.0, 160.0, 10.0]),
+      ]
+    )
+    with tempfile.TemporaryDirectory() as temp_dir:
+      cloud_path = Path(temp_dir) / "cloud_xyzuv.npy"
+      np.save(cloud_path, np.asarray([
+        [0.48, 0.0, 0.08, 400.0, 0.0],  # bin candidate: outside
+        [0.18, 0.0, 0.08, 150.0, 0.0],  # foam candidate: inside
+      ], dtype=np.float32))
+      result = VisionOpenVocabularyDetectTool(
+        detector=backend,
+        allowed_xy_polygon=[[0.15, -0.10], [0.35, -0.10], [0.35, 0.10], [0.15, 0.10]],
+        allowed_xy_margin_m=0.01,
+      ).run(
+        ToolCall(
+          tool="vision.open_vocab_detect",
+          input={
+            "query": "bolt",
+            "cloud_path": str(cloud_path),
+            "T_base_camera": [
+              [1.0, 0.0, 0.0, 0.0],
+              [0.0, 1.0, 0.0, 0.0],
+              [0.0, 0.0, 1.0, 0.0],
+              [0.0, 0.0, 0.0, 1.0],
+            ],
+          },
+          trace=TraceContext(),
+        )
+      )
+
+    self.assertTrue(result.success)
+    self.assertEqual(result.output["bbox_2d"], [140.0, -10.0, 160.0, 10.0])
 
   def test_spatial_nearest_and_farthest_use_base_xy(self) -> None:
     backend = _FakeMultiBoxBackend(

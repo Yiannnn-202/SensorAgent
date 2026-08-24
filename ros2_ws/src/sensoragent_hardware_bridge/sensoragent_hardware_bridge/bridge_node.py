@@ -24,6 +24,22 @@ def _response(success: bool, error_code: str = "OK", message: str = "OK", state:
   return {"success": success, "error_code": error_code, "message": message, "state": state or {}}
 
 
+_FAULT_LABELS = {
+  0: "no_fault",
+  1: "over_temperature",
+  2: "over_speed",
+  3: "initialization_fault",
+  4: "over_limit",
+}
+
+_STATUS_LABELS = {
+  0: "target_reached",
+  1: "moving",
+  2: "stalled",
+  3: "object_dropped",
+}
+
+
 class HardwareBridge(Node):
   """HTTP bridge with a deliberate opt-in gate for all physical motion."""
 
@@ -38,6 +54,7 @@ class HardwareBridge(Node):
         ("max_gripper_open_command", 254.0 / 255.0),
         ("workspace_min", [-0.55, -0.18, 0.0]), ("workspace_max", [-0.20, 0.18, 0.35]),
         ("approach_position_tolerance_m", 0.002), ("approach_orientation_tolerance", 0.01),
+        ("motion_completion_timeout_sec", 90.0), ("motion_poll_interval_sec", 0.2),
     ):
       self.declare_parameter(name, default)
     # A NaN placeholder fixes the ROS parameter type while remaining unusable
@@ -50,6 +67,8 @@ class HardwareBridge(Node):
     self._upper = [float(item) for item in self.get_parameter("workspace_max").value]
     self._approach_position_tolerance = float(self.get_parameter("approach_position_tolerance_m").value)
     self._approach_orientation_tolerance = float(self.get_parameter("approach_orientation_tolerance").value)
+    self._motion_completion_timeout = float(self.get_parameter("motion_completion_timeout_sec").value)
+    self._motion_poll_interval = float(self.get_parameter("motion_poll_interval_sec").value)
     arm_prefix = str(self.get_parameter("arm_service_prefix").value).rstrip("/")
     gripper_prefix = str(self.get_parameter("gripper_service_prefix").value).rstrip("/")
     self._move_joints = self.create_client(MoveJDeg, f"{arm_prefix}/movej_deg")
@@ -68,8 +87,21 @@ class HardwareBridge(Node):
 
   def _on_gripper_state(self, message: OmniPickerState) -> None:
     position = float(message.pos)
+    raw_frame = list(getattr(message, "raw_frame", []))
+    fault_code = int(raw_frame[3]) if len(raw_frame) > 3 else 0
+    status = int(message.status)
     # A stalled finger pair near its open limit is a controller fault, not a grasp.
-    self._gripper_state = {"opening": position * self._max_gripper_opening, "force": float(message.force), "status": int(message.status), "grasped": int(message.status) == 2 and position < (220.0 / 255.0)}
+    self._gripper_state = {
+      "opening": position * self._max_gripper_opening,
+      "force": float(message.force),
+      "status": status,
+      "status_label": _STATUS_LABELS.get(status, "unknown"),
+      "fault_code": fault_code,
+      "fault_label": _FAULT_LABELS.get(fault_code, "unknown"),
+      "grasped": status == 2 and position < (220.0 / 255.0),
+    }
+    if raw_frame:
+      self._gripper_state["raw_frame_hex"] = " ".join(f"{value:02X}" for value in raw_frame)
 
   def ready(self) -> dict:
     return {"allow_motion": bool(self.get_parameter("allow_motion").value), "movej": self._move_joints.service_is_ready(), "move_to_pose": self._move_pose.service_is_ready(), "movel": self._move_linear.service_is_ready(), "get_current_pose": self._current_pose.service_is_ready(), "gripper_open": self._open.service_is_ready(), "gripper_close": self._close.service_is_ready(), "gripper_position": self._set_position.service_is_ready()}
@@ -118,6 +150,13 @@ class HardwareBridge(Node):
       return False
     opening_value = float(opening)
     if closing:
+      # A full close at zero aperture is an empty grasp, not a completed pick.
+      # Hardware picks need a non-zero contact opening plus force, unless the
+      # controller has already explicitly reported a stalled grasp.
+      if target_opening_m <= 0.005:
+        force = self._gripper_state.get("force")
+        has_force_contact = isinstance(force, (int, float)) and float(force) >= 0.2 and opening_value > 0.003
+        return bool(self._gripper_state.get("grasped")) or has_force_contact
       return bool(self._gripper_state.get("grasped")) or opening_value <= target_opening_m + 0.003
     return opening_value >= target_opening_m - 0.003
 
@@ -128,6 +167,66 @@ class HardwareBridge(Node):
         return True
       time.sleep(0.05)
     return self._gripper_reached_target(target_opening_m, closing)
+
+  def _describe_gripper_state(self) -> str:
+    opening = self._gripper_state.get("opening")
+    opening_text = f"{float(opening):.4f}m" if isinstance(opening, (int, float)) else "unknown"
+    status = self._gripper_state.get("status")
+    status_label = self._gripper_state.get("status_label", "unknown")
+    fault = self._gripper_state.get("fault_code")
+    fault_label = self._gripper_state.get("fault_label", "unknown")
+    return f"opening={opening_text}, status={status}({status_label}), fault={fault}({fault_label})"
+
+  def _gripper_moving_without_fault(self) -> bool:
+    status = self._gripper_state.get("status")
+    status_label = self._gripper_state.get("status_label")
+    fault_code = int(self._gripper_state.get("fault_code", 0) or 0)
+    return fault_code == 0 and (status == 1 or status_label == "moving")
+
+  def _gripper_stalled_without_fault(self) -> bool:
+    status = self._gripper_state.get("status")
+    status_label = self._gripper_state.get("status_label")
+    fault_code = int(self._gripper_state.get("fault_code", 0) or 0)
+    return fault_code == 0 and (status == 2 or status_label == "stalled")
+
+  def _finish_gripper_response(self, response: dict, target_opening_m: float, closing: bool, require_feedback_target: bool = True, tolerate_non_terminal_failure: bool = False, feedback_timeout_sec: float = 8.0) -> dict:
+    if response.get("success"):
+      if not require_feedback_target:
+        response["state"] = self._gripper_state
+        return response
+      if self._wait_for_gripper_reach(target_opening_m, closing, feedback_timeout_sec):
+        response["state"] = self._gripper_state
+        return response
+      if closing and target_opening_m <= 0.005:
+        return _response(
+          False,
+          "GRIPPER_CONTACT_NOT_DETECTED",
+          f"Full-close command did not report object contact; last state: {self._describe_gripper_state()}.",
+          state=self._gripper_state,
+        )
+      return _response(
+        False,
+        "GRIPPER_MOTION_INCOMPLETE",
+        f"Gripper service returned success, but feedback did not reach target {target_opening_m:.4f} m; last state: {self._describe_gripper_state()}.",
+        state=self._gripper_state,
+      )
+    if self._wait_for_gripper_reach(target_opening_m, closing, feedback_timeout_sec):
+      return _response(
+        True,
+        "OK",
+        "Gripper reached the requested state after a late controller failure.",
+        state=self._gripper_state,
+      )
+    if tolerate_non_terminal_failure and int(self._gripper_state.get("fault_code", 0) or 0) == 0 and self._gripper_reached_target(target_opening_m, closing):
+      return _response(
+        True,
+        "OK",
+        f"Gripper command completed with non-terminal feedback tolerated: {response.get('message', 'unknown')}; last state: {self._describe_gripper_state()}.",
+        state=self._gripper_state,
+      )
+    response["state"] = self._gripper_state
+    response["message"] = f"{response.get('message', 'Gripper command failed')}; last state: {self._describe_gripper_state()}."
+    return response
 
   def _gripper_position_command(self, requested_opening_m: float, opening: bool) -> tuple[float, float]:
     requested = min(self._max_gripper_opening, max(0.0, requested_opening_m))
@@ -184,6 +283,60 @@ class HardwareBridge(Node):
     pose = result.pose
     return _response(True, state={"arm": {"status": "idle", "pose": {"frame_id": self._base_frame, "position": [pose.position.x, pose.position.y, pose.position.z], "orientation": [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]}}, "gripper": self._gripper_state})
 
+  @staticmethod
+  def _pose_reached(target: Pose, state: dict, position_tolerance: float = 0.001, orientation_tolerance: float = 0.02) -> bool:
+    pose = state.get("arm", {}).get("pose", {}) if isinstance(state, dict) else {}
+    position = pose.get("position") if isinstance(pose, dict) else None
+    orientation = pose.get("orientation") if isinstance(pose, dict) else None
+    if not isinstance(position, list) or len(position) < 3:
+      return False
+    target_position = [target.position.x, target.position.y, target.position.z]
+    position_error = sum((float(position[index]) - target_position[index]) ** 2 for index in range(3)) ** 0.5
+    if position_error > position_tolerance:
+      return False
+    if not isinstance(orientation, list) or len(orientation) < 4:
+      return True
+    target_orientation = [target.orientation.x, target.orientation.y, target.orientation.z, target.orientation.w]
+    dot = abs(sum(float(orientation[index]) * target_orientation[index] for index in range(4)))
+    return 1.0 - min(1.0, dot) <= orientation_tolerance
+
+  def _wait_for_pose_reach(self, pose: Pose) -> dict:
+    deadline = time.monotonic() + self._motion_completion_timeout
+    last_state: dict = {}
+    while True:
+      state_response = self._state()
+      if state_response.get("success"):
+        last_state = state_response.get("state", {})
+        if self._pose_reached(pose, last_state):
+          return _response(True, "OK", "Motion reached the requested pose.", state=last_state)
+      if time.monotonic() >= deadline:
+        break
+      time.sleep(self._motion_poll_interval)
+    return _response(
+      False,
+      "MOTION_INCOMPLETE",
+      f"Motion did not reach the requested pose within {self._motion_completion_timeout:.1f} seconds.",
+      state=last_state,
+    )
+
+  def _finish_motion_response(self, response: dict, pose: Pose, wait: bool) -> dict:
+    if response.get("success"):
+      if not wait:
+        state_response = self._state()
+        response["state"] = state_response.get("state", {})
+        return response
+      return self._wait_for_pose_reach(pose)
+    # The arm-control server reports its internal completion timeout as error
+    # code 4 but leaves the command active. Confirm the physical pose instead
+    # of treating that stale service result as a failed motion.
+    if "timeout" in str(response.get("message", "")).lower():
+      completed = self._wait_for_pose_reach(pose)
+      if completed.get("success"):
+        completed["message"] = "Motion reached the requested pose after the driver completion timeout."
+        return completed
+      response["state"] = completed.get("state", {})
+    return response
+
   def handle_request(self, method: str, path: str, payload: dict) -> dict:
     if method == "GET" and path == "/health": return _response(True, state={"allow_motion": bool(self.get_parameter("allow_motion").value)})
     if method == "GET" and path == "/ready": return _response(True, state=self.ready())
@@ -209,29 +362,72 @@ class HardwareBridge(Node):
           request = MoveJDeg.Request(); request.joints = [degrees(float(value)) for value in joints]; request.speed = self._speed(payload.get("speed", 1)); request.block = bool(payload.get("wait", True))
           return self._wait(self._move_joints, request, 65.0, "MOVEJ")
         if path in {"/move-pose", "/move-linear"}:
-          pose = self._pose(payload); request = (MoveL.Request() if path == "/move-linear" else MoveToPose.Request()); request.pose = pose; request.speed = self._speed(payload.get("speed", 1)); request.block = bool(payload.get("wait", True))
+          pose = self._pose(payload); request = (MoveL.Request() if path == "/move-linear" else MoveToPose.Request()); request.pose = pose; request.speed = self._speed(payload.get("speed", 1)); wait = bool(payload.get("wait", True)); request.block = wait
           response = self._wait(self._move_linear if path == "/move-linear" else self._move_pose, request, 65.0, "MOVEL" if path == "/move-linear" else "MOVEPOSE")
-          if response.get("success"):
-            state_response = self._state()
-            response["state"] = state_response.get("state", {})
-          return response
-        opening, target_opening_m = self._gripper_position_command(float(payload.get("opening", self._max_gripper_opening)), path == "/gripper/open"); speed = min(1.0, max(0.0, float(payload.get("speed", 0.7))))
+          return self._finish_motion_response(response, pose, wait)
+        requested_opening_m = float(payload.get("opening", self._max_gripper_opening))
+        opening, target_opening_m = self._gripper_position_command(requested_opening_m, path == "/gripper/open"); speed = min(1.0, max(0.0, float(payload.get("speed", 0.7))))
+        release = bool(payload.get("release", False))
+        require_contact = bool(payload.get("require_contact", True))
+        if path == "/gripper/open" and target_opening_m >= self._max_gripper_opening * self._max_gripper_open_command - 1e-6:
+          request = Open.Request(); request.speed = speed
+          return self._finish_gripper_response(
+            self._wait(self._open, request, 12.0, "GRIPPER_OPEN"),
+            target_opening_m,
+            False,
+            require_feedback_target=False,
+            tolerate_non_terminal_failure=True,
+          )
         if path == "/gripper/open" and self._gripper_reached_target(target_opening_m, False):
-          return _response(True, "OK", "Gripper is already at the requested open state.", state=self._gripper_state)
+          return _response(True, "OK", "Gripper is already open enough for the requested target.", state=self._gripper_state)
         request = SetPosition.Request(); request.position = opening if path == "/gripper/open" else max(0.0, opening); request.speed = speed
         if path == "/gripper/close" and opening <= 0.005:
-          close = Close.Request(); close.force = min(1.0, max(0.0, float(payload.get("force", 0.6)))); close.speed = speed; return self._wait(self._close, close, 12.0, "GRIPPER_CLOSE")
+          close = Close.Request(); close.force = min(1.0, max(0.0, float(payload.get("force", 0.6)))); close.speed = speed
+          return self._finish_gripper_response(
+            self._wait(self._close, close, 12.0, "GRIPPER_CLOSE"),
+            target_opening_m,
+            True,
+            require_feedback_target=require_contact,
+          )
         response = self._wait(self._set_position, request, 12.0, "GRIPPER_POSITION")
-        if response.get("success"):
-          return response
-        if self._wait_for_gripper_reach(target_opening_m, path == "/gripper/close"):
+        if path == "/gripper/open" and not release and not response.get("success") and response.get("error_code") == "GRIPPER_POSITION_3" and self._gripper_moving_without_fault():
+          open_request = Open.Request(); open_request.speed = speed
+          retry = self._finish_gripper_response(
+            self._wait(self._open, open_request, 12.0, "GRIPPER_OPEN_RECOVERY"),
+            target_opening_m,
+            False,
+            require_feedback_target=True,
+            tolerate_non_terminal_failure=True,
+          )
+          if retry.get("success"):
+            retry["message"] = f"Recovered gripper open after {response.get('error_code')}: {retry.get('message', 'OK')}"
+            return retry
+        result = self._finish_gripper_response(
+          response,
+          target_opening_m,
+          path == "/gripper/close",
+          require_feedback_target=True,
+        )
+        if path == "/gripper/open" and release and not result.get("success") and (self._gripper_moving_without_fault() or self._gripper_stalled_without_fault()):
           return _response(
             True,
             "OK",
-            "Gripper reached the requested state after a late controller failure.",
+            "Release opening command remains in motion; continuing without full-open recovery.",
             state=self._gripper_state,
           )
-        return response
+        if path == "/gripper/open" and not release and not result.get("success") and (self._gripper_moving_without_fault() or self._gripper_stalled_without_fault()):
+          open_request = Open.Request(); open_request.speed = speed
+          retry = self._finish_gripper_response(
+            self._wait(self._open, open_request, 12.0, "GRIPPER_OPEN_RECOVERY"),
+            target_opening_m,
+            False,
+            require_feedback_target=True,
+            tolerate_non_terminal_failure=True,
+          )
+          if retry.get("success"):
+            retry["message"] = f"Recovered incomplete gripper open after partial-position command: {retry.get('message', 'OK')}"
+            return retry
+        return result
       except (TypeError, ValueError) as exc:
         return _response(False, "REQUEST_INVALID", str(exc))
     return _response(False, "NOT_FOUND", f"Unknown endpoint: {method} {path}")

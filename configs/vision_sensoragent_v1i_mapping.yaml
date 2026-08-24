@@ -1,0 +1,10 @@
+classes:
+  - hex nut
+  - roller
+  - short bolt
+
+category_map:
+  hex_nut: hex nut
+  roller: roller
+  short_bolt: short bolt
+  sensroagent: null

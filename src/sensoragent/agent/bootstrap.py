@@ -18,6 +18,7 @@ from sensoragent.integrations import (
   SoundDeviceVadRecorder,
   SoundDeviceRecorder,
   load_llm_config_from_env,
+  load_vlm_config_from_env,
 )
 from sensoragent.integrations.robot import FakeRobotControlClient, HttpRobotControlClient
 from sensoragent.logger import TaskLogger
@@ -65,7 +66,9 @@ from sensoragent.tools.robot.pick_profile import RobotSelectPickProfileTool
 from sensoragent.tools.vision import (
   VisionConfigDetectTool,
   VisionGroundedSam2Tool,
+  VisionListSourceCandidatesTool,
   VisionOpenVocabularyDetectTool,
+  VisionResolveReferenceTool,
   VisionYolo11SegDetectTool,
 )
 from sensoragent.tools.vision import VisionCaptureFrameTool
@@ -74,7 +77,11 @@ from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
   build_industrial_recovery_pick_place_tree,
+  build_hardware_roller_approach_calibration_actionlist,
+  build_hardware_roller_pregrasp_calibration_actionlist,
+  build_hardware_hex_nut_approach_calibration_actionlist,
   build_hardware_pick_object_actionlist,
+  build_hardware_pick_place_actionlist,
   build_industrial_pick_at_pose_actionlist,
   build_industrial_pick_only_actionlist,
   build_industrial_pick_observed_object_actionlist,
@@ -116,8 +123,10 @@ SCENE_TOOL_NAMES = {
   "vision.grounded_sam2",
   "vision.open_vocab_detect",
   "vision.yolo11_seg_detect",
+  "vision.list_source_candidates",
   "vision.capture_frame",
   "vision.verify_object_in_bin",
+  "vision.resolve_reference",
   "robot.resolve_place_target",
   "robot.select_pick_profile",
 }
@@ -150,8 +159,13 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
     "vision.grounded_sam2",
     "vision.open_vocab_detect",
     "vision.yolo11_seg_detect",
+    "vision.list_source_candidates",
   }:
     vision_config = config.integrations.vision
+    source_region = dict(vision_config.get("source_region") or {})
+    source_frame = source_region.get("frame_id", "base_link")
+    if source_frame != "base_link":
+      raise ValueError("integrations.vision.source_region.frame_id must be base_link")
     common_settings = dict(
       model_path=str(vision_config.get("model_path", "models/vision/yoloe.pt")),
       grounding_dino_model=vision_config.get("grounding_dino_model"),
@@ -177,16 +191,27 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       workspace=dict(config.scene.workspace or {}),
       candidate_policy=str(vision_config.get("candidate_policy", "baseline")),
       scene_profile=vision_config.get("scene_profile"),
+      allowed_xy_polygon=source_region.get("polygon"),
+      allowed_xy_margin_m=float(source_region.get("boundary_margin_m", 0.0)),
     )
     if tool_name == "vision.grounded_sam2":
       return VisionGroundedSam2Tool(**common_settings)
     if tool_name == "vision.yolo11_seg_detect":
       return VisionYolo11SegDetectTool(**common_settings)
+    if tool_name == "vision.list_source_candidates":
+      return VisionListSourceCandidatesTool(
+        backend=str(vision_config.get("backend", "yoloe")),
+        require_masks=bool(vision_config.get("require_masks", False)),
+        **common_settings,
+      )
     return VisionOpenVocabularyDetectTool(
       backend=str(vision_config.get("backend", "yoloe")),
       refine_masks=vision_config.get("refine_masks"),
       require_masks=bool(vision_config.get("require_masks", False)),
       red_color_shortcut=bool(vision_config.get("red_color_shortcut", False)),
+      first_detection_preview_gui=bool(
+        vision_config.get("first_detection_preview_gui", False)
+      ),
       **common_settings,
     )
   if tool_name == "vision.capture_frame":
@@ -210,13 +235,19 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       fallback_t_world_camera=vision_config.get("T_world_camera"),
     )
   if tool_name == "robot.resolve_place_target":
-    targets = config.scene.place_targets or default_place_target_registry()
+    targets = config.scene.place_targets or (
+      {} if config.agent.mode == "robot_hardware" else default_place_target_registry()
+    )
     return RobotResolvePlaceTargetTool(targets)
   if tool_name == "robot.select_pick_profile":
     return RobotSelectPickProfileTool(config.scene.pick_profiles)
   if tool_name == "vision.verify_object_in_bin":
-    targets = config.scene.place_targets or default_place_target_registry()
+    targets = config.scene.place_targets or (
+      {} if config.agent.mode == "robot_hardware" else default_place_target_registry()
+    )
     return VisionVerifyObjectInBinTool(targets)
+  if tool_name == "vision.resolve_reference":
+    return VisionResolveReferenceTool(OpenAICompatibleClient(load_vlm_config_from_env()))
   raise KeyError(f"Not a scene tool: {tool_name}")
 
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {
@@ -288,17 +319,31 @@ def _allowed_planner_targets(config: SensorAgentConfig, actionlists: dict, decis
   enabled_tools = set(config.tools.enabled or ())
   enabled_skills = set(config.skills.enabled or ())
   targets = list(actionlists.keys()) + list(decision_trees.keys())
-  if "hardware.pick_object_actionlist" in targets and not (
+  hardware_detect_tool = (
+    "vision.grounded_sam2"
+    if config.integrations.vision.get("backend", "grounding_dino") == "grounding_dino"
+    else "vision.open_vocab_detect"
+  )
+  hardware_pick_ready = (
     {
       "vision.capture_frame",
-      "vision.grounded_sam2",
+      hardware_detect_tool,
       "robot.select_pick_profile",
       "robot.plan_short_bolt_pick",
     }
     <= enabled_tools
     and {"robot.pick", "robot.verify_grasp"} <= enabled_skills
-  ):
+  )
+  if "hardware.pick_object_actionlist" in targets and not hardware_pick_ready:
     targets.remove("hardware.pick_object_actionlist")
+  hardware_place_ready = (
+    {"robot.resolve_place_target", "robot.plan_place", "robot.move_pose", "robot.move_linear", "gripper.open"}
+    <= enabled_tools
+    and "robot.verify_place" in enabled_skills
+    and bool(config.scene.place_targets)
+  )
+  if "hardware.pick_place_actionlist" in targets and not (hardware_pick_ready and hardware_place_ready):
+    targets.remove("hardware.pick_place_actionlist")
   return tuple(targets)
 
 
@@ -396,7 +441,7 @@ def build_agent(
   if log_path is not None:
     progress_path = config.logging.progress_dir / f"{log_path.stem}.log"
   logger = TaskLogger(log_path, console=config.logging.console, progress_path=progress_path)
-
+  
   tool_registry = ToolRegistry()
   robot_client = None
   if any(tool_name in ROBOT_TOOL_FACTORIES for tool_name in config.tools.enabled):
@@ -420,6 +465,11 @@ def build_agent(
   skill_runtime = SkillRuntime(skill_registry, tool_runtime, logger)
   actionlist_runtime = ActionListRuntime(tool_runtime, skill_runtime, logger)
   joint_poses = config.scene.joint_poses
+  hardware_detect_tool = (
+    "vision.grounded_sam2"
+    if config.integrations.vision.get("backend", "grounding_dino") == "grounding_dino"
+    else "vision.open_vocab_detect"
+  )
   actionlists = {
     "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
@@ -430,7 +480,11 @@ def build_agent(
     "industrial.place_only_actionlist": build_industrial_place_only_actionlist(joint_poses),
     "industrial.vision_pick_place_actionlist": build_industrial_vision_pick_place_actionlist(joint_poses),
     "industrial.sorting_config_pick_place_actionlist": build_sorting_config_pick_place_actionlist(joint_poses),
-    "hardware.pick_object_actionlist": build_hardware_pick_object_actionlist(joint_poses),
+    "hardware.pick_object_actionlist": build_hardware_pick_object_actionlist(joint_poses, hardware_detect_tool),
+    "hardware.pick_place_actionlist": build_hardware_pick_place_actionlist(joint_poses, hardware_detect_tool),
+    "hardware.calibrate_roller_approach_actionlist": build_hardware_roller_approach_calibration_actionlist(joint_poses, hardware_detect_tool),
+    "hardware.calibrate_roller_pregrasp_actionlist": build_hardware_roller_pregrasp_calibration_actionlist(joint_poses, hardware_detect_tool),
+    "hardware.calibrate_hex_nut_approach_actionlist": build_hardware_hex_nut_approach_calibration_actionlist(joint_poses, hardware_detect_tool),
   }
   decision_tree_runtime = DecisionTreeRuntime(
     tool_runtime,
@@ -446,9 +500,10 @@ def build_agent(
   event_stream = InMemoryEventStream()
   planner = None
   if planner_mode == "llm":
-    place_targets = tuple(
-      (config.scene.place_targets or default_place_target_registry()).keys()
+    place_target_registry = config.scene.place_targets or (
+      {} if config.agent.mode == "robot_hardware" else default_place_target_registry()
     )
+    place_targets = tuple(place_target_registry.keys())
     planner = LLMPlanner(
       OpenAICompatibleClient(load_llm_config_from_env()),
       # DecisionTree targets are dispatched separately by target_kind but share
