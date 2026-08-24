@@ -727,6 +727,58 @@ class RobotControlTest(TestCase):
     self.assertEqual(fallbacks[1][1]["pose"]["position"], list(plan.place.position))
     self.assertEqual(fallbacks[2][1]["pose"]["position"][2], max(plan.retreat.position[2], plan.place.position[2] + 0.06))
 
+  def test_place_skill_tolerates_failed_post_release_retreat(self) -> None:
+    trace = TraceContext()
+    place = RobotPose(
+      position=(0.50, -0.20, 0.36),
+      orientation=(0.0, 1.0, 0.0, 0.0),
+    )
+    plan = build_place_plan(place)
+
+    class StubToolRuntime:
+      def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+        self.motion_count = 0
+
+      def invoke(self, name: str, input_data: dict, trace_context: TraceContext) -> ToolResult:
+        del trace_context
+        self.calls.append((name, input_data))
+        if name in {"robot.move_linear", "robot.move_pose", "robot.move_joints"}:
+          self.motion_count += 1
+          # Approach (pose) and descent (linear) succeed; everything after the
+          # gripper opens — the lifted retreat and the joint retreat — fails.
+          if self.motion_count > 2:
+            return ToolResult(
+              tool=name,
+              success=False,
+              error="MOVEIT_-2: ACTION_ABORTED: MoveIt planning or execution failed.",
+            )
+        return ToolResult(tool=name, success=True, output={"completed": True})
+
+    tool_runtime = StubToolRuntime()
+    result = RobotPlaceSkill().run(
+      call=Mock(
+        input={
+          "object_id": "short_bolt_02",
+          "target": "bin_cell_3",
+          "plan": plan.to_dict(),
+          "retreat_joints": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+        },
+        trace=trace,
+      ),
+      context=SkillContext(tool_runtime=tool_runtime, logger=TaskLogger()),
+    )
+
+    # The descent and release completed, so the place must succeed even though
+    # every post-release retreat motion failed.
+    self.assertTrue(result.success, msg=result.error)
+    self.assertTrue(result.output["placed"])
+    self.assertEqual(
+      result.output["completed_steps"],
+      ["move_approach", "move_place", "open_gripper"],
+    )
+    self.assertTrue(result.output["tolerated_failures"])
+
   def test_place_skill_accepts_pre_approach_joints(self) -> None:
     client, runtime = _build_runtime()
     trace = TraceContext()

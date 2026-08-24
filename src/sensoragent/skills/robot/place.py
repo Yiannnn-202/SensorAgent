@@ -21,6 +21,7 @@ class RobotPlaceSkill:
     speed = call.input.get("speed", 0.2)
     post_release_lift = float(call.input.get("post_release_lift", 0.06))
     completed_steps: list[str] = []
+    tolerated_steps: list[str] = []
     steps = []
     pre_approach_joints = call.input.get("pre_approach_joints")
     retreat_joints = call.input.get("retreat_joints")
@@ -97,6 +98,13 @@ class RobotPlaceSkill:
             call.trace,
           )
       if not result.success:
+        if step_name in {"post_release_lift", "retreat", "retreat_joints"}:
+          # The object is already released; a failed retreat motion must not
+          # fail the place. Record it and let the remaining steps try to pull
+          # the arm out; if they also fail the arm may stay near the bin but
+          # the place itself has succeeded.
+          tolerated_steps.append(f"{step_name}: {result.error}")
+          continue
         return SkillResult(
           skill=self.spec.name,
           success=False,
@@ -113,5 +121,6 @@ class RobotPlaceSkill:
         "object_id": call.input.get("object_id"),
         "target": call.input.get("target"),
         "completed_steps": completed_steps,
+        **({"tolerated_failures": tolerated_steps} if tolerated_steps else {}),
       },
     )
