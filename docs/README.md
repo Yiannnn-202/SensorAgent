@@ -33,6 +33,7 @@ the same status or design.
 ### Vision
 
 - [Grounding DINO red_block_v0 training handoff](guides/vision/grounding-dino-red-block-v0-cn.md)
+- [metal_part_v0 Gazebo dataset collection](guides/vision/metal-part-v0-collection-cn.md)
 - [Grounded SAM 2 strict Tool and red-block evaluation](guides/vision/grounded-sam2-tool-cn.md)
 - [Open-vocabulary vision](guides/vision/open-vocabulary.md)
 - [Public datasets and licenses](guides/vision/public-datasets.md)
