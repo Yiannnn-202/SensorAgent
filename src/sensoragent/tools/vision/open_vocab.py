@@ -89,6 +89,136 @@ class VisionDetection:
     return output
 
 
+def _float_range(value: object, field_name: str) -> tuple[float, float] | None:
+  if value is None:
+    return None
+  if not isinstance(value, (list, tuple)) or len(value) != 2:
+    raise ValueError(f"scene_profile.{field_name} must contain two numbers")
+  try:
+    low, high = float(value[0]), float(value[1])
+  except (TypeError, ValueError) as exc:
+    raise ValueError(
+      f"scene_profile.{field_name} must contain two numbers"
+    ) from exc
+  if low < 0.0 or high <= low:
+    raise ValueError(
+      f"scene_profile.{field_name} must satisfy 0 <= low < high"
+    )
+  return low, high
+
+
+def _float_roi(value: object, field_name: str) -> tuple[float, float, float, float]:
+  if not isinstance(value, (list, tuple)) or len(value) != 4:
+    raise ValueError(f"scene_profile.{field_name} must be [x1, y1, x2, y2]")
+  try:
+    x1, y1, x2, y2 = (float(item) for item in value)
+  except (TypeError, ValueError) as exc:
+    raise ValueError(
+      f"scene_profile.{field_name} must be [x1, y1, x2, y2]"
+    ) from exc
+  if x2 <= x1 or y2 <= y1:
+    raise ValueError(
+      f"scene_profile.{field_name} must satisfy x2>x1 and y2>y1"
+    )
+  return x1, y1, x2, y2
+
+
+def _positive_pair(value: object, field_name: str) -> tuple[float, float] | None:
+  if value is None:
+    return None
+  if not isinstance(value, (list, tuple)) or len(value) != 2:
+    raise ValueError(f"scene_profile.{field_name} must contain two numbers")
+  try:
+    first, second = float(value[0]), float(value[1])
+  except (TypeError, ValueError) as exc:
+    raise ValueError(
+      f"scene_profile.{field_name} must contain two numbers"
+    ) from exc
+  if first <= 0.0 or second <= 0.0:
+    raise ValueError(f"scene_profile.{field_name} values must be positive")
+  return first, second
+
+
+@dataclass(frozen=True)
+class TabletopSceneProfile:
+  """2D priors for ranking detector candidates in one fixed tabletop scene."""
+
+  name: str = "industrial_tabletop_v1"
+  workspace_roi: tuple[float, float, float, float] | None = None
+  forbidden_rois: tuple[tuple[float, float, float, float], ...] = ()
+  image_size: tuple[float, float] | None = None
+  expected_width_px: tuple[float, float] | None = None
+  expected_height_px: tuple[float, float] | None = None
+  expected_aspect_ratio: tuple[float, float] | None = None
+  min_roi_coverage: float = 0.50
+  min_boundary_coverage: float = 0.90
+  max_forbidden_overlap: float = 0.10
+  max_candidate_iou: float = 0.75
+  min_scene_score: float = 0.05
+  ambiguity_margin: float = 0.03
+
+  @classmethod
+  def from_value(cls, value: object) -> "TabletopSceneProfile | None":
+    """Parse a config/call profile; None or false keeps baseline behavior."""
+
+    if value in (None, False, "", "baseline"):
+      return None
+    if isinstance(value, cls):
+      return value
+    if isinstance(value, str):
+      return cls(name=value.strip() or "industrial_tabletop_v1")
+    if not isinstance(value, dict):
+      raise ValueError("scene_profile must be an object, string, or null")
+    name = str(value.get("name", "industrial_tabletop_v1")).strip()
+    if not name:
+      raise ValueError("scene_profile.name must be non-empty")
+    workspace_value = value.get("workspace_roi")
+    workspace_roi = (
+      _float_roi(workspace_value, "workspace_roi")
+      if workspace_value is not None
+      else None
+    )
+    forbidden_value = value.get("forbidden_rois", [])
+    if not isinstance(forbidden_value, list):
+      raise ValueError("scene_profile.forbidden_rois must be a list")
+    forbidden_rois = tuple(
+      _float_roi(item, f"forbidden_rois[{index}]")
+      for index, item in enumerate(forbidden_value)
+    )
+    image_size = _positive_pair(value.get("image_size"), "image_size")
+
+    def probability(field_name: str, default: float) -> float:
+      try:
+        parsed = float(value.get(field_name, default))
+      except (TypeError, ValueError) as exc:
+        raise ValueError(f"scene_profile.{field_name} must be a number") from exc
+      if not 0.0 <= parsed <= 1.0:
+        raise ValueError(f"scene_profile.{field_name} must be between 0 and 1")
+      return parsed
+
+    return cls(
+      name=name,
+      workspace_roi=workspace_roi,
+      forbidden_rois=forbidden_rois,
+      image_size=image_size,
+      expected_width_px=_float_range(
+        value.get("expected_width_px"), "expected_width_px"
+      ),
+      expected_height_px=_float_range(
+        value.get("expected_height_px"), "expected_height_px"
+      ),
+      expected_aspect_ratio=_float_range(
+        value.get("expected_aspect_ratio"), "expected_aspect_ratio"
+      ),
+      min_roi_coverage=probability("min_roi_coverage", 0.50),
+      min_boundary_coverage=probability("min_boundary_coverage", 0.90),
+      max_forbidden_overlap=probability("max_forbidden_overlap", 0.10),
+      max_candidate_iou=probability("max_candidate_iou", 0.75),
+      min_scene_score=probability("min_scene_score", 0.05),
+      ambiguity_margin=probability("ambiguity_margin", 0.03),
+    )
+
+
 _SPATIAL_IMAGE_X_RELATIONS = frozenset({"left", "right"})
 _SPATIAL_IMAGE_MIDDLE_RELATIONS = frozenset({"middle", "center"})
 _SPATIAL_IMAGE_Y_RELATIONS = frozenset({"front", "back"})
@@ -1307,7 +1437,7 @@ class VisionOpenVocabularyDetectTool:
     self._world_frame = world_frame
     self._workspace = dict(workspace or {})
     self._candidate_policy = candidate_policy
-    self._scene_profile = scene_profile
+    self._scene_profile = TabletopSceneProfile.from_value(scene_profile)
     self._allowed_xy_polygon = (
       _normalize_xy_polygon(allowed_xy_polygon)
       if allowed_xy_polygon is not None
