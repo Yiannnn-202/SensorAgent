@@ -15,6 +15,9 @@ import numpy as np
 from sensoragent.schemas.robot import PickPlan, PlacePlan, RobotPose
 
 
+DEFAULT_TOP_DOWN_ORIENTATION = (0.0, 1.0, 0.0, 0.0)
+
+
 @dataclass(frozen=True)
 class ObjectGeometry:
   """Estimated object geometry in the robot base frame."""
@@ -76,6 +79,48 @@ def _matrix_to_quaternion(matrix: np.ndarray) -> tuple[float, float, float, floa
   quat = np.asarray([x, y, z, w], dtype=np.float64)
   quat = quat / np.linalg.norm(quat)
   return tuple(float(value) for value in quat)
+
+
+def _quaternion_to_matrix(quaternion: tuple[float, float, float, float]) -> np.ndarray:
+  x, y, z, w = (float(value) for value in quaternion)
+  norm = (x * x + y * y + z * z + w * w) ** 0.5
+  if norm < 1e-9:
+    raise ValueError("orientation quaternion must not be zero")
+  x, y, z, w = x / norm, y / norm, z / norm, w / norm
+  return np.array([
+    [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+  ], dtype=np.float64)
+
+
+def build_fixed_orientation_pick_plan_from_contact(
+  contact_point: Iterable[float],
+  *,
+  orientation: tuple[float, float, float, float] = DEFAULT_TOP_DOWN_ORIENTATION,
+  frame_id: str = "base_link",
+  approach_distance: float = 0.10,
+  pregrasp_distance: float = 0.03,
+  lift_height: float = 0.10,
+  tcp_offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> PickPlan:
+  contact = np.asarray(tuple(float(value) for value in contact_point), dtype=np.float64)
+  rotation = _quaternion_to_matrix(orientation)
+  link6_grasp = contact - rotation @ np.asarray(tcp_offset, dtype=np.float64)
+
+  def make_pose(position: np.ndarray) -> RobotPose:
+    return RobotPose(
+      position=tuple(float(value) for value in position),
+      orientation=orientation,
+      frame_id=frame_id,
+    )
+
+  return PickPlan(
+    approach=make_pose(link6_grasp + np.array([0.0, 0.0, approach_distance])),
+    pregrasp=make_pose(link6_grasp + np.array([0.0, 0.0, pregrasp_distance])),
+    grasp=make_pose(link6_grasp),
+    lift=make_pose(link6_grasp + np.array([0.0, 0.0, lift_height])),
+  )
 
 
 def estimate_object_geometry(points: Iterable[Iterable[float]]) -> ObjectGeometry:
@@ -218,6 +263,51 @@ def build_oriented_pick_plan_from_points(
     pregrasp=make_pose(handle_center - pregrasp_distance * tool_z),
     grasp=make_pose(handle_center),
     lift=make_pose(handle_center + np.array([0.0, 0.0, lift_height])),
+  )
+
+
+def build_yaw_aligned_pick_plan_from_points(
+  points: Iterable[Iterable[float]],
+  *,
+  orientation: tuple[float, float, float, float],
+  frame_id: str = "base_link",
+  approach_distance: float = 0.10,
+  pregrasp_distance: float = 0.03,
+  lift_height: float = 0.10,
+  tcp_offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
+  grasp_point: tuple[float, float, float] | None = None,
+) -> PickPlan:
+  """Align only the calibrated tool yaw to the point-cloud long axis."""
+
+  point_array = _as_points(points)
+  axis = np.asarray(estimate_object_geometry(point_array).principal_axis, dtype=np.float64)
+  axis[2] = 0.0
+  axis = _normalize(axis)
+  rotation = _quaternion_to_matrix(orientation)
+  reference_x = rotation[:, 0].copy()
+  reference_x[2] = 0.0
+  reference_x = _normalize(reference_x)
+  if float(reference_x @ axis) < 0.0:
+    axis = -axis
+  yaw = float(np.arctan2(
+    reference_x[0] * axis[1] - reference_x[1] * axis[0],
+    reference_x @ axis,
+  ))
+  yaw_rotation = np.array([
+    [np.cos(yaw), -np.sin(yaw), 0.0],
+    [np.sin(yaw), np.cos(yaw), 0.0],
+    [0.0, 0.0, 1.0],
+  ], dtype=np.float64)
+  aligned_orientation = _matrix_to_quaternion(yaw_rotation @ rotation)
+  contact = grasp_point if grasp_point is not None else tuple(np.mean(point_array, axis=0))
+  return build_fixed_orientation_pick_plan_from_contact(
+    contact,
+    orientation=aligned_orientation,
+    frame_id=frame_id,
+    approach_distance=approach_distance,
+    pregrasp_distance=pregrasp_distance,
+    lift_height=lift_height,
+    tcp_offset=tcp_offset,
   )
 
 

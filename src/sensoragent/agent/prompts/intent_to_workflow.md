@@ -29,7 +29,7 @@ Your job:
    present. Extract `relation` from these keywords (Chinese or English):
       - 左 / 左侧(的) / 左边(的) / left → `"left"`
       - 右 / 右侧(的) / 右边(的) / right → `"right"`
-      - 中间 / 中间的 / middle / center → `"middle"`
+      - 中间 / 中间的 / middle / center → `"left"` with `ordinal: 2` (the second object from left to right)
       - 前面(的) / front → `"front"`
      - 后面(的) / back → `"back"`
      - 最近(的) / nearest / closest → `"nearest"`
@@ -56,6 +56,8 @@ Your job:
      and the operator asks for visual verification, post-place checking, recovery, or
      explicitly says to verify the result with vision
      → `industrial.recovery_pick_place_tree` with `target_kind="decision_tree"`
+    - `intent.action == "pick_place"` and `hardware.pick_place_actionlist` is available
+      → `hardware.pick_place_actionlist`
     - `intent.action == "pick_place"` → `industrial.pick_place_actionlist`
     - `intent.action == "pick"` and `hardware.pick_object_actionlist` is available
       → `hardware.pick_object_actionlist`
@@ -77,8 +79,10 @@ Your job:
     - `industrial.place_only_actionlist`: `{target}`
     - `industrial.vision_pick_place_actionlist`: `{object_query, target, spatial_constraint}`
     - `industrial.recovery_pick_place_tree`: `{object_query, target, spatial_constraint}`
+    - `hardware.pick_place_actionlist`: `{object_query, pick_profile, target, spatial_constraint}`
     - `hardware.pick_object_actionlist`: `{object_query, pick_profile, spatial_constraint}`
-      Use `pick_profile:"short_bolt"` when the object is 螺栓, 短螺栓, bolt, or short bolt;
+      Use `pick_profile:"short_bolt"` when the object is 螺栓, 短螺栓, bolt, or short bolt.
+      Use `pick_profile:"hex_nut"` when the object is 六角螺母 or hex nut;
       otherwise use `pick_profile:""`.
    Include `spatial_constraint` only when `intent.spatial` is non-null; mirror it as
    `{"relation": ..., "ordinal": ...}`. Sensor inputs (`image_path`, `depth_path`,
@@ -115,8 +119,9 @@ Rules:
   but strip any spatial modifier into `spatial`/`spatial_constraint`; the vision layer matches
   the bare noun.
 - Prefer `industrial.recovery_pick_place_tree` for verified pick-and-place requests when
-  present in `allowed_targets`; otherwise prefer `industrial.pick_place_actionlist`. Fall
-  back to `mock.pick_place_actionlist` only when no industrial target is available.
+  present in `allowed_targets`; otherwise prefer `hardware.pick_place_actionlist` when it
+  is available, then `industrial.pick_place_actionlist`. Fall back to
+  `mock.pick_place_actionlist` only when no industrial or hardware target is available.
 - `intent` and `input` must agree: `intent.object == input.object_query`,
   `intent.target == input.target`, and `intent.spatial == input.spatial_constraint` (when
   spatial is present).

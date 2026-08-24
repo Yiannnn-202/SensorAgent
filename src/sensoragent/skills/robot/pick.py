@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from sensoragent.schemas import SkillCall, SkillResult, SkillSpec
 from sensoragent.schemas.robot import PickPlan
 from sensoragent.skills.base import SkillContext
@@ -72,17 +74,44 @@ class RobotPickSkill:
 
     for step_name, tool_name, input_data in steps:
       result = context.tool_runtime.invoke(tool_name, input_data, call.trace)
+      if (
+        not result.success
+        and tool_name in {"robot.move_pose", "robot.move_linear"}
+        and "arm is busy" in str(result.error or "").casefold()
+      ):
+        # The hardware driver can report the TCP at its target shortly before
+        # it releases its single-command slot. Retry only this same motion.
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline:
+          time.sleep(0.2)
+          result = context.tool_runtime.invoke(tool_name, input_data, call.trace)
+          if result.success or "arm is busy" not in str(result.error or "").casefold():
+            break
       if not result.success and step_name == "open_gripper":
         state_result = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
-        opening = (state_result.output or {}).get("state", {}).get("opening") if state_result.success else None
-        target_opening = float(input_data.get("opening", 0.0848))
-        if isinstance(opening, (int, float)) and float(opening) >= target_opening - 0.003:
+        state = (state_result.output or {}).get("state", {}) if state_result.success else {}
+        opening = state.get("opening") if isinstance(state, dict) else None
+        fault_code = state.get("fault_code") if isinstance(state, dict) else None
+        target_opening = float(call.input.get("open_min_opening", input_data.get("opening", 0.0848)))
+        if (
+          isinstance(opening, (int, float))
+          and float(opening) >= target_opening - 0.003
+          and fault_code in (None, 0)
+        ):
           result = state_result
       if not result.success and step_name == "close_gripper":
         state_result = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
         state = (state_result.output or {}).get("state", {}) if state_result.success else {}
         grasped = bool(state.get("grasped")) if isinstance(state, dict) else False
-        if grasped:
+        opening = state.get("opening") if isinstance(state, dict) else None
+        force = state.get("force") if isinstance(state, dict) else None
+        has_force_contact = (
+          isinstance(opening, (int, float))
+          and float(opening) > 0.003
+          and isinstance(force, (int, float))
+          and float(force) >= 0.2
+        )
+        if grasped or has_force_contact:
           stage_results.append(
             {
               "step": "close_gripper_state_check",
@@ -102,9 +131,36 @@ class RobotPickSkill:
               "input": {},
               "success": False,
               "output": state_result.output,
-              "error": "Gripper is not reporting a grasp; refusing to lift.",
+                "error": "Gripper is not reporting object contact; refusing to lift.",
               "original_error": result.error,
             }
+          )
+      if result.success and step_name == "close_gripper" and bool(call.input.get("require_grasp_confirmation", False)):
+        state_result = context.tool_runtime.invoke("gripper.get_state", {}, call.trace)
+        state = (state_result.output or {}).get("state", {}) if state_result.success else {}
+        grasped = bool(state.get("grasped")) if isinstance(state, dict) else False
+        opening = state.get("opening") if isinstance(state, dict) else None
+        force = state.get("force") if isinstance(state, dict) else None
+        has_force_contact = (
+          isinstance(opening, (int, float))
+          and float(opening) > 0.003
+          and isinstance(force, (int, float))
+          and float(force) >= 0.2
+        )
+        stage_results.append(
+          {
+            "step": "close_gripper_state_check",
+            "tool": "gripper.get_state",
+            "input": {},
+            "success": state_result.success,
+            "output": state_result.output,
+          }
+        )
+        if not state_result.success or not (grasped or has_force_contact):
+          result = type(result)(
+            tool=result.tool,
+            success=False,
+            error="gripper did not report non-zero object contact; refusing to lift",
           )
       if (
         not result.success

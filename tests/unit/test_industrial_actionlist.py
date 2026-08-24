@@ -26,7 +26,10 @@ from sensoragent.workflows.actionlists.industrial import (
 from sensoragent.workflows.actionlists.industrial_vision import (
   build_industrial_vision_pick_place_actionlist,
 )
-from sensoragent.workflows.actionlists.hardware import build_hardware_pick_object_actionlist
+from sensoragent.workflows.actionlists.hardware import (
+  build_hardware_pick_object_actionlist,
+  build_hardware_pick_place_actionlist,
+)
 from sensoragent.workflows.actionlists.sorting_config import (
   build_sorting_config_pick_place_actionlist,
 )
@@ -478,21 +481,30 @@ class HardwarePickActionListTest(TestCase):
       "vision.capture_frame": lambda _i: {
         "image_path": "rgb.npy", "png_path": "rgb.png", "cloud_path": "cloud.npy", "T_base_camera": [],
       },
-      "vision.grounded_sam2": lambda input_data: {
+        "vision.grounded_sam2": lambda input_data: {
         "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
         "mask_polygons": [], "center_px": [100.0, 100.0],
-        "spatial_constraint": input_data["spatial_constraint"],
-      },
+          "spatial_constraint": input_data["spatial_constraint"],
+        },
+        "vision.list_source_candidates": lambda _i: {"candidates": [{
+          "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
+          "mask_polygons": [], "center_px": [100.0, 100.0],
+        }]},
+        "vision.resolve_reference": lambda input_data: {
+          "candidate": input_data["candidates"][0],
+        },
       "robot.select_pick_profile": lambda _i: {
         "planner": "robot.plan_short_bolt_pick", "orientation": [0, 1, 0, 0],
         "position_offset": [0, 0, 0.02], "approach_distance": 0.1,
         "pregrasp_distance": 0.04, "lift_height": 0.12,
-        "lift_speed": 0.35, "open_opening": 0.12,
-        "close_opening": 0.0, "gripper_force": 1.0, "gripper_speed": 0.12,
-        "motion_speed": 0.35, "descent_speed": 0.25,
-        "tcp_offset": [0.0, 0.0, 0.0], "headward_offset": 0.015,
+        "open_opening": 0.12, "open_min_opening": 0.12,
+          "close_opening": 0.0, "max_grasp_opening": 0.08,
+          "gripper_force": 1.0, "gripper_speed": 0.12,
+          "require_grasp_confirmation": False,
+        "motion_speed": 0.35, "descent_speed": 0.25, "lift_speed": 0.6,
+        "tcp_offset": [0.0, 0.0, 0.0], "grasp_point_mode": "shaft", "headward_offset": 0.015,
         "camera_left_offset_px": 0.0, "camera_left_offset_m": 0.01, "minimum_safe_z": 0.14,
-        "workspace_min": [-0.55, -0.18, 0.0], "workspace_max": [-0.20, 0.18, 0.35],
+          "lock_orientation": False, "orientation_mode": "full_pca", "workspace_min": [-0.55, -0.18, 0.0], "workspace_max": [-0.20, 0.18, 0.35],
       },
       "robot.plan_short_bolt_pick": lambda _i: {"plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}},
       "robot.ensure_observe_pose": lambda _i: {"completed": True, "skipped": True},
@@ -504,31 +516,117 @@ class HardwarePickActionListTest(TestCase):
     })
     runtime = ActionListRuntime(tool_runtime, skill_runtime, _NullLogger())
 
+    observe_pose = {"position": [-0.196744, -0.001111, 0.449013], "orientation": [0.98824, 0.002022, -0.152897, 0.000599]}
     result = runtime.run(
-      build_hardware_pick_object_actionlist({"observe_joints": [0, 1, 2, 3, 4, 5]}),
+      build_hardware_pick_object_actionlist({"observe_joints": [0, 1, 2, 3, 4, 5], "observe_pose": observe_pose}),
       {"object_query": "bolt", "pick_profile": "short_bolt", "spatial_constraint": {"relation": "left"}},
       TraceContext(),
     )
 
     self.assertTrue(result.success, msg=result.error)
     self.assertEqual([step.step for step in result.steps], [
-      "ensure_observe_before_capture", "capture_frame", "detect_object", "select_pick_profile", "plan_pick", "pick", "verify_grasp", "observe_after_pick",
+      "ensure_observe_before_capture", "capture_frame", "list_source_candidates", "resolve_reference", "select_pick_profile", "plan_pick", "pick", "verify_grasp", "observe_after_pick",
     ])
     self.assertIn(("robot.plan_short_bolt_pick", {
       "pose_3d": [0.3, 0.1, 0.05], "cloud_path": "cloud.npy", "mask_polygons": [],
       "center_px": [100.0, 100.0], "T_base_camera": [], "orientation": [0, 1, 0, 0],
       "position_offset": [0, 0, 0.02], "approach_distance": 0.1,
       "pregrasp_distance": 0.04, "lift_height": 0.12,
-      "tcp_offset": [0.0, 0.0, 0.0], "headward_offset": 0.015,
-      "camera_left_offset_px": 0.0, "camera_left_offset_m": 0.01, "minimum_safe_z": 0.14,
-      "workspace_min": [-0.55, -0.18, 0.0], "workspace_max": [-0.20, 0.18, 0.35],
+      "tcp_offset": [0.0, 0.0, 0.0], "grasp_point_mode": "shaft", "headward_offset": 0.015,
+        "camera_left_offset_px": 0.0, "camera_left_offset_m": 0.01, "minimum_safe_z": 0.14,
+        "lock_orientation": False,
+        "orientation_mode": "full_pca",
+        "workspace_min": [-0.55, -0.18, 0.0], "workspace_max": [-0.20, 0.18, 0.35],
     }), tool_runtime.calls)
     pick_input = next(input_data for name, input_data in skill_runtime.calls if name == "robot.pick")
     self.assertEqual(pick_input["close_opening"], 0.0)
     self.assertEqual(pick_input["open_opening"], 0.12)
-    self.assertEqual(pick_input["lift_speed"], 0.35)
+    self.assertEqual(pick_input["open_min_opening"], 0.12)
+    self.assertEqual(pick_input["lift_speed"], 0.6)
     self.assertEqual(pick_input["gripper_force"], 1.0)
     self.assertEqual(pick_input["gripper_speed"], 0.12)
+    observe_calls = [input_data for name, input_data in tool_runtime.calls if name == "robot.ensure_observe_pose"]
+    self.assertEqual(len(observe_calls), 2)
+    self.assertEqual(observe_calls[-1]["pose"], observe_pose)
+
+  def test_hardware_pick_place_appends_configured_place_phase(self) -> None:
+    tool_runtime = _StubRuntime({
+      "vision.capture_frame": lambda _i: {"png_path": "rgb.png", "cloud_path": "cloud.npy", "T_base_camera": []},
+      "vision.grounded_sam2": lambda input_data: {
+        "found": True,
+        "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
+        "mask_polygons": [], "center_px": [100.0, 100.0],
+        "spatial_constraint": input_data["spatial_constraint"],
+      },
+      "vision.list_source_candidates": lambda _i: {"candidates": [{
+        "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
+        "mask_polygons": [], "center_px": [100.0, 100.0],
+      }]},
+      "vision.resolve_reference": lambda input_data: {"candidate": input_data["candidates"][0]},
+      "robot.select_pick_profile": lambda _i: {
+        "planner": "robot.plan_short_bolt_pick", "orientation": [0, 1, 0, 0],
+        "position_offset": [0, 0, 0.02], "approach_distance": 0.1,
+        "pregrasp_distance": 0.04, "lift_height": 0.12,
+        "open_opening": 0.12, "open_min_opening": 0.105,
+          "close_opening": 0.0, "max_grasp_opening": 0.08,
+          "gripper_force": 1.0, "gripper_speed": 0.12,
+          "require_grasp_confirmation": False,
+        "motion_speed": 0.35, "descent_speed": 0.25, "lift_speed": 0.6,
+        "tcp_offset": [0.0, 0.0, 0.0], "grasp_point_mode": "shaft", "headward_offset": 0.015,
+        "camera_left_offset_px": 0.0, "camera_left_offset_m": 0.01, "minimum_safe_z": 0.14,
+          "lock_orientation": False, "orientation_mode": "full_pca", "workspace_min": [-0.55, -0.18, 0.0], "workspace_max": [-0.20, 0.18, 0.35],
+      },
+      "robot.plan_short_bolt_pick": lambda _i: {"plan": {"approach": {}, "pregrasp": {}, "grasp": {}, "lift": {}}},
+      "robot.resolve_place_target": lambda input_data: {
+        "target": input_data["target"],
+        "place_pose": {"position": [0.4, 0.2, 0.25], "orientation": [0, 1, 0, 0], "frame_id": "base_link"},
+      },
+      "robot.plan_place": lambda _i: {"plan": {
+        "approach": {"position": [0.4, 0.2, 0.33], "orientation": [0, 1, 0, 0], "frame_id": "base_link"},
+        "place": {"position": [0.4, 0.2, 0.25], "orientation": [0, 1, 0, 0], "frame_id": "base_link"},
+        "retreat": {"position": [0.4, 0.2, 0.33], "orientation": [0, 1, 0, 0], "frame_id": "base_link"},
+      }},
+      "robot.move_pose": lambda _i: {"completed": True},
+      "robot.move_linear": lambda _i: {"completed": True},
+      "gripper.open": lambda _i: {"completed": True, "state": {"opening": 0.0848}},
+      "gripper.close": lambda _i: {"completed": True, "state": {"opening": 0.0}},
+      "robot.ensure_observe_pose": lambda _i: {"completed": True},
+    })
+    skill_runtime = _StubRuntime({
+      "robot.pick": lambda _i: {"picked": True},
+      "robot.verify_grasp": lambda _i: {"held": True},
+      "robot.verify_place": lambda _i: {"released": True},
+    })
+    runtime = ActionListRuntime(tool_runtime, skill_runtime, _NullLogger())
+
+    observe_pose = {"position": [-0.196744, -0.001111, 0.449013], "orientation": [0.98824, 0.002022, -0.152897, 0.000599]}
+    result = runtime.run(
+      build_hardware_pick_place_actionlist({"observe_joints": [0, 1, 2, 3, 4, 5], "observe_pose": observe_pose}),
+      {
+        "object_query": "短螺栓",
+        "pick_profile": "short_bolt",
+        "target": "bin_cell_3",
+        "spatial_constraint": {"relation": "left", "ordinal": 2},
+      },
+      TraceContext(),
+    )
+
+    self.assertTrue(result.success, msg=result.error)
+    self.assertEqual([step.step for step in result.steps], [
+      "ensure_observe_before_capture", "capture_frame", "list_source_candidates", "resolve_reference", "select_pick_profile", "plan_pick", "pick",
+       "verify_grasp", "observe_after_pick", "resolve_place_target", "plan_place", "place_move_approach", "place_move_place",
+       "place_open_gripper", "place_lift_clearance", "place_close_gripper", "observe_after_place",
+    ])
+    self.assertIn(("robot.resolve_place_target", {"target": "bin_cell_3"}), tool_runtime.calls)
+    self.assertIn(("gripper.open", {"opening": 0.040, "speed": 0.75, "release": True}), tool_runtime.calls)
+    self.assertIn(("gripper.close", {"opening": 0.0, "force": 0.5, "speed": 0.75, "require_contact": False}), tool_runtime.calls)
+    self.assertIn(("robot.move_linear", {"pose": {"position": [0.4, 0.2, 0.33], "orientation": [0, 1, 0, 0], "frame_id": "base_link"}, "speed": 1.0, "wait": True}), tool_runtime.calls)
+    tool_names = [name for name, _ in tool_runtime.calls]
+    observe_indices = [index for index, name in enumerate(tool_names) if name == "robot.ensure_observe_pose"]
+    self.assertLess(
+      observe_indices[1],
+      tool_names.index("robot.resolve_place_target"),
+    )
 
 
 class IndustrialPickOnlyTest(TestCase):

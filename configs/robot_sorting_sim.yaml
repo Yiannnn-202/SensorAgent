@@ -16,6 +16,10 @@ tools:
     - gripper.close
     - gripper.get_state
     - vision.config_detect
+    - vision.open_vocab_detect
+    - vision.capture_frame
+    - vision.verify_object_lifted
+    - vision.verify_object_in_bin
     - recovery.classify_failure
     - recovery.plan
     - audio.listen_transcribe
@@ -38,6 +42,27 @@ integrations:
     endpoint: http://127.0.0.1:8765
     # Must exceed the bridge timeout while Gazebo runs below real time on WSL.
     timeout_seconds: 720.0
+  vision:
+    backend: grounding_dino
+    grounding_dino_model: IDEA-Research/grounding-dino-tiny
+    sam2_model_path: models/vision/sam2_t.pt
+    depth_window: 7
+    T_base_camera:
+      - [0.0, 1.0, 0.0, -0.34]
+      - [1.0, 0.0, 0.0, 0.0]
+      - [0.0, 0.0, -1.0, 0.88]
+      - [0.0, 0.0, 0.0, 1.0]
+    recovery_live_detect: true
+    capture:
+      script: scripts/linux/capture_gazebo_rgbd_frame.py
+      ros_python: null
+      image_topic: /industrial_camera/image
+      depth_topic: /industrial_camera/depth_image
+      camera_info_topic: /industrial_camera/camera_info
+      base_frame: base_link
+      world_frame: world
+      out_dir: logs/vision/latest
+      timeout_seconds: 10.0
   audio:
     backend: local
     asr_model_dir: models/asr/sense-voice

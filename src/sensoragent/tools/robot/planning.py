@@ -8,7 +8,9 @@ import numpy as np
 
 from sensoragent.schemas import RobotPose, ToolCall, ToolResult, ToolSpec
 from sensoragent.skills.robot import (
+  build_fixed_orientation_pick_plan_from_contact,
   build_oriented_pick_plan_from_points,
+  build_yaw_aligned_pick_plan_from_points,
   build_place_plan,
   build_top_down_pick_plan,
   estimate_object_geometry,
@@ -384,10 +386,13 @@ class RobotPlanShortBoltPickTool:
     points = _masked_cloud_points(call.input.get("cloud_path"), call.input.get("mask_polygons"))
     points = _transform_camera_points(points, transform)
     if len(points) >= 20:
-      grasp_point = estimate_shaft_grasp_point(
-        points,
-        headward_offset=float(call.input.get("headward_offset", 0.015)),
-      )
+      if str(call.input.get("grasp_point_mode", "shaft")) == "centroid":
+        grasp_point = tuple(float(value) for value in np.mean(points, axis=0))
+      else:
+        grasp_point = estimate_shaft_grasp_point(
+          points,
+          headward_offset=float(call.input.get("headward_offset", 0.015)),
+        )
       camera_left_px = float(call.input.get("camera_left_offset_px", 0.0))
       center_px = call.input.get("center_px")
       if camera_left_px and isinstance(center_px, list) and len(center_px) >= 2:
@@ -413,42 +418,62 @@ class RobotPlanShortBoltPickTool:
           grasp_point = tuple(np.asarray(grasp_point) + base_delta)
       position_offset = np.asarray(call.input.get("position_offset", [0.0, 0.0, 0.0]), dtype=np.float64)
       grasp_point = tuple(np.asarray(grasp_point) + position_offset)
-      plan = build_oriented_pick_plan_from_points(
-        points,
-        frame_id=str(call.input.get("frame_id", "base_link")),
-        approach_distance=float(call.input.get("approach_distance", 0.10)),
-        pregrasp_distance=float(call.input.get("pregrasp_distance", 0.04)),
-        lift_height=float(call.input.get("lift_height", 0.12)),
-        tcp_offset=tuple(float(value) for value in call.input.get("tcp_offset", [0.0, 0.0, 0.161])),
-        grasp_point=grasp_point,
-      )
-      plan = _lift_plan(plan, minimum_safe_z=float(call.input.get("minimum_safe_z", 0.14)))
-      plan = _fit_plan_z_window(plan, call.input)
-      if not _plan_within_workspace(plan, call.input):
-        grasp = _grasp_pose_from_input(call.input)
-        plan = build_top_down_pick_plan(
-          grasp,
+      if bool(call.input.get("lock_orientation", False)):
+        orientation = tuple(float(value) for value in _number_list(call.input.get("orientation", DEFAULT_TOP_DOWN_ORIENTATION), "orientation", 4)[:4])
+        plan = build_fixed_orientation_pick_plan_from_contact(
+          grasp_point,
+          orientation=orientation,
+          frame_id=str(call.input.get("frame_id", "base_link")),
           approach_distance=float(call.input.get("approach_distance", 0.10)),
           pregrasp_distance=float(call.input.get("pregrasp_distance", 0.04)),
           lift_height=float(call.input.get("lift_height", 0.12)),
+          tcp_offset=tuple(float(value) for value in call.input.get("tcp_offset", [0.0, 0.0, 0.161])),
         )
-        plan = _lift_plan(plan, minimum_safe_z=float(call.input.get("minimum_safe_z", 0.14)))
         plan = _fit_plan_z_window(plan, call.input)
         if not _plan_within_workspace(plan, call.input):
-          raise ValueError("SHORT_BOLT_WORKSPACE: no safe plan inside configured workspace")
-        return ToolResult(tool=self.spec.name, success=True, output={"plan": plan.to_dict(), "mode": "pose_fallback"})
+          raise ValueError("SHORT_BOLT_WORKSPACE: fixed-orientation plan is outside configured workspace")
+        return ToolResult(tool=self.spec.name, success=True, output={"plan": plan.to_dict(), "mode": "mask_point_fixed_orientation"})
+      planner_kwargs = {
+        "frame_id": str(call.input.get("frame_id", "base_link")),
+        "approach_distance": float(call.input.get("approach_distance", 0.10)),
+        "pregrasp_distance": float(call.input.get("pregrasp_distance", 0.04)),
+        "lift_height": float(call.input.get("lift_height", 0.12)),
+        "tcp_offset": tuple(float(value) for value in call.input.get("tcp_offset", [0.0, 0.0, 0.161])),
+        "grasp_point": grasp_point,
+      }
+      yaw_only = str(call.input.get("orientation_mode", "full_pca")) == "yaw_only"
+      if yaw_only:
+        orientation = tuple(float(value) for value in _number_list(call.input.get("orientation", DEFAULT_TOP_DOWN_ORIENTATION), "orientation", 4)[:4])
+        plan = build_yaw_aligned_pick_plan_from_points(
+          points, orientation=orientation, **planner_kwargs,
+        )
+      else:
+        plan = build_oriented_pick_plan_from_points(points, **planner_kwargs)
+      plan = _lift_plan(plan, minimum_safe_z=float(call.input.get("minimum_safe_z", 0.14)))
+      plan = _fit_plan_z_window(plan, call.input)
+      if not _plan_within_workspace(plan, call.input):
+        raise ValueError("SHORT_BOLT_WORKSPACE: PCA plan rejected outside the configured safe workspace")
       _validate_waypoints(plan, call.input)
-      return ToolResult(tool=self.spec.name, success=True, output={"plan": plan.to_dict(), "mode": "mask_pca"})
+      mode = "mask_pca_yaw_only" if yaw_only else "mask_pca"
+      return ToolResult(tool=self.spec.name, success=True, output={"plan": plan.to_dict(), "mode": mode})
+
+    if not bool(call.input.get("lock_orientation", False)):
+      raise ValueError("SHORT_BOLT_PCA_UNAVAILABLE: unlocked short-bolt picks require at least 20 masked point-cloud samples")
 
     grasp = _grasp_pose_from_input(call.input)
-    plan = build_top_down_pick_plan(
-      grasp,
+    plan = build_fixed_orientation_pick_plan_from_contact(
+      grasp.position,
+      orientation=grasp.orientation,
+      frame_id=grasp.frame_id,
       approach_distance=float(call.input.get("approach_distance", 0.10)),
       pregrasp_distance=float(call.input.get("pregrasp_distance", 0.04)),
       lift_height=float(call.input.get("lift_height", 0.12)),
+      tcp_offset=tuple(float(value) for value in call.input.get("tcp_offset", [0.0, 0.0, 0.161])),
     )
+    plan = _lift_plan(plan, minimum_safe_z=float(call.input.get("minimum_safe_z", 0.14)))
+    plan = _fit_plan_z_window(plan, call.input)
     _validate_waypoints(plan, call.input)
-    return ToolResult(tool=self.spec.name, success=True, output={"plan": plan.to_dict(), "mode": "pose_fallback"})
+    return ToolResult(tool=self.spec.name, success=True, output={"plan": plan.to_dict(), "mode": "fixed_orientation_no_mask"})
 
 
 class RobotPlanTopDownPickTool:

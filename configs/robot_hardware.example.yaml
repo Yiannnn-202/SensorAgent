@@ -13,6 +13,8 @@ tools:
     - robot.plan_top_down_pick
     - robot.plan_oriented_pick
     - robot.plan_short_bolt_pick
+    - robot.plan_place
+    - robot.resolve_place_target
     - robot.stop
     - gripper.open
     - gripper.close
@@ -27,6 +29,7 @@ skills:
     - hardware.startup
     - robot.pick
     - robot.verify_grasp
+    - robot.verify_place
 
 integrations:
   robot:
@@ -45,6 +48,7 @@ integrations:
       cloud_topic: /vision/cloud
       image_topic: /vision/raw
       out_dir: logs/vision/hardware_latest
+      timeout_seconds: 30.0
 
 # Copy this template to configs/robot_hardware.local.yaml, which is ignored by
 # Git, only after the camera-to-base transform and safe operating envelope are
@@ -59,11 +63,11 @@ scene:
   pick_profiles:
     default:
       planner: robot.plan_top_down_pick
-      open_opening: 0.12
+      open_opening: 0.084
       gripper_force: 0.5
     short_bolt:
       planner: robot.plan_short_bolt_pick
-      open_opening: 0.12
+      open_opening: 0.084
       lift_speed: 0.6
       close_opening: 0.0
       gripper_force: 0.6
@@ -72,16 +76,28 @@ scene:
       descent_speed: 0.25
       # Offset from Link6 to the gripper contact TCP, in the local tool frame.
       tcp_offset: [0.0, 0.0, 0.131]
-      headward_offset: 0.015
+      # Lift the detected contact point slightly above the point-cloud surface;
+      # 17 mm is 3 mm lower than the default 20 mm offset for better shaft bite.
+      position_offset: [0.0, 0.0, 0.017]
+      # Shift the grasp point slightly toward the bolt head, but keep enough
+      # clearance from the head for short shafts.
+      headward_offset: 0.010
       camera_left_offset_px: 0.0
       camera_left_offset_m: 0.01
       minimum_safe_z: 0.14
-      workspace_min: [-0.55, -0.18, 0.0]
+      workspace_min: [-0.55, -0.26, 0.0]
       workspace_max: [-0.20, 0.18, 0.35]
       # This profile is calibrated for the bolt shaft/head viewed camera-left.
       orientation: [0.0, 1.0, 0.0, 0.0]
   workspace:
     frame: base_link
     x: [-0.55, -0.20]
-    y: [-0.18, 0.18]
+    y: [-0.26, 0.18]
     z: [0.0, 0.35]
+  # Physical four-cell bin release poses. Measure these on the real bin before
+  # enabling hardware pick-place; simulation bins may use a different layout.
+  # place_targets:
+  #   bin_cell_1: {position: [0.0, 0.0, 0.0], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+  #   bin_cell_2: {position: [0.0, 0.0, 0.0], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+  #   bin_cell_3: {position: [0.0, 0.0, 0.0], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}
+  #   bin_cell_4: {position: [0.0, 0.0, 0.0], orientation: [0.0, 1.0, 0.0, 0.0], frame_id: base_link}

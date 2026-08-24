@@ -7,6 +7,13 @@ from collections.abc import Mapping
 from sensoragent.schemas import ToolCall, ToolResult, ToolSpec
 
 
+_PROFILE_ALIASES = {
+  "bolt": "short_bolt",
+  "short_bolt": "short_bolt",
+  "hex_nut": "hex_nut",
+}
+
+
 class RobotSelectPickProfileTool:
   """Select a safe, named pick profile for a detected object."""
 
@@ -22,9 +29,16 @@ class RobotSelectPickProfileTool:
   def run(self, call: ToolCall) -> ToolResult:
     requested = str(call.input.get("profile") or call.input.get("label") or "default").casefold()
     requested = requested.split(".", 1)[0].strip().replace(" ", "_")
+    requested = _PROFILE_ALIASES.get(requested, requested)
     profile = self._profiles.get(requested, self._profiles.get("default", {}))
     if not profile:
       return ToolResult(tool=self.spec.name, success=False, error="PICK_PROFILE_NOT_FOUND: default")
+    if requested in self._profiles and not bool(profile.get("enabled", True)):
+      return ToolResult(
+        tool=self.spec.name,
+        success=False,
+        error=f"PICK_PROFILE_DISABLED: {requested} requires physical calibration",
+      )
     output = {
       "name": requested if requested in self._profiles else "default",
       "planner": str(profile.get("planner", "robot.plan_top_down_pick")),
@@ -35,16 +49,22 @@ class RobotSelectPickProfileTool:
       "lift_height": float(profile.get("lift_height", 0.12)),
       "lift_speed": float(profile.get("lift_speed", profile.get("motion_speed", 1.2))),
       "open_opening": float(profile.get("open_opening", 0.120)),
+      "open_min_opening": float(profile.get("open_min_opening", profile.get("open_opening", 0.120))),
       "close_opening": float(profile.get("close_opening", 0.032)),
+      "max_grasp_opening": float(profile.get("max_grasp_opening", 0.08)),
       "gripper_force": float(profile.get("gripper_force", 0.5)),
       "gripper_speed": float(profile.get("gripper_speed", 0.5)),
+      "require_grasp_confirmation": bool(profile.get("require_grasp_confirmation", False)),
       "motion_speed": float(profile.get("motion_speed", 1.2)),
       "descent_speed": float(profile.get("descent_speed", 1.2)),
       "tcp_offset": profile.get("tcp_offset", [0.0, 0.0, 0.161]),
+      "grasp_point_mode": str(profile.get("grasp_point_mode", "shaft")),
       "headward_offset": float(profile.get("headward_offset", 0.015)),
       "camera_left_offset_px": float(profile.get("camera_left_offset_px", 0.0)),
       "camera_left_offset_m": float(profile.get("camera_left_offset_m", 0.0)),
       "minimum_safe_z": float(profile.get("minimum_safe_z", 0.14)),
+      "lock_orientation": bool(profile.get("lock_orientation", False)),
+      "orientation_mode": str(profile.get("orientation_mode", "full_pca")),
       "workspace_min": profile.get("workspace_min", [-0.55, -0.18, 0.0]),
       "workspace_max": profile.get("workspace_max", [-0.20, 0.18, 0.35]),
     }

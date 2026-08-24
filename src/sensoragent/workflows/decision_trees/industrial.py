@@ -145,6 +145,7 @@ def build_industrial_recovery_pick_place_tree(
     on_success="success",
     on_failure="failure",
   )
+  live_wrong_bin_recovery = bool(live_verify and capture_tool)
 
   inputs = {
     "object_query": "string",
@@ -321,8 +322,18 @@ def build_industrial_recovery_pick_place_tree(
       _failure_type_check("is_pick_plan_failed", "PICK_PLAN_FAILED", "recover_pick", "is_pick_exec_failed"),
       _failure_type_check("is_pick_exec_failed", "PICK_EXEC_FAILED", "recover_pick", "is_grasp_empty"),
       _failure_type_check("is_grasp_empty", "GRASP_EMPTY", "recover_pick", "is_dropped_object"),
-      _failure_type_check("is_dropped_object", "DROPPED_OBJECT", "recover_pick_at_pose", "is_wrong_bin"),
-      _failure_type_check("is_wrong_bin", "WRONG_BIN", "recover_pick_at_pose", "is_place_plan_failed"),
+      _failure_type_check(
+        "is_dropped_object",
+        "DROPPED_OBJECT",
+        "recover_observed_pick" if live_wrong_bin_recovery else "recover_pick",
+        "is_wrong_bin",
+      ),
+      _failure_type_check(
+        "is_wrong_bin",
+        "WRONG_BIN",
+        "recover_observed_pick" if live_wrong_bin_recovery else "recover_pick",
+        "is_place_plan_failed",
+      ),
       _failure_type_check("is_place_plan_failed", "PLACE_PLAN_FAILED", "recover_place", "is_place_exec_failed"),
       _failure_type_check("is_place_exec_failed", "PLACE_EXEC_FAILED", "recover_place", "is_release_failed"),
       _failure_type_check("is_release_failed", "RELEASE_FAILED", "recover_release", "is_gripper_failed"),
@@ -347,6 +358,22 @@ def build_industrial_recovery_pick_place_tree(
         max_retries=1,
         on_success="resolve_place_target",
         on_failure="failure",
+      ),
+      *(
+        [
+          DecisionNode(
+            name="recover_observed_pick",
+            kind=DecisionNodeKind.ACTIONLIST,
+            target="industrial.pick_observed_object_actionlist",
+            input={"object": "{{ observed_object }}"},
+            save_as="recovered_pick",
+            max_retries=1,
+            on_success="resolve_place_target",
+            on_failure="failure",
+          )
+        ]
+        if live_wrong_bin_recovery
+        else []
       ),
       DecisionNode(
         name="recover_pick_at_pose",

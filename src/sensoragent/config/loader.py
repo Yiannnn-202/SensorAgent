@@ -34,13 +34,41 @@ def _as_string_list(value: Any, section: str) -> list[str]:
   return value
 
 
+def _merge_config(base: dict, override: dict) -> dict:
+  """Recursively merge an extending config; lists intentionally replace."""
+
+  merged = dict(base)
+  for key, value in override.items():
+    base_value = merged.get(key)
+    if isinstance(base_value, dict) and isinstance(value, dict):
+      merged[key] = _merge_config(base_value, value)
+    else:
+      merged[key] = value
+  return merged
+
+
+def _load_raw_config(path: Path, ancestors: tuple[Path, ...] = ()) -> dict:
+  resolved_path = path.resolve()
+  if resolved_path in ancestors:
+    chain = " -> ".join(str(item) for item in (*ancestors, resolved_path))
+    raise ValueError(f"Config inheritance cycle: {chain}")
+  raw = yaml.safe_load(resolved_path.read_text(encoding="utf-8")) or {}
+  if not isinstance(raw, dict):
+    raise ValueError("Top-level config must be a mapping")
+  extends = raw.pop("extends", None)
+  if extends is None:
+    return raw
+  if not isinstance(extends, str) or not extends.strip():
+    raise ValueError("Config 'extends' must be a non-empty relative path")
+  parent_path = (resolved_path.parent / extends).resolve()
+  return _merge_config(_load_raw_config(parent_path, (*ancestors, resolved_path)), raw)
+
+
 def load_config(path: str | Path) -> SensorAgentConfig:
   """Load a SensorAgent YAML config file."""
 
   config_path = Path(path)
-  raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-  if not isinstance(raw, dict):
-    raise ValueError("Top-level config must be a mapping")
+  raw = _load_raw_config(config_path)
 
   agent = _as_mapping(raw.get("agent"), "agent")
   tools = _as_mapping(raw.get("tools"), "tools")

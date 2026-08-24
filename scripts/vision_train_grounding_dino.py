@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import random
 import sys
@@ -95,6 +96,8 @@ class TrainSettings:
   seed: int
   device: str
   amp: bool
+  class_sampling_weights: dict[str, float]
+  resume: bool
 
 
 def _sha256(path: Path) -> str:
@@ -441,6 +444,18 @@ def load_settings(path: Path, args: argparse.Namespace) -> TrainSettings:
       "training.batch_size must be 1 for the verified transformers Grounding DINO label-map path; "
       "increase gradient_accumulation_steps for a larger effective batch"
     )
+  raw_sampling_weights = training.get("class_sampling_weights", {})
+  if not isinstance(raw_sampling_weights, dict):
+    raise GroundingDinoDatasetError("training.class_sampling_weights must be a mapping")
+  sampling_weights: dict[str, float] = {}
+  for class_name, weight in raw_sampling_weights.items():
+    if not isinstance(class_name, str) or class_name not in _clean_classes(payload.get("classes")):
+      raise GroundingDinoDatasetError(
+        "training.class_sampling_weights keys must match configured classes"
+      )
+    if isinstance(weight, bool) or not isinstance(weight, (int, float)) or weight <= 0:
+      raise GroundingDinoDatasetError("training.class_sampling_weights values must be positive")
+    sampling_weights[class_name] = float(weight)
   if sys.platform == "win32" and num_workers != 0:
     raise GroundingDinoDatasetError("training.num_workers must be 0 on Windows")
 
@@ -462,6 +477,8 @@ def load_settings(path: Path, args: argparse.Namespace) -> TrainSettings:
     seed=seed,
     device=args.device or str(training.get("device", "cuda:0")),
     amp=amp,
+    class_sampling_weights=sampling_weights,
+    resume=args.resume,
   )
 
 
@@ -524,7 +541,7 @@ def train(
   try:
     import torch
     from PIL import Image
-    from torch.utils.data import DataLoader, Dataset
+    from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
     from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
     import transformers
   except ImportError as exc:
@@ -579,10 +596,26 @@ def train(
   train_rows = [sample for sample in samples if sample.split == "train"]
   val_rows = [sample for sample in samples if sample.split == "val"]
   generator = torch.Generator().manual_seed(settings.seed)
+  sampler = None
+  if settings.class_sampling_weights:
+    sample_weights = [
+      max(
+        (settings.class_sampling_weights.get(target.class_name, 1.0) for target in sample.objects),
+        default=1.0,
+      )
+      for sample in train_rows
+    ]
+    sampler = WeightedRandomSampler(
+      sample_weights,
+      num_samples=len(train_rows),
+      replacement=True,
+      generator=generator,
+    )
   train_loader = DataLoader(
     ManifestDataset(train_rows),
     batch_size=settings.batch_size,
-    shuffle=True,
+    shuffle=sampler is None,
+    sampler=sampler,
     num_workers=settings.num_workers,
     collate_fn=collate,
     generator=generator,
@@ -615,16 +648,32 @@ def train(
   scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
   destination = settings.output_dir.resolve()
   destination.mkdir(parents=True, exist_ok=True)
+  state_path = destination / "training_state.pt"
   history: list[dict[str, Any]] = []
   best_val_loss = math.inf
   best_checkpoint_sha256 = None
   optimizer_updates = 0
   skipped_optimizer_steps = 0
+  start_epoch = 1
+  if settings.resume:
+    if not state_path.is_file():
+      raise GroundingDinoDatasetError(f"resume state does not exist: {state_path}")
+    state = torch.load(state_path, map_location=device, weights_only=False)
+    model.load_state_dict(state["model"])
+    optimizer.load_state_dict(state["optimizer"])
+    scheduler.load_state_dict(state["scheduler"])
+    scaler.load_state_dict(state["scaler"])
+    history = list(state["history"])
+    best_val_loss = float(state["best_val_loss"])
+    best_checkpoint_sha256 = state["best_checkpoint_sha256"]
+    optimizer_updates = int(state["optimizer_updates"])
+    skipped_optimizer_steps = int(state["skipped_optimizer_steps"])
+    start_epoch = int(state["epoch"]) + 1
   if device.startswith("cuda"):
     torch.cuda.reset_peak_memory_stats(device)
   started = time.perf_counter()
 
-  for epoch in range(1, settings.epochs + 1):
+  for epoch in range(start_epoch, settings.epochs + 1):
     epoch_started = time.perf_counter()
     model.train()
     optimizer.zero_grad(set_to_none=True)
@@ -687,6 +736,23 @@ def train(
     if val_loss < best_val_loss:
       best_val_loss = val_loss
       best_checkpoint_sha256 = _save_checkpoint(model, processor, destination / "checkpoint-best")
+    state_temp_path = state_path.with_suffix(".tmp")
+    torch.save(
+      {
+        "epoch": epoch,
+        "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict(),
+        "scaler": scaler.state_dict(),
+        "history": history,
+        "best_val_loss": best_val_loss,
+        "best_checkpoint_sha256": best_checkpoint_sha256,
+        "optimizer_updates": optimizer_updates,
+        "skipped_optimizer_steps": skipped_optimizer_steps,
+      },
+      state_temp_path,
+    )
+    os.replace(state_temp_path, state_path)
 
   last_checkpoint_sha256 = _save_checkpoint(model, processor, destination / "checkpoint-last")
   elapsed = time.perf_counter() - started
@@ -720,6 +786,7 @@ def train(
       "seed": settings.seed,
       "device": device,
       "amp": amp_enabled,
+      "class_sampling_weights": settings.class_sampling_weights,
     },
     "optimizer_updates": optimizer_updates,
     "skipped_optimizer_steps": skipped_optimizer_steps,
@@ -758,6 +825,7 @@ def _parser() -> argparse.ArgumentParser:
   parser.add_argument("--epochs", type=int)
   parser.add_argument("--batch-size", type=int)
   parser.add_argument("--no-amp", action="store_true")
+  parser.add_argument("--resume", action="store_true", help="Resume an interrupted run from training_state.pt.")
   parser.add_argument(
     "--allow-missing-files",
     action="store_true",

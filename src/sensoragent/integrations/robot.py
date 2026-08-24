@@ -49,7 +49,7 @@ class RobotControlClient(Protocol):
   def stop(self) -> RobotCommandResult:
     """Stop active arm and gripper motion."""
 
-  def open_gripper(self, *, opening: float, speed: float) -> RobotCommandResult:
+  def open_gripper(self, *, opening: float, speed: float, release: bool = False) -> RobotCommandResult:
     """Open the gripper to the requested opening in metres."""
 
   def close_gripper(
@@ -58,6 +58,7 @@ class RobotControlClient(Protocol):
     opening: float,
     force: float,
     speed: float,
+    require_contact: bool = True,
   ) -> RobotCommandResult:
     """Close the gripper to the requested opening in metres."""
 
@@ -190,11 +191,11 @@ class HttpRobotControlClient:
   def stop(self) -> RobotCommandResult:
     return self._request("POST", "/stop", {}, timeout_seconds=8.0)
 
-  def open_gripper(self, *, opening: float, speed: float) -> RobotCommandResult:
+  def open_gripper(self, *, opening: float, speed: float, release: bool = False) -> RobotCommandResult:
     return self._request(
       "POST",
       "/gripper/open",
-      {"opening": opening, "speed": speed},
+      {"opening": opening, "speed": speed, "release": release},
       timeout_seconds=20.0,
       stop_on_timeout=True,
     )
@@ -205,11 +206,12 @@ class HttpRobotControlClient:
     opening: float,
     force: float,
     speed: float,
+    require_contact: bool = True,
   ) -> RobotCommandResult:
     return self._request(
       "POST",
       "/gripper/close",
-      {"opening": opening, "force": force, "speed": speed},
+      {"opening": opening, "force": force, "speed": speed, "require_contact": require_contact},
       timeout_seconds=20.0,
       stop_on_timeout=True,
     )
@@ -287,8 +289,8 @@ class FakeRobotControlClient:
     self._arm_status = "stopped"
     return RobotCommandResult(success=True, message="Motion stopped.", state=self._state())
 
-  def open_gripper(self, *, opening: float, speed: float) -> RobotCommandResult:
-    del speed
+  def open_gripper(self, *, opening: float, speed: float, release: bool = False) -> RobotCommandResult:
+    del speed, release
     if opening < 0.0 or opening > self._maximum_opening:
       return RobotCommandResult(
         success=False,
@@ -306,8 +308,9 @@ class FakeRobotControlClient:
     opening: float,
     force: float,
     speed: float,
+    require_contact: bool = True,
   ) -> RobotCommandResult:
-    del force, speed
+    del force, speed, require_contact
     if opening < 0.0 or opening > self._maximum_opening:
       return RobotCommandResult(
         success=False,

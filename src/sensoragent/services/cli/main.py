@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -208,6 +209,12 @@ def _build_parser() -> argparse.ArgumentParser:
     default=None,
     help="Path to the JSONL task log. Defaults to logs/tasks/*.jsonl.",
   )
+  listen_task.add_argument(
+    "--max-turns",
+    type=int,
+    default=1,
+    help="Maximum listen-transcribe-execute turns. Use 100 for a bounded session.",
+  )
 
   vision_detect = subparsers.add_parser(
     "vision-detect",
@@ -382,6 +389,9 @@ def _run_actionlist(args: argparse.Namespace) -> int:
 
 
 def _run_listen_task(args: argparse.Namespace) -> int:
+  max_turns = int(getattr(args, "max_turns", 1))
+  if max_turns < 1:
+    raise ValueError("--max-turns must be at least 1")
   log_path = args.log_path or _default_task_log_path()
   config_path = resolve_config_path(args.config)
   config = load_config(config_path)
@@ -408,14 +418,6 @@ def _run_listen_task(args: argparse.Namespace) -> int:
     log_path=log_path,
     planner_mode=args.planner,
   )
-  trace = TraceContext()
-  listen_input = {
-    "duration_seconds": duration_seconds,
-    "language": language,
-    "vad": vad_input,
-  }
-  if args.audio_path is not None:
-    listen_input["output_path"] = str(args.audio_path)
   if args.vad_threshold is not None:
     vad_input["threshold"] = args.vad_threshold
   if args.vad_min_rms is not None:
@@ -427,155 +429,88 @@ def _run_listen_task(args: argparse.Namespace) -> int:
   if args.vad_tail_padding_ms is not None:
     vad_input["tail_padding_ms"] = args.vad_tail_padding_ms
 
-  bundle.logger.log(
-    "listen_task_started",
-    trace,
-    {
-      "stage": "listen_task",
-      "config": str(config_path),
-      "planner": args.planner,
-      "input": listen_input,
-    },
-  )
-
-  print(
-    (
-      "Listening now. Speak one complete command after this line "
-      f"(max {duration_seconds:g}s, silence tail {vad_input['post_roll_ms']} ms)."
-    ),
-    file=sys.stderr,
-    flush=True,
-  )
-  transcript = bundle.tool_runtime.invoke(
-    "audio.listen_vad_transcribe",
-    listen_input,
-    trace=trace,
-  )
-  if not transcript.success or not transcript.output:
-    bundle.logger.log(
-      "listen_task_failed",
-      trace,
-      {
-        "stage": "audio.listen_vad_transcribe",
-        "success": False,
-        "error_type": "TRANSCRIBE_FAILED",
-        "error": transcript.error,
-      },
-    )
-    print(json.dumps({"success": False, "error": transcript.error}, ensure_ascii=False, indent=2))
-    print(f"Task log: {log_path}")
-    return 1
-  bundle.logger.log(
-    "listen_task_transcribed",
-    trace,
-    {
-      "stage": "audio.listen_vad_transcribe",
-      "success": True,
-      "output": {
-        "audio_path": transcript.output.get("audio_path"),
-        "duration_ms": transcript.output.get("duration_ms"),
-        "text": transcript.output.get("text"),
-        "confidence": transcript.output.get("confidence"),
-        "language": transcript.output.get("language"),
-        "vad": transcript.output.get("vad"),
-      },
-    },
-  )
-  if not str(transcript.output.get("text", "")).strip():
-    bundle.logger.log(
-      "listen_task_failed",
-      trace,
-      {
-        "stage": "asr.result_filter",
-        "success": False,
-        "error_type": "EMPTY_TRANSCRIPT",
-        "error": "EMPTY_TRANSCRIPT",
-        "output": transcript.output,
-      },
-    )
-    print(
-      json.dumps(
-        {
-          "success": False,
-          "error": "EMPTY_TRANSCRIPT",
-          "transcript": transcript.output,
-        },
-        ensure_ascii=False,
-        indent=2,
-      )
-    )
-    print(f"Task log: {log_path}")
-    return 1
-
   initial_input = {}
   if args.object_query is not None:
     initial_input["object_query"] = args.object_query
   if args.target is not None:
     initial_input["target"] = args.target
 
-  bundle.logger.log(
-    "listen_task_agent_started",
-    trace,
-    {
-      "stage": "agent.run_task",
-      "planner": args.planner,
-      "input": {
-        "user_input": transcript.output["text"],
-        "initial_input": initial_input,
-      },
-    },
-  )
+  def stop_robot() -> None:
+    try:
+      bundle.tool_runtime.invoke("robot.stop", {}, TraceContext())
+    except Exception:
+      pass
+
   try:
-    task = bundle.agent.run_task(transcript.output["text"], initial_input)
-  except Exception as exc:
-    bundle.logger.log(
-      "listen_task_failed",
-      trace,
-      {
-        "stage": "agent.run_task",
-        "success": False,
-        "error_type": type(exc).__name__,
-        "error": str(exc),
-      },
-    )
-    print(
-      json.dumps(
+    for turn_index in range(1, max_turns + 1):
+      trace = TraceContext()
+      listen_input = {
+        "duration_seconds": duration_seconds,
+        "language": language,
+        "vad": dict(vad_input),
+      }
+      if args.audio_path is not None:
+        audio_path = args.audio_path
+        if max_turns > 1:
+          audio_path = audio_path.with_stem(f"{audio_path.stem}_{turn_index:03d}")
+        listen_input["output_path"] = str(audio_path)
+      bundle.logger.log(
+        "listen_task_started",
+        trace,
         {
-          "success": False,
-          "error": str(exc),
-          "error_type": type(exc).__name__,
-          "transcript": transcript.output,
+          "stage": "listen_task",
+          "turn_index": turn_index,
+          "config": str(config_path),
+          "planner": args.planner,
+          "input": listen_input,
         },
-        ensure_ascii=False,
-        indent=2,
       )
-    )
+      print(
+        f"Listening for command {turn_index}/{max_turns} (max {duration_seconds:g}s, "
+        f"silence tail {vad_input['post_roll_ms']} ms).",
+        file=sys.stderr,
+        flush=True,
+      )
+      transcript = bundle.tool_runtime.invoke(
+        "audio.listen_vad_transcribe",
+        listen_input,
+        trace=trace,
+      )
+      if not transcript.success or not transcript.output:
+        error = transcript.error or "TRANSCRIBE_FAILED"
+        bundle.logger.log("listen_task_failed", trace, {"stage": "audio.listen_vad_transcribe", "turn_index": turn_index, "error": error})
+        print(json.dumps({"turn_index": turn_index, "success": False, "error": error}, ensure_ascii=False, indent=2))
+        print(f"Task log: {log_path}")
+        return 1
+      text = str(transcript.output.get("text", "")).strip()
+      bundle.logger.log("listen_task_transcribed", trace, {"stage": "audio.listen_vad_transcribe", "turn_index": turn_index, "output": transcript.output})
+      if not text:
+        bundle.logger.log("listen_task_failed", trace, {"stage": "asr.result_filter", "turn_index": turn_index, "error": "EMPTY_TRANSCRIPT"})
+        print(json.dumps({"turn_index": turn_index, "success": False, "error": "EMPTY_TRANSCRIPT", "transcript": transcript.output}, ensure_ascii=False, indent=2))
+        print(f"Task log: {log_path}")
+        return 1
+      bundle.logger.log("listen_task_agent_started", trace, {"stage": "agent.run_task", "turn_index": turn_index, "planner": args.planner, "input": {"user_input": text, "initial_input": initial_input}})
+      try:
+        task = bundle.agent.run_task(text, initial_input)
+      except Exception as exc:
+        stop_robot()
+        bundle.logger.log("listen_task_failed", trace, {"stage": "agent.run_task", "turn_index": turn_index, "error_type": type(exc).__name__, "error": str(exc)})
+        print(json.dumps({"turn_index": turn_index, "success": False, "error": str(exc), "error_type": type(exc).__name__, "transcript": transcript.output}, ensure_ascii=False, indent=2))
+        print(f"Task log: {log_path}")
+        return 1
+      bundle.logger.log("listen_task_finished", trace, {"stage": "agent.run_task", "turn_index": turn_index, "success": task.error is None, "task_id": task.task_id, "status": str(task.status), "error": task.error, "plan": task.plan.to_dict() if task.plan is not None else None})
+      print(json.dumps({"turn_index": turn_index, "transcript": transcript.output, "task": task.to_dict()}, ensure_ascii=False, indent=2))
+      if task.error is not None:
+        stop_robot()
+        print(f"Task log: {log_path}")
+        return 1
+  except KeyboardInterrupt:
+    stop_robot()
+    print(json.dumps({"success": False, "error": "INTERRUPTED"}, ensure_ascii=False, indent=2))
     print(f"Task log: {log_path}")
-    return 1
-  bundle.logger.log(
-    "listen_task_finished",
-    trace,
-    {
-      "stage": "agent.run_task",
-      "success": task.error is None,
-      "task_id": task.task_id,
-      "status": str(task.status),
-      "error": task.error,
-      "plan": task.plan.to_dict() if task.plan is not None else None,
-    },
-  )
-  print(
-    json.dumps(
-      {
-        "transcript": transcript.output,
-        "task": task.to_dict(),
-      },
-      ensure_ascii=False,
-      indent=2,
-    )
-  )
+    return 130
   print(f"Task log: {log_path}")
-  return 0 if task.error is None else 1
+  return 0
 
 
 def _run_vision_detect(args: argparse.Namespace) -> int:
@@ -671,7 +606,13 @@ def main(argv: Sequence[str] | None = None) -> int:
   if args.command == "run-actionlist":
     return _run_actionlist(args)
   if args.command == "listen-task":
-    return _run_listen_task(args)
+    exit_code = _run_listen_task(args)
+    # OpenCV/Ultralytics can leave native worker threads alive after Ctrl+C.
+    # robot.stop has already completed in _run_listen_task, so bypass Python's
+    # thread teardown to ensure the operator returns to a usable shell.
+    if exit_code == 130:
+      os._exit(exit_code)
+    return exit_code
   if args.command == "vision-detect":
     return _run_vision_detect(args)
   if args.command == "competition":

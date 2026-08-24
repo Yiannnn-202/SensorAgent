@@ -182,7 +182,7 @@ class TaskLogger:
     if self._console or self._progress_path is not None:
       line = _format_console_event(event, record.payload)
     if line is not None:
-      if self._console:
+      if self._console :
         print(line, file=sys.stderr, flush=True)
       if self._progress_path is not None:
         # record.timestamp is the fixed-format ISO output of utc_now_iso();
