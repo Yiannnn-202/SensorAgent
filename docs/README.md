@@ -55,6 +55,7 @@ the same status or design.
 - [Sorting-scene grasp matrix test](guides/simulation/sorting-scene-grasp-matrix-test.md)
 - [Phase G1 Gazebo smoke test](guides/simulation/g1-gazebo-smoke.md)
 - [Gazebo recovery demo](guides/simulation/gazebo-recovery-demo.md)
+- [Metal sorting text session (skip voice/vision)](guides/simulation/metal-sorting-text-session.md)
 - [Create a grasping block](guides/simulation/create-grasp-block.md)
 
 ### Workflows
