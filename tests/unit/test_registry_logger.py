@@ -13,29 +13,43 @@ if str(SRC) not in sys.path:
   sys.path.insert(0, str(SRC))
 
 from sensoragent.logger import TaskLogger
-from sensoragent.schemas import ToolCall, ToolResult, ToolSpec, TraceContext
-from sensoragent.skills import SkillRegistry
+from sensoragent.schemas import SkillCall, SkillResult, SkillSpec, ToolCall, ToolResult, ToolSpec, TraceContext
+from sensoragent.skills import Skill, SkillContext, SkillRegistry
 from sensoragent.skills.errors import SkillNotFoundError, SkillRegistrationError
-from sensoragent.skills.mock import MockPickAndPlaceSkill
 from sensoragent.tools import ToolRegistry, ToolRuntime
 from sensoragent.tools.errors import ToolNotFoundError, ToolRegistrationError
-from sensoragent.tools.vision.mock import MockDetectTool
+
+
+class _TestTool:
+  spec = ToolSpec(name="test.tool", description="test tool")
+
+  def run(self, call: ToolCall) -> ToolResult:
+    del call
+    return ToolResult(tool=self.spec.name, success=True, output={"ok": True})
+
+
+class _TestSkill(Skill):
+  spec = SkillSpec(name="test.skill", description="test skill")
+
+  def run(self, call: SkillCall, context: SkillContext) -> SkillResult:
+    del call, context
+    return SkillResult(skill=self.spec.name, success=True, output={"ok": True})
 
 
 class RegistryLoggerTest(TestCase):
   def test_tool_registry_registers_and_lists_tools(self) -> None:
     registry = ToolRegistry()
-    registry.register(MockDetectTool())
+    registry.register(_TestTool())
 
-    self.assertEqual(registry.names(), ["vision.mock_detect"])
-    self.assertEqual(registry.get("vision.mock_detect").spec.name, "vision.mock_detect")
+    self.assertEqual(registry.names(), ["test.tool"])
+    self.assertEqual(registry.get("test.tool").spec.name, "test.tool")
 
   def test_tool_registry_rejects_duplicate_tools(self) -> None:
     registry = ToolRegistry()
-    registry.register(MockDetectTool())
+    registry.register(_TestTool())
 
     with self.assertRaises(ToolRegistrationError):
-      registry.register(MockDetectTool())
+      registry.register(_TestTool())
 
   def test_tool_registry_raises_typed_error_for_unknown_tool(self) -> None:
     registry = ToolRegistry()
@@ -45,23 +59,23 @@ class RegistryLoggerTest(TestCase):
 
   def test_skill_registry_registers_and_lists_skills(self) -> None:
     registry = SkillRegistry()
-    registry.register(MockPickAndPlaceSkill())
+    registry.register(_TestSkill())
 
-    self.assertEqual(registry.names(), ["mock.pick_and_place"])
-    self.assertEqual(registry.get("mock.pick_and_place").spec.name, "mock.pick_and_place")
+    self.assertEqual(registry.names(), ["test.skill"])
+    self.assertEqual(registry.get("test.skill").spec.name, "test.skill")
 
   def test_skill_registry_rejects_duplicate_skills(self) -> None:
     registry = SkillRegistry()
-    registry.register(MockPickAndPlaceSkill())
+    registry.register(_TestSkill())
 
     with self.assertRaises(SkillRegistrationError):
-      registry.register(MockPickAndPlaceSkill())
+      registry.register(_TestSkill())
 
   def test_skill_registry_raises_typed_error_for_unknown_skill(self) -> None:
     registry = SkillRegistry()
 
     with self.assertRaises(SkillNotFoundError):
-      registry.get("mock.missing")
+      registry.get("missing.skill")
 
   def test_task_logger_records_events(self) -> None:
     logger = TaskLogger()

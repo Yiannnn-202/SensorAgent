@@ -13,7 +13,6 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
   sys.path.insert(0, str(SRC))
 
-from sensoragent.agent import build_agent_from_config
 from sensoragent.integrations import FakeAudioClient, FakeMicrophoneRecorder, LocalAudioClient
 from sensoragent.integrations.audio import AudioError, _write_wav
 from sensoragent.integrations.microphone import MicrophoneError
@@ -278,13 +277,6 @@ class AudioIntegrationTest(TestCase):
 
       self.assertGreaterEqual(int(np.max(np.abs(audio))), 16000)
       self.assertLess(int(np.max(np.abs(audio))), 17000)
-
-  def test_audio_mock_config_registers_audio_tools(self) -> None:
-    bundle = build_agent_from_config(ROOT / "configs" / "audio_mock.yaml")
-
-    self.assertIn("audio.transcribe", bundle.tool_registry.names())
-    self.assertIn("audio.speak", bundle.tool_registry.names())
-
 
 class _FailingAudioClient(FakeAudioClient):
   """Fake client whose transcribe/speak raise a configured AudioError."""

@@ -1,4 +1,4 @@
-"""Tests for competition command grounding and oracle instance selection."""
+"""Tests for competition command grounding and configured-scene instance selection."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ from unittest import TestCase
 from sensoragent.config import load_config
 from sensoragent.grounding import (
   GroundingStatus,
+  IntentAction,
+  LlmAssistedSortingCommandGrounder,
   ObjectOntology,
   OracleInstanceResolver,
   SortingCommandGrounder,
@@ -15,6 +17,18 @@ from sensoragent.grounding import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+class _FakeGroundingClient:
+  def __init__(self, response: dict | Exception) -> None:
+    self.response = response
+    self.calls: list[tuple[str, str]] = []
+
+  def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
+    self.calls.append((system_prompt, user_prompt))
+    if isinstance(self.response, Exception):
+      raise self.response
+    return dict(self.response)
 
 
 class CompetitionGroundingTest(TestCase):
@@ -97,3 +111,73 @@ class CompetitionGroundingTest(TestCase):
     self.assertEqual(intent.selector.relation, "nearest")
     self.assertEqual(intent.selector.ordinal, 1)
     self.assertEqual(intent.target, "bin_cell_4")
+
+  def test_llm_assisted_grounder_maps_supported_synonym_when_rules_fail(self) -> None:
+    client = _FakeGroundingClient(
+      {
+        "status": "ready",
+        "action": "pick_place",
+        "object_class": "hex_nut",
+        "selector": {"relation": "left", "ordinal": 1, "reference_frame": "camera"},
+        "quantity": 1,
+        "target": "bin_cell_1",
+        "verify": True,
+        "confidence": 0.87,
+        "reason": "六边形小零件 maps to hex_nut",
+      }
+    )
+    grounder = LlmAssistedSortingCommandGrounder(
+      self.grounder,
+      self.ontology,
+      self.config.scene.place_targets,
+      client,
+    )
+
+    intent = grounder.ground("把左边那个六边形小零件放到一号格")
+
+    self.assertEqual(intent.status, GroundingStatus.READY)
+    self.assertEqual(intent.action, IntentAction.PICK_PLACE)
+    self.assertEqual(intent.object_class, "hex_nut")
+    self.assertEqual(intent.selector.relation, "left")
+    self.assertEqual(intent.target, "bin_cell_1")
+    self.assertEqual(intent.grounding_source, "llm_assisted")
+    self.assertEqual(intent.grounding_confidence, 0.87)
+    self.assertEqual(len(client.calls), 1)
+
+  def test_llm_assisted_grounder_keeps_rule_result_when_rules_succeed(self) -> None:
+    client = _FakeGroundingClient(RuntimeError("should not be called"))
+    grounder = LlmAssistedSortingCommandGrounder(
+      self.grounder,
+      self.ontology,
+      self.config.scene.place_targets,
+      client,
+    )
+
+    intent = grounder.ground("把最近的滚轮放到二号格")
+
+    self.assertEqual(intent.status, GroundingStatus.READY)
+    self.assertEqual(intent.object_class, "roller")
+    self.assertEqual(intent.grounding_source, "rules")
+    self.assertEqual(client.calls, [])
+
+  def test_llm_assisted_grounder_rejects_invalid_class_and_returns_rule_failure(self) -> None:
+    client = _FakeGroundingClient(
+      {
+        "status": "ready",
+        "action": "pick_place",
+        "object_class": "unlisted_part",
+        "target": "bin_cell_1",
+      }
+    )
+    grounder = LlmAssistedSortingCommandGrounder(
+      self.grounder,
+      self.ontology,
+      self.config.scene.place_targets,
+      client,
+    )
+
+    intent = grounder.ground("把左边那个六边形小零件放到一号格")
+
+    self.assertEqual(intent.status, GroundingStatus.UNSUPPORTED)
+    self.assertEqual(intent.reason, "UNKNOWN_OBJECT_CLASS")
+    self.assertEqual(intent.grounding_source, "rules")

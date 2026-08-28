@@ -1,0 +1,199 @@
+# Industrial Agent Reproduction Guide
+
+This is the evaluator-facing entry point for the SensorAgent submission branch.
+The project exposes one persistent industrial agent loop with two launch modes:
+Gazebo simulation and physical hardware.
+
+## Agent loop
+
+The runtime is a session, not a one-shot script. It keeps running until the
+operator enters `exit`, `quit`, `q`, `退出`, or `结束`.
+
+```text
+IDLE
+→ UNDERSTAND        parse the Chinese/English command into object, target, selector
+→ CHECK_WORLD       reject occupied bins or ambiguous references
+→ OBSERVE           use configured scene state or RGB-D/camera capture
+→ PERCEIVE          detect/select the target object
+→ PLAN              choose a bounded pick/place action sequence
+→ ACT               call approved robot Skills/Tools only
+→ VERIFY            verify grasp/place postconditions
+→ RECOVER           classify failures and retry within the recovery budget
+→ COMPLETE
+→ IDLE
+```
+
+The agent prints one JSON event per turn and writes JSONL records under
+`logs/tasks/`. The `agent_loop` field in command results lists the active loop
+stages, and `world_state` records objects, bins, current task state, and history.
+
+For simple industrial references, the perception layer uses deterministic
+grounding rather than free-form model reasoning. For example, "左边的螺母" becomes
+the normalized class `hex_nut` plus `spatial_constraint={"relation":"left",
+"ordinal":1}`; the vision branch detects candidate instances, then the spatial
+selector chooses from those existing candidates. A VLM is used only as a
+constrained reranker for more complex hardware visual references, and it must
+return an allowed candidate ID.
+
+## 1. Simulation agent
+
+Use this command on Ubuntu with ROS 2 Humble:
+
+```bash
+bash scripts/linux/run_sim_agent.sh
+```
+
+The launcher starts the industrial sorting Gazebo/MoveIt stack and then enters
+the persistent competition session with:
+
+```text
+backend: sim
+config:  configs/competition_sim.yaml
+mode:    text
+execute: true
+```
+
+Useful options:
+
+```bash
+bash scripts/linux/run_sim_agent.sh --mode voice
+bash scripts/linux/run_sim_agent.sh --dry-run
+bash scripts/linux/run_sim_agent.sh --no-start-stack
+bash scripts/linux/run_sim_agent.sh --llm-grounding
+```
+
+`--dry-run` switches robot execution to the fake backend. `--no-start-stack`
+assumes Gazebo/MoveIt/bridge are already running.
+`--llm-grounding` enables a constrained LLM fallback for utterances that the
+rule-based industrial ontology cannot map; valid rule-based commands do not call
+the LLM.
+
+Example commands after the prompt appears:
+
+```text
+把离机械臂最近的滚柱放到三号格
+把左边的六角螺母放到一号格
+把所有滚柱放到一号格
+状态
+退出
+```
+
+The simulation path captures Gazebo RGB-D frames and uses
+`vision.dual_branch_detect` for object perception. The configured ontology is
+used only for language grounding and supported-class validation; object position
+comes from the vision output consumed by the recovery DecisionTree.
+
+## 2. Hardware agent
+
+The hardware launcher is safety-gated. By default it starts the hardware bridge
+with `allow_motion:=false` and enters the same persistent agent loop without
+enabling physical movement:
+
+```bash
+bash scripts/linux/run_hardware_agent.sh
+```
+
+To allow physical motion, run it only after workspace, camera, gripper, operator,
+and emergency-stop checks are complete:
+
+```bash
+bash scripts/linux/run_hardware_agent.sh --enable-motion
+```
+
+Useful options:
+
+```bash
+bash scripts/linux/run_hardware_agent.sh --mode voice
+bash scripts/linux/run_hardware_agent.sh --no-start-stack
+bash scripts/linux/run_hardware_agent.sh --llm-grounding
+```
+
+The hardware launcher uses:
+
+```text
+backend: hardware
+config:  configs/competition_hardware.yaml
+mode:    text
+motion:  disabled unless --enable-motion is present
+```
+
+Because the hardware path can resolve complex natural-language visual references
+against localized candidates, configure the VLM endpoint before starting the
+launcher:
+
+```bash
+export SENSORAGENT_VLM_API_KEY=...
+export SENSORAGENT_VLM_MODEL=...
+export SENSORAGENT_VLM_BASE_URL=https://api.example.com/v1
+```
+
+The hardware path captures real RGB/point-cloud input, resolves the requested
+object from localized candidates, selects the configured pick profile, executes
+the approved pick/place actionlist, and records the same JSON turn output. It
+does not bypass bridge safety limits or issue arbitrary LLM-generated robot
+commands.
+
+If `--llm-grounding` is enabled, also configure the text LLM endpoint:
+
+```bash
+export SENSORAGENT_LLM_API_KEY=...
+export SENSORAGENT_LLM_MODEL=...
+export SENSORAGENT_LLM_BASE_URL=https://api.example.com
+```
+
+The text LLM may only output an allowed object class, action, target, quantity,
+and spatial selector. Invalid output is ignored and the deterministic grounding
+result is returned.
+
+## Output contract
+
+A successful or failed command prints one object like:
+
+```json
+{
+  "type": "command",
+  "success": true,
+  "backend": "sim",
+  "transcript": "把离机械臂最近的滚柱放到三号格",
+  "intent": {
+    "status": "ready",
+    "action": "pick_place",
+    "object_class": "roller",
+    "target": "bin_cell_3"
+  },
+  "agent_loop": [
+    "idle",
+    "understand",
+    "check_world",
+    "observe",
+    "perceive",
+    "select",
+    "plan",
+    "act",
+    "verify",
+    "recover_if_needed",
+    "complete"
+  ],
+  "execution": {
+    "actionlist": "industrial.sorting_config_pick_place_actionlist",
+    "recovery_attempts": 0
+  },
+  "world_state": {}
+}
+```
+
+If the command is ambiguous or the target cell is occupied, the agent returns a
+structured failure and waits for the next command instead of terminating.
+
+## Validation
+
+Run the repository test suite from the project root:
+
+```powershell
+$env:PYTHONPATH = "$(Get-Location)\src"
+python -m pytest -q tests
+```
+
+The tests are offline/static except for environment-specific ROS or hardware
+manual acceptance. Model weights, datasets, logs, captured frames, and real
+credentials remain outside Git.

@@ -1,4 +1,4 @@
-"""Contract tests for mock tool inputs and outputs."""
+"""Contract tests for submission-facing tool inputs and outputs."""
 
 from __future__ import annotations
 
@@ -14,69 +14,43 @@ if str(SRC) not in sys.path:
 
 from sensoragent.contracts import ContractValidator
 from sensoragent.schemas import ToolCall, TraceContext
-from sensoragent.tools.audio.mock import MockTranscribeTool
-from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
-from sensoragent.tools.vision.mock import MockDetectTool
+from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 
 
-def load_contract(tool_name: str) -> dict[str, Any]:
+def load_contract(tool_name: str) -> dict:
   path = ROOT / "contracts" / "tools" / f"{tool_name}.schema.json"
   return json.loads(path.read_text(encoding="utf-8"))
 
 
-class MockToolContractTest(TestCase):
-  def test_vision_mock_detect_contract(self) -> None:
-    contract = load_contract("vision.mock_detect")
+class ToolContractTest(TestCase):
+  def test_vision_config_detect_contract(self) -> None:
+    contract = load_contract("vision.config_detect")
     validator = ContractValidator(ROOT / "contracts")
-    input_data = {"query": "silver roller"}
-    validator.validate_tool_input("vision.mock_detect", input_data)
+    input_data = {"query": "roller"}
+    validator.validate_tool_input("vision.config_detect", input_data)
 
-    result = MockDetectTool().run(
-      ToolCall(tool="vision.mock_detect", input=input_data, trace=TraceContext())
+    result = VisionConfigDetectTool({"roller": [0.1, 0.2, 0.3]}).run(
+      ToolCall(tool="vision.config_detect", input=input_data, trace=TraceContext())
     )
 
     self.assertTrue(result.success)
-    self.assertEqual(contract["name"], "vision.mock_detect")
-    validator.validate_tool_output("vision.mock_detect", result.output)
+    self.assertEqual(contract["name"], "vision.config_detect")
+    validator.validate_tool_output("vision.config_detect", result.output)
 
-  def test_audio_mock_transcribe_contract(self) -> None:
-    contract = load_contract("audio.mock_transcribe")
+  def test_dual_branch_contract_accepts_pipeline_metadata(self) -> None:
     validator = ContractValidator(ROOT / "contracts")
-    input_data = {"text": "put the roller into the third bin cell"}
-    validator.validate_tool_input("audio.mock_transcribe", input_data)
+    output = {
+      "found": True,
+      "label": "roller",
+      "confidence": 0.9,
+      "source": "yolo11_seg",
+      "vision_pipeline": {
+        "name": "dual_branch",
+        "selected_branch": "yolo11_seg",
+        "route_order": ["yolo11_seg", "grounding_dino"],
+        "fallback_used": False,
+        "attempts": [{"branch": "yolo11_seg", "tool": "vision.yolo11_seg_detect", "success": True}],
+      },
+    }
 
-    result = MockTranscribeTool().run(
-      ToolCall(tool="audio.mock_transcribe", input=input_data, trace=TraceContext())
-    )
-
-    self.assertTrue(result.success)
-    self.assertEqual(contract["name"], "audio.mock_transcribe")
-    validator.validate_tool_output("audio.mock_transcribe", result.output)
-
-  def test_robot_mock_pick_contract(self) -> None:
-    contract = load_contract("robot.mock_pick")
-    validator = ContractValidator(ROOT / "contracts")
-    input_data = {"object_id": "mock_object_001", "pose_3d": [0.42, -0.13, 0.08]}
-    validator.validate_tool_input("robot.mock_pick", input_data)
-
-    result = MockPickTool().run(
-      ToolCall(tool="robot.mock_pick", input=input_data, trace=TraceContext())
-    )
-
-    self.assertTrue(result.success)
-    self.assertEqual(contract["name"], "robot.mock_pick")
-    validator.validate_tool_output("robot.mock_pick", result.output)
-
-  def test_robot_mock_place_contract(self) -> None:
-    contract = load_contract("robot.mock_place")
-    validator = ContractValidator(ROOT / "contracts")
-    input_data = {"object_id": "mock_object_001", "target": "third bin cell"}
-    validator.validate_tool_input("robot.mock_place", input_data)
-
-    result = MockPlaceTool().run(
-      ToolCall(tool="robot.mock_place", input=input_data, trace=TraceContext())
-    )
-
-    self.assertTrue(result.success)
-    self.assertEqual(contract["name"], "robot.mock_place")
-    validator.validate_tool_output("robot.mock_place", result.output)
+    validator.validate_tool_output("vision.dual_branch_detect", output)

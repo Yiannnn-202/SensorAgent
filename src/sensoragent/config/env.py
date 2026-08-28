@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 DEFAULT_CONFIG_DIR = Path("configs")
-DEFAULT_ENV = "mock"
+DEFAULT_ENV = "competition_sim"
 
 
 def load_dotenv(path: str | Path = ".env", *, environ: dict[str, str] | None = None) -> None:
@@ -40,7 +40,7 @@ def resolve_config_path(
     1. Explicit path argument.
     2. SENSORAGENT_CONFIG environment variable.
     3. SENSORAGENT_ENV environment variable mapped to configs/<env>.yaml.
-    4. configs/mock.yaml.
+    4. configs/competition_sim.yaml.
   """
 
   env = environ if environ is not None else os.environ

@@ -12,12 +12,11 @@ from typing import Sequence
 
 from sensoragent.agent import build_agent_from_config, build_agent_from_env
 from sensoragent.config import load_config, resolve_config_path
-from sensoragent.mcp import MockMcpEndpoint
 from sensoragent.schemas import AgentRequest, TraceContext
 from sensoragent.tools.vision import SPATIAL_RELATIONS
 
 
-def _default_task_log_path(prefix: str = "mock_pick_place") -> Path:
+def _default_task_log_path(prefix: str = "sensoragent") -> Path:
   timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
   return Path("logs") / "tasks" / f"{prefix}_{timestamp}.jsonl"
 
@@ -28,33 +27,6 @@ def _build_parser() -> argparse.ArgumentParser:
     description="SensorAgent command-line tools.",
   )
   subparsers = parser.add_subparsers(dest="command", required=True)
-
-  mock_pick = subparsers.add_parser(
-    "mock-pick-place",
-    help="Run the local mock pick-and-place Agent chain.",
-  )
-  mock_pick.add_argument(
-    "--config",
-    type=Path,
-    default=None,
-    help="Path to a SensorAgent config file. Defaults to env resolution.",
-  )
-  mock_pick.add_argument(
-    "--object-query",
-    default="silver roller",
-    help="Object query passed to the mock vision tool.",
-  )
-  mock_pick.add_argument(
-    "--target",
-    default="third bin cell",
-    help="Target location passed to the mock robot place tool.",
-  )
-  mock_pick.add_argument(
-    "--log-path",
-    type=Path,
-    default=None,
-    help="Path to the JSONL task log. Defaults to logs/tasks/*.jsonl.",
-  )
 
   run_task = subparsers.add_parser(
     "run-task",
@@ -218,7 +190,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
   vision_detect = subparsers.add_parser(
     "vision-detect",
-    help="Run open-vocabulary detection on one RGB image.",
+    help="Run a selected vision Tool on one RGB image.",
   )
   vision_detect.add_argument(
     "--config",
@@ -230,13 +202,14 @@ def _build_parser() -> argparse.ArgumentParser:
     "--tool",
     choices=(
       "vision.open_vocab_detect",
+      "vision.dual_branch_detect",
       "vision.grounded_sam2",
       "vision.yolo11_seg_detect",
     ),
     default="vision.open_vocab_detect",
     help=(
-      "Vision Tool to invoke. Grounded SAM2 and YOLO11-seg always require "
-      "native/refined masks."
+      "Vision Tool to invoke. dual_branch routes YOLO11-seg and Grounded SAM2; "
+      "Grounded SAM2 and YOLO11-seg always require native/refined masks."
     ),
   )
   vision_detect.add_argument("--image", type=Path, required=True)
@@ -289,8 +262,8 @@ def _build_parser() -> argparse.ArgumentParser:
   competition.add_argument(
     "--config",
     type=Path,
-    default=Path("configs/robot_mock.yaml"),
-    help="SensorAgent config with a fake/local backend (default: configs/robot_mock.yaml).",
+    default=Path("configs/competition_eval.yaml"),
+    help="SensorAgent config with a local fake backend (default: configs/competition_eval.yaml).",
   )
   competition.add_argument(
     "--scenarios",
@@ -312,24 +285,6 @@ def _build_parser() -> argparse.ArgumentParser:
   )
 
   return parser
-
-
-def _run_mock_pick_place(args: argparse.Namespace) -> int:
-  log_path = args.log_path or _default_task_log_path()
-  bundle = build_agent_from_env(args.config, log_path=log_path)
-  endpoint = MockMcpEndpoint(bundle.agent)
-
-  response = endpoint.call_skill(
-    "mock.pick_and_place",
-    {
-      "object_query": args.object_query,
-      "target": args.target,
-    },
-  )
-
-  print(json.dumps(response.to_dict(), ensure_ascii=False, indent=2))
-  print(f"Task log: {log_path}")
-  return 0 if response.success else 1
 
 
 def _run_task(args: argparse.Namespace) -> int:
@@ -599,8 +554,6 @@ def main(argv: Sequence[str] | None = None) -> int:
   parser = _build_parser()
   args = parser.parse_args(argv)
 
-  if args.command == "mock-pick-place":
-    return _run_mock_pick_place(args)
   if args.command == "run-task":
     return _run_task(args)
   if args.command == "run-actionlist":

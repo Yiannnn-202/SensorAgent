@@ -275,7 +275,13 @@ def _update_world_state(
 ) -> None:
   output = result.output if isinstance(result.output, dict) else {}
   if result.success:
-    if node.target in {"vision.config_detect", "vision.open_vocab_detect", "vision.grounded_sam2"}:
+    if node.target in {
+      "vision.config_detect",
+      "vision.open_vocab_detect",
+      "vision.grounded_sam2",
+      "vision.dual_branch_detect",
+      "vision.yolo11_seg_detect",
+    }:
       _observe_object(context, output, node_name=node.name)
     elif node.target == "robot.pick":
       _mark_object_status(context, "held", node_name=node.name, output=output)

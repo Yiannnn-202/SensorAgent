@@ -11,7 +11,7 @@ class AgentConfig:
   """Agent runtime configuration."""
 
   name: str = "sensoragent"
-  mode: str = "mock"
+  mode: str = "competition_sim"
   default_skill: str | None = None
 
 

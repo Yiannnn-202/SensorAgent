@@ -1,0 +1,111 @@
+{
+  "name": "vision.dual_branch_detect",
+  "version": "0.1.0",
+  "description": "Route a vision request through YOLO11-seg fixed industrial segmentation and GroundingDINO open-vocabulary detection.",
+  "input_schema": {
+    "type": "object",
+    "required": ["query"],
+    "properties": {
+      "query": {"type": "string"},
+      "image_path": {"type": "string"},
+      "depth_path": {"type": "string"},
+      "cloud_path": {"type": "string"},
+      "camera_info_path": {"type": "string"},
+      "overlay_path": {"type": "string"},
+      "camera_info": {"type": "object"},
+      "T_base_camera": {
+        "type": "array",
+        "items": {"type": "array", "items": {"type": "number"}}
+      },
+      "T_world_camera": {
+        "type": "array",
+        "items": {"type": "array", "items": {"type": "number"}}
+      },
+      "position_base_offset": {"type": "array", "items": {"type": "number"}},
+      "depth_window": {"type": "number"},
+      "depth_scale": {"type": "number"},
+      "box_threshold": {"type": "number"},
+      "text_threshold": {"type": "number"},
+      "nms_iou_threshold": {"type": "number"},
+      "device": {"type": "string"},
+      "refine_masks": {"type": "boolean"},
+      "require_masks": {"type": "boolean"},
+      "camera_frame": {"type": "string"},
+      "base_frame": {"type": "string"},
+      "world_frame": {"type": "string"},
+      "force_branch": {"type": "string"},
+      "candidate_policy": {"type": "string"},
+      "scene_profile": {"type": "object"},
+      "spatial_constraint": {
+        "type": "object",
+        "properties": {
+          "relation": {"type": "string"},
+          "ordinal": {"type": "number"},
+          "reference": {"type": "string"},
+          "tolerance_px": {"type": "number"}
+        }
+      }
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "required": ["found", "label", "confidence", "source"],
+    "properties": {
+      "found": {"type": "boolean"},
+      "label": {"type": "string"},
+      "confidence": {"type": "number"},
+      "source": {"type": "string"},
+      "object_id": {"type": "string"},
+      "bbox_2d": {"type": "array", "items": {"type": "number"}},
+      "mask_path": {"type": "string"},
+      "overlay_path": {"type": "string"},
+      "mask_polygons": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {"type": "array", "items": {"type": "number"}}
+        }
+      },
+      "mask_area_px": {"type": "number"},
+      "center_px": {"type": "array", "items": {"type": "number"}},
+      "depth_m": {"type": "number"},
+      "position_camera": {"type": "array", "items": {"type": "number"}},
+      "position_base": {"type": "array", "items": {"type": "number"}},
+      "position_world": {"type": "array", "items": {"type": "number"}},
+      "pose_3d": {"type": "array", "items": {"type": "number"}},
+      "position_3d": {"type": "object"},
+      "camera_frame": {"type": "string"},
+      "base_frame": {"type": "string"},
+      "world_frame": {"type": "string"},
+      "model": {"type": "string"},
+      "model_path": {"type": "string"},
+      "timing_ms": {"type": "object"},
+      "warnings": {"type": "array", "items": {"type": "string"}},
+      "candidates": {"type": "array", "items": {"type": "object"}},
+      "candidate_policy": {"type": "string"},
+      "scene_profile": {"type": "string"},
+      "scene_score": {"type": "number"},
+      "scene_features": {"type": "object"},
+      "rejection_reason": {"type": "string"},
+      "ambiguity": {"type": "object"},
+      "vision_pipeline": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "selected_branch": {"type": "string"},
+          "route_order": {"type": "array", "items": {"type": "string"}},
+          "fallback_used": {"type": "boolean"},
+          "attempts": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    }
+  },
+  "errors": [
+    "VISION_MODEL_NOT_READY",
+    "VISION_BACKEND_UNAVAILABLE",
+    "VISION_BACKEND_ERROR",
+    "VISION_INPUT_ERROR",
+    "OBJECT_NOT_FOUND",
+    "OBJECT_AMBIGUOUS"
+  ]
+}

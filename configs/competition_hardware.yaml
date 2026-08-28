@@ -1,0 +1,63 @@
+extends: robot_hardware_sensoragent_v1i_baseline.yaml
+
+agent:
+  mode: competition_hardware
+
+tools:
+  enabled:
+    - audio.listen_vad_transcribe
+    - hardware.start_stack
+    - robot.ensure_observe_pose
+    - robot.get_state
+    - robot.move_joints
+    - robot.move_pose
+    - robot.move_linear
+    - robot.plan_top_down_pick
+    - robot.plan_oriented_pick
+    - robot.plan_short_bolt_pick
+    - robot.plan_place
+    - robot.resolve_place_target
+    - robot.stop
+    - gripper.open
+    - gripper.close
+    - gripper.get_state
+    - vision.dual_branch_detect
+    - vision.yolo11_seg_detect
+    - vision.grounded_sam2
+    - vision.open_vocab_detect
+    - vision.list_source_candidates
+    - vision.resolve_reference
+    - vision.capture_frame
+    - robot.select_pick_profile
+
+integrations:
+  vision:
+    backend: yolo11_seg
+    model_path: models/vision/yolo11-seg/industrial-best.pt
+    grounding_dino_model: models/vision/grounding-dino/industrial-open-vocab
+    sam2_model_path: models/vision/sam2_t.pt
+    dual_branch:
+      route_policy: industrial_first
+      fallback_on_error: true
+      min_fixed_confidence: 0.35
+
+scene:
+  object_ontology:
+    hex_nut:
+      display_name: 六角螺母
+      aliases: [六角螺母, 螺母, hex nut]
+      vision_queries: [hex nut, industrial hexagonal nut]
+      instance_ids: [hardware_hex_nut]
+      grasp_opening: 0.032
+    short_bolt:
+      display_name: 短螺栓
+      aliases: [短螺栓, 螺栓, short bolt]
+      vision_queries: [short bolt, metal bolt with narrow shaft]
+      instance_ids: [hardware_short_bolt]
+      grasp_opening: 0.020
+    roller:
+      display_name: 滚柱
+      aliases: [滚柱, 滚轮, roller]
+      vision_queries: [roller, industrial metal roller]
+      instance_ids: [hardware_roller]
+      grasp_opening: 0.032

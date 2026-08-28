@@ -351,17 +351,6 @@ class VisionOpenVocabularyToolTest(TestCase):
     self.assertFalse(result.success)
     self.assertIn("nms_iou_threshold must be between 0 and 1", result.error or "")
 
-  def test_yoloe_sam2_example_config_registers_without_loading_weights(self) -> None:
-    bundle = build_agent_from_config(
-      ROOT / "configs" / "vision_yoloe_sam2.example.yaml"
-    )
-    tool = bundle.tool_registry.get("vision.open_vocab_detect")
-
-    self.assertEqual(tool._backend, "yoloe")
-    self.assertTrue(tool._refine_masks)
-    self.assertTrue(tool._require_masks)
-    self.assertIsInstance(tool._mask_refiner, UltralyticsSam2Backend)
-
   def test_placeholder_reports_model_not_ready(self) -> None:
     result = VisionOpenVocabularyDetectTool(
       model_path="models/vision/missing-yoloe.pt",

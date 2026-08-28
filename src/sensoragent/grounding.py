@@ -6,7 +6,8 @@ from dataclasses import asdict, dataclass
 from enum import StrEnum
 import math
 import re
-from typing import Mapping
+import json
+from typing import Mapping, Protocol
 
 
 class GroundingStatus(StrEnum):
@@ -50,6 +51,8 @@ class GroundedIntent:
   verify: bool = True
   reason: str | None = None
   clarification: str | None = None
+  grounding_source: str = "rules"
+  grounding_confidence: float | None = None
 
   def to_dict(self) -> dict:
     return asdict(self)
@@ -62,10 +65,17 @@ class GroundedInstance:
   display_name: str
   pose_3d: tuple[float, float, float]
   grasp_opening: float
-  source: str = "oracle_config"
+  source: str = "configured_scene"
 
   def to_dict(self) -> dict:
     return asdict(self)
+
+
+class JsonGroundingClient(Protocol):
+  """LLM client used only for constrained instruction grounding."""
+
+  def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
+    """Return one JSON object from a model call."""
 
 
 _RELATIONS = (
@@ -311,6 +321,190 @@ class SortingCommandGrounder:
     )
 
 
+class LlmAssistedSortingCommandGrounder:
+  """Rule-first industrial command grounder with constrained LLM fallback.
+
+  The LLM never produces coordinates or robot actions. It may only map an
+  operator utterance onto the configured ontology, target cells, action names,
+  and spatial selectors. Invalid model output is rejected and the deterministic
+  grounding result is returned unchanged.
+  """
+
+  def __init__(
+    self,
+    base_grounder: SortingCommandGrounder,
+    ontology: ObjectOntology,
+    place_targets: Mapping[str, object],
+    client: JsonGroundingClient,
+  ) -> None:
+    self._base = base_grounder
+    self._ontology = ontology
+    self._place_targets = set(place_targets)
+    self._client = client
+
+  def ground(self, text: str) -> GroundedIntent:
+    base = self._base.ground(text)
+    if base.status == GroundingStatus.READY:
+      return base
+    try:
+      candidate = self._client.complete_json(
+        _LLM_GROUNDING_SYSTEM_PROMPT,
+        self._user_prompt(text, base),
+      )
+      return self._validate(candidate, text, base)
+    except Exception:
+      return base
+
+  def _user_prompt(self, text: str, base: GroundedIntent) -> str:
+    return json.dumps(
+      {
+        "instruction": text,
+        "rule_result": base.to_dict(),
+        "allowed_object_classes": [
+          {
+            "class_id": item.class_id,
+            "display_name": item.display_name,
+            "aliases": list(item.aliases),
+            "vision_queries": list(item.vision_queries),
+          }
+          for item in self._ontology.classes()
+        ],
+        "allowed_actions": [item.value for item in IntentAction],
+        "allowed_spatial_relations": [
+          "left",
+          "right",
+          "front",
+          "back",
+          "nearest",
+          "farthest",
+          "largest",
+          "smallest",
+        ],
+        "allowed_targets": sorted(self._place_targets),
+      },
+      ensure_ascii=False,
+      indent=2,
+    )
+
+  def _validate(
+    self,
+    value: dict,
+    text: str,
+    fallback: GroundedIntent,
+  ) -> GroundedIntent:
+    if not isinstance(value, dict):
+      return fallback
+    status = self._status(value.get("status"))
+    if status is None:
+      return fallback
+    reason = str(value.get("reason", "") or "") or None
+    clarification = str(value.get("clarification", "") or "") or None
+    confidence = _optional_probability(value.get("confidence"))
+    if status != GroundingStatus.READY:
+      return GroundedIntent(
+        status=status,
+        raw_text=text.strip(),
+        reason=reason or "LLM_GROUNDING_NOT_READY",
+        clarification=clarification,
+        grounding_source="llm_assisted",
+        grounding_confidence=confidence,
+      )
+
+    object_class = value.get("object_class")
+    if not isinstance(object_class, str) or object_class not in {
+      item.class_id for item in self._ontology.classes()
+    }:
+      return fallback
+    try:
+      action = IntentAction(str(value.get("action", IntentAction.PICK.value)))
+    except ValueError:
+      return fallback
+    target = value.get("target")
+    if target in ("", False):
+      target = None
+    if target is not None and (
+      not isinstance(target, str) or target not in self._place_targets
+    ):
+      return fallback
+    quantity = value.get("quantity", 1)
+    if quantity != "all":
+      try:
+        quantity = int(quantity)
+      except (TypeError, ValueError):
+        return fallback
+      if quantity < 1:
+        return fallback
+    if quantity == "all" and target is None:
+      return GroundedIntent(
+        status=GroundingStatus.NEEDS_CLARIFICATION,
+        raw_text=text.strip(),
+        action=action,
+        object_class=object_class,
+        quantity=quantity,
+        target=None,
+        reason="TARGET_REQUIRED",
+        clarification="批量任务请指定起始目标格，例如“把所有滚轮放入一号格”。",
+        grounding_source="llm_assisted",
+        grounding_confidence=confidence,
+      )
+    selector = self._selector(value.get("selector"))
+    return GroundedIntent(
+      status=GroundingStatus.READY,
+      raw_text=text.strip(),
+      action=action,
+      object_class=object_class,
+      selector=selector,
+      quantity=quantity,
+      target=target,
+      verify=bool(value.get("verify", True)),
+      reason=reason,
+      clarification=clarification,
+      grounding_source="llm_assisted",
+      grounding_confidence=confidence,
+    )
+
+  @staticmethod
+  def _status(value: object) -> GroundingStatus | None:
+    try:
+      return GroundingStatus(str(value))
+    except ValueError:
+      return None
+
+  @staticmethod
+  def _selector(value: object) -> InstanceSelector | None:
+    if value in (None, "", False):
+      return None
+    if not isinstance(value, Mapping):
+      raise ValueError("selector must be an object")
+    relation = str(value.get("relation", "")).strip().casefold()
+    allowed = {
+      "left",
+      "right",
+      "front",
+      "back",
+      "nearest",
+      "farthest",
+      "largest",
+      "smallest",
+    }
+    if relation not in allowed:
+      raise ValueError("selector.relation is unsupported")
+    try:
+      ordinal = int(value.get("ordinal", 1) or 1)
+    except (TypeError, ValueError) as exc:
+      raise ValueError("selector.ordinal must be an integer") from exc
+    if ordinal < 1:
+      raise ValueError("selector.ordinal must be >= 1")
+    frame = str(value.get("reference_frame", "camera") or "camera")
+    if frame not in {"camera", "arm_base"}:
+      frame = "camera"
+    return InstanceSelector(
+      relation=relation,
+      ordinal=ordinal,
+      reference_frame=frame,
+    )
+
+
 class OracleInstanceResolver:
   """Resolve a grounded selector against configured Gazebo instance poses."""
 
@@ -399,3 +593,31 @@ def _normalize(text: str) -> str:
 
 def _digit(value: str) -> int:
   return int(value) if value.isdigit() else _CN_DIGITS[value]
+
+
+def _optional_probability(value: object) -> float | None:
+  if value is None:
+    return None
+  if not isinstance(value, (int, float)) or isinstance(value, bool):
+    return None
+  number = float(value)
+  return number if 0.0 <= number <= 1.0 else None
+
+
+_LLM_GROUNDING_SYSTEM_PROMPT = """You map industrial robot operator commands into a strict JSON intent.
+Use only the allowed object classes, actions, spatial relations, and target cells.
+Never invent coordinates, robot poses, tool names, or object IDs.
+Return JSON only with:
+{
+  "status": "ready" | "needs_clarification" | "unsupported",
+  "action": "pick" | "place" | "pick_place",
+  "object_class": "one allowed class id or null",
+  "selector": {"relation": "left|right|front|back|nearest|farthest|largest|smallest", "ordinal": 1, "reference_frame": "camera|arm_base"} or null,
+  "quantity": 1 or "all",
+  "target": "one allowed target or null",
+  "verify": true,
+  "confidence": 0.0,
+  "reason": "short reason",
+  "clarification": "question to ask only when not ready"
+}
+If the command cannot be mapped without inventing a class or target, return needs_clarification or unsupported."""

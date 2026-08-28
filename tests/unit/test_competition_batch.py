@@ -24,7 +24,7 @@ from sensoragent.evaluation.batch import (
 )
 from sensoragent.schemas import ToolCall, ToolResult, ToolSpec, TraceContext
 
-ROBOT_MOCK = ROOT / "configs" / "robot_mock.yaml"
+COMPETITION_EVAL = ROOT / "configs" / "competition_eval.yaml"
 SCENARIOS_YAML = ROOT / "tests" / "fixtures" / "competition" / "scenarios.yaml"
 
 
@@ -90,7 +90,7 @@ class LoadScenariosTest(TestCase):
 
 class InjectAndRunTest(TestCase):
   def setUp(self) -> None:
-    self.bundle = build_agent_from_config(ROBOT_MOCK)
+    self.bundle = build_agent_from_config(COMPETITION_EVAL)
     self.tree = self.bundle.decision_trees[TREE_NAME]
 
   def test_registry_restored_after_injection(self) -> None:
@@ -133,7 +133,7 @@ class RunBatchTest(TestCase):
         ),
       ),
     )
-    records, baseline = run_batch(scenarios, ROBOT_MOCK)
+    records, baseline = run_batch(scenarios, COMPETITION_EVAL)
 
     self.assertEqual(len(records), 2)
     by_name = {record.run_id: record for record in records}
@@ -149,7 +149,7 @@ class RunBatchTest(TestCase):
 
   def test_explicit_baseline_overrides_nominal(self) -> None:
     scenarios = (Scenario(name="nominal", object_query="roller", target="bin_cell_3"),)
-    _, baseline = run_batch(scenarios, ROBOT_MOCK, baseline_success_rate=0.4)
+    _, baseline = run_batch(scenarios, COMPETITION_EVAL, baseline_success_rate=0.4)
     self.assertAlmostEqual(baseline, 0.4)
 
 

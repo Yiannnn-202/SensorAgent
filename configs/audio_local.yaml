@@ -1,7 +1,6 @@
 agent:
   name: sensoragent
   mode: audio_local
-  default_skill: mock.pick_and_place
 
 tools:
   enabled:
@@ -9,15 +8,11 @@ tools:
     - audio.listen_vad_transcribe
     - audio.transcribe
     - audio.speak
-    - vision.mock_detect
-    - robot.mock_pick
-    - robot.mock_place
 
 skills:
   enabled:
     - audio.listen_command
     - audio.announce
-    - mock.pick_and_place
 
 integrations:
   audio:

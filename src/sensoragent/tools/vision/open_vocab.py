@@ -481,6 +481,7 @@ def _grounding_prompt(query: str) -> str:
     "阶梯轴": "stepped shaft",
     "滚柱": "roller",
     "滚筒": "roller",
+    "滚轮": "roller",
     "齿轮": "gear",
     "法兰": "flange",
     "红色": "red ",
@@ -1231,9 +1232,9 @@ def _resolve_spatial(
     return None, candidates, "ambiguous"
   if relation in _SPATIAL_IMAGE_MIDDLE_RELATIONS:
     keyed.sort(key=lambda item: item[0])
-    if len(keyed) % 2 == 0 or constraint.ordinal > 1:
+    if constraint.ordinal > 1:
       return None, candidates, "ambiguous"
-    middle_index = len(keyed) // 2
+    middle_index = (len(keyed) - 1) // 2
     winner = keyed[middle_index][1]
     alternatives = [detection for _, detection in keyed if detection is not winner]
     return winner, alternatives, None
@@ -1965,12 +1966,123 @@ class VisionOpenVocabularyDetectTool:
 
     return estimate
 
+  def _cloud_base_xy_estimator(
+    self,
+    cloud_path: str | None,
+    t_base_camera: list[list[float]] | None,
+  ) -> Callable[[VisionDetection], tuple[float, float] | None] | None:
+    """Build a candidate-centre -> base XY estimator from an xyzuv point cloud."""
+
+    if cloud_path is None or t_base_camera is None:
+      return None
+    cloud = np.load(cloud_path)
+    if cloud.ndim != 2 or cloud.shape[0] == 0 or cloud.shape[1] < 5:
+      raise ValueError("cloud_path must contain Nx5 xyzuv points")
+
+    def estimate(detection: VisionDetection) -> tuple[float, float] | None:
+      center = detection.center_px
+      if center is None or len(center) < 2:
+        bbox = detection.bbox_2d
+        if bbox is None or len(bbox) < 4:
+          return None
+        center = [(bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0]
+      distances = (cloud[:, 3] - float(center[0])) ** 2 + (
+        cloud[:, 4] - float(center[1])
+      ) ** 2
+      point_base = _transform_to_base(
+        cloud[int(np.argmin(distances)), :3].tolist(),
+        t_base_camera,
+      )
+      if point_base is None:
+        return None
+      return float(point_base[0]), float(point_base[1])
+
+    return estimate
+
+  def _candidate_base_xy_estimator(
+    self,
+    *,
+    cloud_path: str | None,
+    camera_info: dict | None,
+    t_base_camera: list[list[float]] | None,
+  ) -> Callable[[VisionDetection], tuple[float, float] | None] | None:
+    """Prefer measured point-cloud candidate positions over table-plane projection."""
+
+    cloud_estimator = self._cloud_base_xy_estimator(cloud_path, t_base_camera)
+    if cloud_estimator is not None:
+      return cloud_estimator
+    return self._base_xy_estimator(camera_info, t_base_camera)
+
+  def _filter_reachable_candidates(
+    self,
+    candidates: list[VisionDetection],
+    base_xy_of: Callable[[VisionDetection], tuple[float, float] | None] | None,
+  ) -> list[VisionDetection]:
+    """Apply configured base-frame workspace and source-region gates."""
+
+    if self._allowed_xy_polygon is not None:
+      if base_xy_of is None:
+        return []
+      candidates = [
+        candidate
+        for candidate in candidates
+        if _within_allowed_xy_polygon(
+          base_xy_of(candidate),
+          self._allowed_xy_polygon,
+          self._allowed_xy_margin_m,
+        )
+      ]
+    if self._workspace and base_xy_of is not None:
+      candidates = [
+        candidate
+        for candidate in candidates
+        if _within_workspace(base_xy_of(candidate), self._workspace)
+      ]
+    return candidates
+
+  def _select_reachable_baseline(
+    self,
+    *,
+    query: str,
+    image_path: str | None,
+    depth_path: str | None,
+    options: VisionInferenceOptions,
+    cloud_path: str | None,
+    camera_info: dict | None,
+    t_base_camera: list[list[float]] | None,
+  ) -> tuple[VisionDetection | None, list[VisionDetection]]:
+    """Select the highest-confidence candidate after configured reach gates."""
+
+    candidates = self._detector.detect_all(
+      query=query,
+      image_path=image_path,
+      depth_path=depth_path,
+      options=options,
+    )
+    found = [
+      candidate
+      for candidate in candidates
+      if candidate.found and candidate.bbox_2d is not None
+    ]
+    base_xy_of = self._candidate_base_xy_estimator(
+      cloud_path=cloud_path,
+      camera_info=camera_info,
+      t_base_camera=t_base_camera,
+    )
+    reachable = self._filter_reachable_candidates(found, base_xy_of)
+    if not reachable:
+      return None, found
+    winner = max(reachable, key=lambda detection: detection.confidence)
+    alternatives = [candidate for candidate in found if candidate is not winner]
+    return winner, alternatives
+
   def _select_by_spatial(
     self,
     *,
     query: str,
     image_path: str | None,
     depth_path: str | None,
+    cloud_path: str | None,
     options: VisionInferenceOptions,
     spatial: SpatialConstraint,
     camera_info: dict | None,
@@ -2004,13 +2116,12 @@ class VisionOpenVocabularyDetectTool:
       ]
       if not candidates:
         return None, scored, "not_found"
-    base_xy_of = self._base_xy_estimator(camera_info, t_base_camera)
-    if self._workspace and base_xy_of is not None:
-      candidates = [
-        candidate
-        for candidate in candidates
-        if _within_workspace(base_xy_of(candidate), self._workspace)
-      ]
+    base_xy_of = self._candidate_base_xy_estimator(
+      cloud_path=cloud_path,
+      camera_info=camera_info,
+      t_base_camera=t_base_camera,
+    )
+    candidates = self._filter_reachable_candidates(candidates, base_xy_of)
     winner, alternatives, error = _resolve_spatial(
       candidates,
       spatial,
@@ -2166,6 +2277,7 @@ class VisionOpenVocabularyDetectTool:
           query=query,
           image_path=image_path,
           depth_path=depth_path,
+          cloud_path=call.input.get("cloud_path"),
           options=options,
           spatial=spatial,
           camera_info=_load_camera_info(
@@ -2220,12 +2332,41 @@ class VisionOpenVocabularyDetectTool:
             },
           )
         else:
-          detection = self._detector.detect(
-            query=query,
-            image_path=image_path,
-            depth_path=depth_path,
-            options=options,
-          )
+          if self._workspace or self._allowed_xy_polygon is not None:
+            detection, alternatives = self._select_reachable_baseline(
+              query=query,
+              image_path=image_path,
+              depth_path=depth_path,
+              options=options,
+              cloud_path=call.input.get("cloud_path"),
+              camera_info=_load_camera_info(
+                call.input.get("camera_info_path", self._camera_info_path),
+                call.input.get("camera_info", self._camera_info),
+              ),
+              t_base_camera=call.input.get("T_base_camera", self._t_base_camera),
+            )
+            if detection is None:
+              return ToolResult(
+                tool=self.spec.name,
+                success=False,
+                output={
+                  "found": False,
+                  "label": query,
+                  "confidence": 0.0,
+                  "source": self._backend,
+                  "candidates": [
+                    alternative.to_output() for alternative in alternatives
+                  ],
+                },
+                error="OBJECT_NOT_FOUND: no reachable candidate passed workspace/source-region filters",
+              )
+          else:
+            detection = self._detector.detect(
+              query=query,
+              image_path=image_path,
+              depth_path=depth_path,
+              options=options,
+            )
       detection = self._refine_detection(
         detection,
         image_path=image_path,

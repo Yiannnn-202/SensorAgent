@@ -19,7 +19,7 @@ class StaticPlanner:
 
   def __init__(
     self,
-    target: str = "mock.pick_place_actionlist",
+    target: str = "industrial.sorting_config_pick_place_actionlist",
     target_kind: PlanTargetKind = PlanTargetKind.ACTIONLIST,
   ) -> None:
     self._target = target

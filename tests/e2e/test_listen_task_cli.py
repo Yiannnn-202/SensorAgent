@@ -23,59 +23,6 @@ from sensoragent.services.cli import main as cli_main
 
 
 class ListenTaskCliTest(TestCase):
-  def test_listen_task_cli_with_fake_recorder_and_static_planner(self) -> None:
-    with tempfile.TemporaryDirectory() as temp_dir:
-      log_path = Path(temp_dir) / "listen_task.jsonl"
-      audio_path = Path(temp_dir) / "listen.wav"
-      env = os.environ.copy()
-      env["PYTHONPATH"] = str(ROOT / "src")
-
-      result = subprocess.run(
-        [
-          sys.executable,
-          "-m",
-          "sensoragent.services.cli.main",
-          "listen-task",
-          "--config",
-          str(ROOT / "configs" / "audio_mock.yaml"),
-          "--planner",
-          "static",
-          "--duration",
-          "1",
-          "--audio-path",
-          str(audio_path),
-          "--object-query",
-          "silver roller",
-          "--target",
-          "third bin cell",
-          "--log-path",
-          str(log_path),
-        ],
-        cwd=ROOT,
-        env=env,
-        check=False,
-        capture_output=True,
-        text=True,
-      )
-
-      self.assertEqual(result.returncode, 0, msg=result.stderr)
-      response_text, _, log_line = result.stdout.partition("\nTask log:")
-      response = json.loads(response_text)
-
-      self.assertIn("transcript", response)
-      self.assertIn("task", response)
-      self.assertEqual(response["task"]["status"], "succeeded")
-      self.assertIn("银色滚柱", response["transcript"]["text"])
-      self.assertTrue(audio_path.exists())
-      self.assertIn(str(log_path), log_line)
-      self.assertTrue(log_path.exists())
-      records = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-      events = [record["event"] for record in records]
-      self.assertIn("listen_task_started", events)
-      self.assertIn("listen_task_transcribed", events)
-      self.assertIn("listen_task_agent_started", events)
-      self.assertIn("listen_task_finished", events)
-
   def test_listen_task_cli_rejects_empty_transcript(self) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
       log_path = Path(temp_dir) / "listen_task.jsonl"
@@ -98,7 +45,7 @@ class ListenTaskCliTest(TestCase):
         logger=Mock(),
       )
       args = SimpleNamespace(
-        config=ROOT / "configs" / "audio_mock.yaml",
+        config=ROOT / "configs" / "audio_local.yaml",
         planner="static",
         duration=None,
         language=None,

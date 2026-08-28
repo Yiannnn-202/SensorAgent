@@ -15,17 +15,17 @@ from sensoragent.contracts import ContractValidator
 from sensoragent.logger import TaskLogger
 from sensoragent.schemas import ToolCall, ToolResult, ToolSpec, TraceContext
 from sensoragent.tools import ToolRegistry, ToolRuntime
-from sensoragent.tools.vision.mock import MockDetectTool
+from sensoragent.tools.vision.config_detect import VisionConfigDetectTool
 
 
 class ToolRuntimeValidationTest(TestCase):
   def test_tool_runtime_rejects_invalid_input_before_invocation(self) -> None:
     registry = ToolRegistry()
-    registry.register(MockDetectTool())
+    registry.register(VisionConfigDetectTool({}))
     logger = TaskLogger()
     runtime = ToolRuntime(registry, logger, ContractValidator(ROOT / "contracts"))
 
-    result = runtime.invoke("vision.mock_detect", {}, TraceContext())
+    result = runtime.invoke("vision.config_detect", {}, TraceContext())
 
     self.assertFalse(result.success)
     self.assertIn("$.query is required", result.error or "")
@@ -35,7 +35,7 @@ class ToolRuntimeValidationTest(TestCase):
 
   def test_tool_runtime_rejects_invalid_success_output_after_invocation(self) -> None:
     class BadOutputTool:
-      spec = ToolSpec(name="vision.mock_detect", description="Bad output tool")
+      spec = ToolSpec(name="vision.config_detect", description="Bad output tool")
 
       def run(self, call: ToolCall) -> ToolResult:
         return ToolResult(
@@ -49,7 +49,7 @@ class ToolRuntimeValidationTest(TestCase):
     logger = TaskLogger()
     runtime = ToolRuntime(registry, logger, ContractValidator(ROOT / "contracts"))
 
-    result = runtime.invoke("vision.mock_detect", {"query": "roller"}, TraceContext())
+    result = runtime.invoke("vision.config_detect", {"query": "roller"}, TraceContext())
 
     self.assertFalse(result.success)
     self.assertIn("$.label is required", result.error or "")

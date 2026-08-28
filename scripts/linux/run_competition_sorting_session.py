@@ -21,25 +21,27 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
   sys.path.insert(0, str(SCRIPT_DIR))
 
-from test_gazebo_pick_pipeline import (  # noqa: E402
-  _check_bridge,
-  _wait_for_bridge,
-  _wait_for_ready,
+from agent_bridge_support import (  # noqa: E402
+  check_bridge,
+  wait_for_bridge,
+  wait_for_ready,
 )
 
 from sensoragent.agent import AgentBundle, build_agent  # noqa: E402
 from sensoragent.config import SensorAgentConfig, load_config  # noqa: E402
+from sensoragent.integrations import OpenAICompatibleClient, load_llm_config_from_env  # noqa: E402
 from sensoragent.grounding import (  # noqa: E402
   GroundingStatus,
+  LlmAssistedSortingCommandGrounder,
   ObjectOntology,
-  OracleInstanceResolver,
   SortingCommandGrounder,
 )
 from sensoragent.schemas import TraceContext  # noqa: E402
 from sensoragent.state import CompetitionWorldState  # noqa: E402
 
 
-ACTIONLIST = "industrial.sorting_config_pick_place_actionlist"
+SIM_DECISION_TREE = "industrial.recovery_pick_place_tree"
+HARDWARE_ACTIONLIST = "hardware.pick_place_actionlist"
 EXIT_COMMANDS = {"退出", "结束", "exit", "quit", "q"}
 STATUS_COMMANDS = {"状态", "status"}
 
@@ -85,26 +87,37 @@ class CompetitionSortingSession:
     config: SensorAgentConfig,
     bundle: AgentBundle,
     *,
+    backend: str = "sim",
+    llm_grounding: bool = False,
     max_recovery_attempts: int = 1,
   ) -> None:
     self.config = config
     self.bundle = bundle
+    self.backend = backend
+    if self.backend not in {"sim", "hardware"}:
+      raise ValueError("backend must be sim or hardware")
+    self.actionlist_name = HARDWARE_ACTIONLIST if self.backend == "hardware" else None
+    self.decision_tree_name = SIM_DECISION_TREE if self.backend == "sim" else None
     self.ontology = ObjectOntology.from_mapping(config.scene.object_ontology)
-    self.grounder = SortingCommandGrounder(
+    base_grounder = SortingCommandGrounder(
       self.ontology,
       config.scene.place_targets,
     )
-    self.resolver = OracleInstanceResolver(
-      self.ontology,
-      config.scene.objects,
+    self.grounder = (
+      LlmAssistedSortingCommandGrounder(
+        base_grounder,
+        self.ontology,
+        config.scene.place_targets,
+        OpenAICompatibleClient(load_llm_config_from_env()),
+      )
+      if llm_grounding
+      else base_grounder
     )
+    self.resolver = None
     self.world = CompetitionWorldState(
       tuple(config.scene.place_targets),
     )
     self.max_recovery_attempts = max(0, int(max_recovery_attempts))
-    for object_class in self.ontology.classes():
-      for instance in self.resolver.candidates(object_class.class_id):
-        self.world.observe(instance)
 
   def handle_text(self, text: str, *, turn_index: int) -> dict:
     normalized = "".join(text.strip().casefold().split())
@@ -129,7 +142,24 @@ class CompetitionSortingSession:
       "turn_index": turn_index,
       "transcript": text.strip(),
       "intent": intent.to_dict(),
-      "perception_backend": "oracle_config",
+      "grounding_source": intent.grounding_source,
+      "backend": self.backend,
+      "perception_backend": (
+        "hardware_rgbd" if self.backend == "hardware" else "gazebo_rgbd"
+      ),
+      "agent_loop": [
+        "idle",
+        "understand",
+        "check_world",
+        "observe",
+        "perceive",
+        "select",
+        "plan",
+        "act",
+        "verify",
+        "recover_if_needed",
+        "complete",
+      ],
     }
     if intent.status != GroundingStatus.READY:
       return {
@@ -160,40 +190,88 @@ class CompetitionSortingSession:
           f"{intent.target} 已被 {occupied_by} 占用，请选择其他空格。"
         ),
       }
+    if self.backend == "sim" and intent.selector is None and intent.object_class is not None:
+      object_class = self.ontology.get(intent.object_class)
+      if len(object_class.instance_ids) > 1:
+        return {
+          **base_result,
+          "success": False,
+          "status": GroundingStatus.NEEDS_CLARIFICATION,
+          "error": "INSTANCE_AMBIGUOUS",
+          "clarification": (
+            f"检测到多个{object_class.display_name}，"
+            "请说明左、右、前、后、最近、最远或第几个。"
+          ),
+        }
 
-    instance, clarification = self.resolver.resolve(
-      intent,
-      excluded=self.world.unavailable_instances,
-    )
-    if instance is None:
+    if self.backend == "hardware":
+      execution = self._execute_with_recovery(
+        intent.raw_text,
+        intent.target,
+        pick_profile=intent.object_class or "",
+        spatial_constraint=(
+          asdict(intent.selector) if intent.selector is not None else {}
+        ),
+      )
+      if execution["success"]:
+        self.world.record(
+          "hardware_task_completed",
+          object_class=intent.object_class,
+          target=intent.target,
+        )
+      else:
+        self.world.record(
+          "hardware_task_failed",
+          object_class=intent.object_class,
+          target=intent.target,
+          error=execution.get("error"),
+        )
       return {
         **base_result,
-        "success": False,
-        "status": GroundingStatus.NEEDS_CLARIFICATION,
-        "error": "INSTANCE_AMBIGUOUS",
-        "clarification": clarification,
+        "success": execution["success"],
+        "status": "completed" if execution["success"] else "failed",
+        "selected_instance": None,
+        "execution": execution,
+        "world_state": self.world.to_dict(),
       }
-    self.world.observe(instance)
-    self.world.select(instance.instance_id, intent.target)
+
+    object_query = self._vision_query(intent.object_class)
     execution = self._execute_with_recovery(
-      instance.instance_id,
+      object_query,
       intent.target,
+      spatial_constraint=(
+        asdict(intent.selector) if intent.selector is not None else {}
+      ),
     )
     if execution["success"]:
-      self.world.mark_placed(instance.instance_id, intent.target)
+      self.world.record(
+        "sim_visual_task_completed",
+        object_class=intent.object_class,
+        object_query=object_query,
+        target=intent.target,
+      )
     else:
-      self.world.mark_failed(
-        instance.instance_id,
-        str(execution.get("error") or "workflow failed"),
+      self.world.record(
+        "sim_visual_task_failed",
+        object_class=intent.object_class,
+        object_query=object_query,
+        target=intent.target,
+        error=execution.get("error"),
       )
     return {
       **base_result,
       "success": execution["success"],
       "status": "completed" if execution["success"] else "failed",
-      "selected_instance": instance.to_dict(),
+      "selected_instance": None,
       "execution": execution,
       "world_state": self.world.to_dict(),
     }
+
+  def _vision_query(self, object_class: str | None) -> str:
+    if object_class is None:
+      return ""
+    item = self.ontology.get(object_class)
+    return item.vision_queries[0] if item.vision_queries else item.class_id
 
   def _handle_batch(self, intent, base_result: dict) -> dict:
     """Queue every remaining instance of the class, one cell per instance.
@@ -202,6 +280,14 @@ class CompetitionSortingSession:
     batch so the remaining queue and the failed object stay on record.
     """
 
+    if self.resolver is None:
+      return {
+        **base_result,
+        "success": False,
+        "status": GroundingStatus.UNSUPPORTED,
+        "error": "BATCH_UNSUPPORTED",
+        "clarification": "视觉模式当前不支持批量全类分拣，请逐条指定目标零件和目标格。",
+      }
     queue = self.resolver.candidates(
       intent.object_class,
       excluded=self.world.unavailable_instances,
@@ -294,15 +380,42 @@ class CompetitionSortingSession:
       "world_state": self.world.to_dict(),
     }
 
-  def _execute_with_recovery(self, instance_id: str, target: str) -> dict:
+  def _execute_with_recovery(
+    self,
+    object_query: str,
+    target: str,
+    *,
+    pick_profile: str = "",
+    spatial_constraint: dict | None = None,
+  ) -> dict:
     attempts: list[dict] = []
+    input_data = {
+      "object_query": object_query,
+      "target": target,
+    }
+    if self.actionlist_name is not None:
+      actionlist = self.bundle.actionlists[self.actionlist_name]
+      if "pick_profile" in actionlist.inputs:
+        input_data["pick_profile"] = pick_profile
+      if "spatial_constraint" in actionlist.inputs:
+        input_data["spatial_constraint"] = spatial_constraint or {}
+    elif self.decision_tree_name is not None:
+      input_data["spatial_constraint"] = spatial_constraint or {}
+      input_data["max_recovery_attempts"] = self.max_recovery_attempts
+      actionlist = None
+    else:
+      raise RuntimeError("No executable workflow is configured for this session")
     for attempt in range(1, self.max_recovery_attempts + 2):
       trace = TraceContext()
-      result = self.bundle.actionlist_runtime.run(
-        self.bundle.actionlists[ACTIONLIST],
-        {"object_query": instance_id, "target": target},
-        trace,
-      )
+      if actionlist is not None:
+        result = self.bundle.actionlist_runtime.run(actionlist, input_data, trace)
+        step_records = [asdict(step) for step in result.steps]
+        workflow_name = self.actionlist_name
+      else:
+        tree = self.bundle.decision_trees[self.decision_tree_name or ""]
+        result = self.bundle.decision_tree_runtime.run(tree, input_data, trace)
+        step_records = [asdict(node) for node in result.nodes]
+        workflow_name = self.decision_tree_name
       if isinstance(result.output, dict) and isinstance(result.output.get("world_state"), dict):
         self.world.merge_runtime_state(result.output["world_state"])
       attempt_result = {
@@ -310,15 +423,18 @@ class CompetitionSortingSession:
         "success": result.success,
         "error": result.error,
         "trace": trace.to_dict(),
-        "steps": [asdict(step) for step in result.steps],
+        "steps": step_records,
       }
       attempts.append(attempt_result)
       if result.success:
         return {
           "success": True,
+          "workflow": workflow_name,
           "attempts": attempts,
           "recovery_attempts": attempt - 1,
         }
+      if actionlist is None:
+        break
       if attempt > self.max_recovery_attempts:
         break
 
@@ -371,6 +487,7 @@ class CompetitionSortingSession:
 
     return {
       "success": False,
+      "workflow": self.actionlist_name or self.decision_tree_name,
       "error": attempts[-1]["error"] if attempts else "workflow failed",
       "attempts": attempts,
       "recovery_attempts": max(0, len(attempts) - 1),
@@ -435,10 +552,19 @@ def _parser() -> argparse.ArgumentParser:
     type=Path,
     default=ROOT / "configs" / "robot_sorting_sim.yaml",
   )
+  parser.add_argument("--backend", choices=("sim", "hardware"), default="sim")
   parser.add_argument("--mode", choices=("text", "voice"), default="text")
   parser.add_argument("--command", help="Run one text command and exit.")
   parser.add_argument("--execute", action="store_true")
   parser.add_argument("--duration", type=float, default=15.0)
+  parser.add_argument(
+    "--llm-grounding",
+    action="store_true",
+    help=(
+      "Use constrained LLM fallback only when deterministic industrial "
+      "grounding cannot map the command."
+    ),
+  )
   parser.add_argument("--max-turns", type=int, default=None)
   parser.add_argument("--max-recovery-attempts", type=int, default=1)
   parser.add_argument("--jsonl-out", type=Path, default=None)
@@ -457,9 +583,9 @@ def main(argv: list[str] | None = None) -> int:
     config.integrations.robot.get("endpoint", "http://127.0.0.1:8765")
   )
   if args.execute:
-    _wait_for_bridge(endpoint, 30.0)
-    _check_bridge(endpoint)
-    _wait_for_ready(
+    wait_for_bridge(endpoint, 30.0)
+    check_bridge(endpoint)
+    wait_for_ready(
       endpoint,
       60.0,
       ("move_action", "execute_trajectory", "cartesian_path", "gripper_cmd"),
@@ -474,6 +600,8 @@ def main(argv: list[str] | None = None) -> int:
   session = CompetitionSortingSession(
     active_config,
     bundle,
+    backend=args.backend,
+    llm_grounding=args.llm_grounding,
     max_recovery_attempts=args.max_recovery_attempts,
   )
 

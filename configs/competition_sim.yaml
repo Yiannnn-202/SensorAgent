@@ -1,0 +1,36 @@
+extends: robot_sorting_sim.yaml
+
+agent:
+  mode: competition_sim
+
+tools:
+  enabled:
+    - robot.get_state
+    - robot.move_joints
+    - robot.move_pose
+    - robot.move_linear
+    - robot.stop
+    - robot.plan_top_down_pick
+    - robot.plan_place
+    - robot.resolve_place_target
+    - gripper.open
+    - gripper.close
+    - gripper.get_state
+    - vision.dual_branch_detect
+    - vision.capture_frame
+    - vision.verify_object_lifted
+    - vision.verify_object_in_bin
+    - recovery.classify_failure
+    - recovery.plan
+    - audio.listen_transcribe
+    - audio.listen_vad_transcribe
+    - audio.transcribe
+    - audio.speak
+
+integrations:
+  vision:
+    backend: dual_branch
+    dual_branch:
+      route_policy: industrial_first
+      fallback_on_error: true
+      min_fixed_confidence: 0.35

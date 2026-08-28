@@ -33,29 +33,22 @@ class TaskLifecycleTest(TestCase):
       "Planner selected industrial.recovery_pick_place_tree but missing required input(s): object_query",
     )
 
-  def test_agent_run_task_lifecycle_succeeds(self) -> None:
-    bundle = build_agent_from_config(ROOT / "configs" / "mock.yaml")
-
-    task = bundle.agent.run_task(
-      "put the silver roller into the third bin cell",
-      {"object_query": "silver roller", "target": "third bin cell"},
+  def test_agent_create_task_lifecycle_records_state(self) -> None:
+    bundle = build_agent_from_config(ROOT / "configs" / "competition_sim.yaml")
+    task = bundle.agent.create_task(
+      "把左边的滚轮放到三号格",
+      {"object_query": "roller", "target": "bin_cell_3"},
     )
 
-    self.assertEqual(task.status, TaskStatus.SUCCEEDED)
-    self.assertIsNotNone(task.plan)
-    self.assertEqual(task.plan.target, "mock.pick_place_actionlist")
-    self.assertIsNotNone(task.result)
-    self.assertEqual(task.result["place"]["target"], "third bin cell")
+    self.assertEqual(task.status, TaskStatus.PENDING)
     self.assertIs(bundle.task_store.get(task.task_id), task)
-
-    event_names = [event.event for event in bundle.event_stream.events()]
     self.assertEqual(
-      event_names,
-      ["task_created", "task_started", "task_planned", "task_succeeded"],
+      [event.event for event in bundle.event_stream.events()],
+      ["task_created"],
     )
 
   def test_agent_cancel_pending_task(self) -> None:
-    bundle = build_agent_from_config(ROOT / "configs" / "mock.yaml")
+    bundle = build_agent_from_config(ROOT / "configs" / "competition_sim.yaml")
     task = bundle.agent.create_task("cancel me", {"object_query": "roller"})
 
     cancelled = bundle.agent.cancel_task(task.task_id)

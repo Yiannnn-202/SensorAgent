@@ -380,7 +380,7 @@ class LLMPlannerAllowedTargetsTest(TestCase):
 
     planner = LLMPlanner(
       _FakeClient(),
-      allowed_targets=("industrial.pick_place_actionlist", "mock.pick_place_actionlist"),
+      allowed_targets=("industrial.pick_place_actionlist",),
     )
     plan = planner.plan("把滚柱放到 bin_cell_3", {})
     self.assertEqual(plan.target, "industrial.pick_place_actionlist")

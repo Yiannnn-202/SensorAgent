@@ -1,0 +1,54 @@
+agent:
+  name: sensoragent
+  mode: vision_dual_branch
+
+tools:
+  enabled:
+    - vision.dual_branch_detect
+
+skills:
+  enabled: []
+
+integrations:
+  vision:
+    # The unified competition-facing visual perception entry point.
+    # Known industrial classes route to YOLO11-seg first for stable masks and
+    # speed; open or long-tail language references route to the industrial
+    # fine-tuned GroundingDINO + SAM2 branch.
+    backend: dual_branch
+    model_path: models/vision/yolo11-seg/industrial-best.pt
+    grounding_dino_model: models/vision/grounding-dino/industrial-open-vocab/checkpoint-best
+    sam2_model_path: models/vision/sam2_t.pt
+    box_threshold: 0.35
+    text_threshold: 0.25
+    nms_iou_threshold: 0.55
+    depth_scale: 1.0
+    camera_frame: camera_color_optical_frame
+    base_frame: base_link
+    dual_branch:
+      route_policy: industrial_first
+      fallback_on_error: true
+      min_fixed_confidence: 0.35
+      industrial_labels:
+        - screwdriver
+        - screw
+        - wrench
+        - hex_nut
+        - nut
+        - short_bolt
+        - bolt
+        - stepped_shaft
+        - roller
+        - gear
+        - flange
+        - cylinder
+        - washer
+        - bearing
+
+logging:
+  level: info
+  console: true
+  app_log: logs/app.log
+  task_dir: logs/tasks
+  trace_dir: logs/traces
+  error_dir: logs/errors
