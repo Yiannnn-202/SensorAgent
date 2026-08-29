@@ -57,6 +57,7 @@ the same status or design.
 - [Phase G1 Gazebo smoke test](guides/simulation/g1-gazebo-smoke.md)
 - [Gazebo recovery demo](guides/simulation/gazebo-recovery-demo.md)
 - [Metal sorting text session (skip voice/vision)](guides/simulation/metal-sorting-text-session.md)
+- [Sorting benchmark findings](guides/simulation/sorting-benchmark-findings.md)
 - [Create a grasping block](guides/simulation/create-grasp-block.md)
 
 ### Workflows

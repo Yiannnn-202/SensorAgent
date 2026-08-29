@@ -16,6 +16,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("bind_host", default_value="127.0.0.1"),
             DeclareLaunchArgument("bind_port", default_value="8765"),
+            DeclareLaunchArgument("motion_timeout", default_value="90.0"),
             Node(
                 package="sensoragent_robot_bridge",
                 executable="robot_bridge",
@@ -28,6 +29,10 @@ def generate_launch_description():
                         "bind_port": ParameterValue(
                             LaunchConfiguration("bind_port"),
                             value_type=int,
+                        ),
+                        "motion_timeout": ParameterValue(
+                            LaunchConfiguration("motion_timeout"),
+                            value_type=float,
                         ),
                         "use_sim_time": True,
                     },

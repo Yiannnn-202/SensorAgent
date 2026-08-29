@@ -48,6 +48,7 @@ def generate_launch_description():
         launch_arguments={
             "bind_host": LaunchConfiguration("robot_bridge_host"),
             "bind_port": LaunchConfiguration("robot_bridge_port"),
+            "motion_timeout": LaunchConfiguration("robot_bridge_motion_timeout"),
         }.items(),
         condition=IfCondition(LaunchConfiguration("start_robot_bridge")),
     )
@@ -63,6 +64,9 @@ def generate_launch_description():
                 default_value="127.0.0.1",
             ),
             DeclareLaunchArgument("robot_bridge_port", default_value="8765"),
+            DeclareLaunchArgument(
+                "robot_bridge_motion_timeout", default_value="90.0"
+            ),
             DeclareLaunchArgument(
                 "world_file",
                 default_value="industrial_pgs.sdf",

@@ -19,7 +19,7 @@ sensoragent_robot_bridge:
     planning_attempts: 10
     planning_time: 10.0
     motion_timeout: 90.0
-    gripper_timeout: 15.0
+    gripper_timeout: 30.0
     cartesian_max_step: 0.01
     cartesian_min_fraction: 0.98
     position_tolerance: 0.005
