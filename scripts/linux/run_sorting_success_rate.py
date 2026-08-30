@@ -169,6 +169,70 @@ def reset_arm_home(*, attempts: int = 4) -> bool:
     return False
 
 
+# --- Simulation-stack supervisor -------------------------------------------------
+# When the arm falls into an unrecoverable configuration (self-collision /
+# joint-limit pocket), MoveIt refuses every plan and each trial dies at reset.
+# The only way out is restarting the whole Gazebo stack. The benchmark does
+# this automatically after N consecutive reset failures.
+
+SIM_LAUNCH_SCRIPT = ROOT / "scripts" / "linux" / "run_industrial_sorting_metal_sim.sh"
+SIM_PROCESS_PATTERNS = [
+  "ros2 launch",
+  "ign gazebo",
+  "gzserver",
+  "gzclient",
+  "robot_bridge",
+  "gripper_action_bridge",
+  "static_scene_publisher",
+  "move_group",
+  "rviz2",
+  "controller_manager",
+  "robot_state_publisher",
+  "parameter_bridge",
+]
+
+
+def stop_sim_stack() -> None:
+  """Kill every process of a running sim stack (TERM then KILL)."""
+
+  for pattern in SIM_PROCESS_PATTERNS:
+    subprocess.run(["pkill", "-f", pattern], capture_output=True)
+  time.sleep(3)
+  for pattern in SIM_PROCESS_PATTERNS:
+    subprocess.run(["pkill", "-9", "-f", pattern], capture_output=True)
+  time.sleep(2)
+
+
+def start_sim_stack(log_file: Path) -> None:
+  """Launch a fresh sim stack in the background (does not wait for ready)."""
+
+  log_handle = log_file.open("ab")
+  subprocess.Popen(
+    ["bash", str(SIM_LAUNCH_SCRIPT), "render_engine:=ogre", "robot_bridge_motion_timeout:=300.0"],
+    stdout=log_handle,
+    stderr=subprocess.STDOUT,
+    start_new_session=True,
+  )
+
+
+def restart_sim_stack(log_dir: Path) -> bool:
+  """Restart the sim stack and wait until the bridge is responsive again."""
+
+  print("[supervisor] restarting simulation stack...", flush=True)
+  stop_sim_stack()
+  start_sim_stack(log_dir / "benchmark_sim_restart.log")
+  try:
+    wait_for_bridge(timeout=300.0)
+  except RuntimeError:
+    return False
+  # Fresh stack spawns the arm at home already; confirm it is idle.
+  try:
+    state = _http("GET", "/state", timeout=10.0)
+    return state.get("state", {}).get("arm", {}).get("status") in ("idle", "stopped")
+  except Exception:  # noqa: BLE001
+    return False
+
+
 def build_trial_config(config: SensorAgentConfig, label: str, object_key: str, pose_base: list[float], release_z: float) -> SensorAgentConfig:
   """Return a config whose config_detect catalog has only the trial object."""
 
@@ -278,6 +342,12 @@ def main() -> int:
   parser.add_argument("--config", type=Path, default=ROOT / "configs" / "robot_sorting_sim.yaml")
   parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility.")
   parser.add_argument("--out-dir", type=Path, default=ROOT / "logs" / "benchmarks")
+  parser.add_argument(
+    "--max-consecutive-reset-failures",
+    type=int,
+    default=2,
+    help="Restart the sim stack after this many consecutive arm-reset failures (0 disables).",
+  )
   args = parser.parse_args()
 
   wait_for_bridge()
@@ -320,12 +390,42 @@ def main() -> int:
 
   results: list[dict] = []
   trial_log = args.out_dir / f"sorting_success_{timestamp}_trial.jsonl"
+  consecutive_reset_failures = 0
+  sim_restarts = 0
   for trial_index in range(1, args.trials + 1):
+    # Dead-zone guard: after repeated reset failures the arm is unrecoverable
+    # without a fresh Gazebo; restart before wasting more trials.
+    if (
+      args.max_consecutive_reset_failures > 0
+      and consecutive_reset_failures >= args.max_consecutive_reset_failures
+    ):
+      print(
+        f"[supervisor] {consecutive_reset_failures} consecutive reset failures; restarting sim stack",
+        flush=True,
+      )
+      if restart_sim_stack(args.out_dir):
+        sim_restarts += 1
+        consecutive_reset_failures = 0
+        restart_note = {
+          "type": "sim_restart",
+          "after_trial": trial_index - 1,
+          "consecutive_reset_failures": consecutive_reset_failures,
+        }
+        del restart_note["consecutive_reset_failures"]
+        with out_path.open("a", encoding="utf-8") as fh:
+          fh.write(json.dumps(restart_note, ensure_ascii=False) + "\n")
+      else:
+        print("[supervisor] sim restart failed; aborting benchmark", flush=True)
+        break
     print(f"[trial {trial_index}/{args.trials}] starting...", flush=True)
     # Truncate the per-trial log so physics reads only see this trial.
     trial_log.write_text("", encoding="utf-8")
     record = run_trial(bundle_factory, base_config, rng, trial_index)
     record["grasp_physics"] = read_trial_grasp_physics(trial_log)
+    if record.get("error") == "arm_reset_failed":
+      consecutive_reset_failures += 1
+    else:
+      consecutive_reset_failures = 0
     results.append(record)
     with out_path.open("a", encoding="utf-8") as fh:
       fh.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -342,7 +442,7 @@ def main() -> int:
   placed = sum(1 for r in results if r["placed"] is True)
   full_success = sum(1 for r in results if r["actionlist_success"])
   print("\n=== SUMMARY ===")
-  print(f"trials: {total} (teleported ok: {teleported})")
+  print(f"trials: {total} (teleported ok: {teleported}, sim restarts: {sim_restarts})")
   if total:
     print(f"grasp success (physics): {grasped_physics}/{total} = {grasped_physics / total:.0%}")
     print(f"place success: {placed}/{total} = {placed / total:.0%}")
