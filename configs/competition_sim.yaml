@@ -34,3 +34,6 @@ integrations:
       route_policy: industrial_first
       fallback_on_error: true
       min_fixed_confidence: 0.35
+      grounding_dino:
+        refine_masks: true
+        require_masks: true

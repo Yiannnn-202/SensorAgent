@@ -546,7 +546,7 @@ def train(
     import transformers
   except ImportError as exc:
     raise GroundingDinoDatasetError(
-      "Grounding DINO training requires torch, Pillow, scipy, and transformers from requirements-vision.txt"
+      "Grounding DINO training requires torch, Pillow, scipy, and transformers from requirements.txt"
     ) from exc
 
   device = _normalized_device(settings.device, torch)

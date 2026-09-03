@@ -71,8 +71,8 @@ The perception layer converts operator commands and scene observations into
 structured task inputs. Speech input uses local VAD and SenseVoice ASR. Vision
 uses the competition-facing `vision.dual_branch_detect` Tool: known industrial
 classes route to YOLO11-seg for stable fixed-class instance segmentation, while
-unknown or long-tail language references route to industrial GroundingDINO plus
-SAM 2 for open-vocabulary detection and mask refinement.
+unknown or long-tail language references route to industrial GroundingDINO +
+SAM2 for open-vocabulary detection and mask refinement.
 
 Simple industrial references such as "左边的螺母" are not delegated to an
 unbounded LLM. They are handled by deterministic ontology and spatial grounding:
@@ -129,10 +129,10 @@ live-perception world-state fusion, and physical-cell validation.
 | Backend-neutral robot Tools and pick/place Skills | Implemented |
 | SensorAgent-to-Gazebo/MoveIt HTTP bridge | Implemented and used by Gazebo test scripts; automated ROS acceptance is not in the default suite |
 | Industrial config-detect pick/place ActionLists | Implemented for the current tabletop world |
-| Gazebo RGB-D open-vocabulary vision ActionList | Implemented as an optional vision path |
+| Gazebo RGB-D dual-branch vision ActionList | Implemented as the competition perception path |
 | Gazebo RGB-D frame capture Tool (`vision.capture_frame`) | Implemented; requires a ROS 2 Python interpreter on Ubuntu |
-| Dual-branch competition vision (`vision.dual_branch_detect`) | Implemented as a routing entry point: known industrial classes prefer YOLO11-seg, while open/long-tail references use the industrial GroundingDINO + SAM 2 branch |
-| Strict Grounding DINO + SAM 2 Tool (`vision.grounded_sam2`) | Implemented with a pretrained baseline and local industrial fine-tuning checkpoints; used as the open-vocabulary branch |
+| Dual-branch competition vision (`vision.dual_branch_detect`) | Implemented as a routing entry point: known industrial classes prefer YOLO11-seg, while open/long-tail references use the GroundingDINO + SAM2 branch |
+| Strict Grounding DINO + SAM 2 Tool (`vision.grounded_sam2`) | Implemented as the open-vocabulary branch with mandatory SAM2 mask refinement |
 | YOLOE and YOLO11-seg Tools | Implemented as optional alternatives; `vision.yolo11_seg_detect` is the fixed/many-class industrial segmentation branch and requires native masks |
 | Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
 | Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
@@ -162,8 +162,7 @@ enabling any physical motion.
 Python 3.12 is required for the Agent package.
 
 ```powershell
-python -m pip install -r requirements.txt          # core runtime + local audio
-python -m pip install -r requirements-vision.txt   # only for the vision model path
+python -m pip install -r requirements.txt
 python -m pip install onnxruntime pytest           # Silero VAD and the pytest-based tests
 ```
 
@@ -267,16 +266,10 @@ The submission branch keeps only two operational guides:
 
 The competition-facing path is `vision.dual_branch_detect`. It routes common
 industrial classes such as bolts, nuts, rollers, gears, flanges, and wrenches to
-the fixed-class YOLO11-seg branch, then falls back to the industrial
-GroundingDINO + SAM 2 branch when needed. Queries outside the fixed industrial
-ontology start from GroundingDINO to preserve open-vocabulary behavior.
-
-The generic open-vocabulary path still uses `vision.open_vocab_detect` for the
-temporary YOLOE baseline and configurable experimental backends. The strict
-`vision.grounded_sam2` Tool fixes the detector to Grounding DINO, always invokes
-SAM 2, and fails instead of silently falling back to a detector box when mask
-generation fails. Validate a portable dataset manifest before running a long
-evaluation:
+the fixed-class YOLO11-seg branch, then falls back to the GroundingDINO + SAM2
+branch when needed. Queries outside the fixed industrial ontology start from
+GroundingDINO to preserve open-vocabulary behavior. Validate a portable dataset
+manifest before running a long evaluation:
 
 ```powershell
 python scripts\vision_eval.py validate `
@@ -289,8 +282,8 @@ Run a labeled local dataset with one persistent model instance:
 ```powershell
 python scripts\vision_eval.py run `
   --manifest data\vision\competition_test.jsonl `
-  --config configs\vision_grounded_sam2.yaml `
-  --tool vision.grounded_sam2 `
+  --config configs\vision_dual_branch.example.yaml `
+  --tool vision.dual_branch_detect `
   --output-dir runs\vision\competition_test `
   --device 0 `
   --require-masks `

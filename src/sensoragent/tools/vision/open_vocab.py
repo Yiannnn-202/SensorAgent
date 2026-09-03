@@ -715,7 +715,7 @@ class GroundingDinoBackend:
     except ImportError as exc:
       raise ImportError(
         "transformers, torch, and Pillow are required for Grounding DINO. "
-        "Install requirements-vision.txt first."
+        "Install requirements.txt first."
       ) from exc
     self._processor = AutoProcessor.from_pretrained(self.model_id)
     self._model = AutoModelForZeroShotObjectDetection.from_pretrained(self.model_id)
@@ -755,7 +755,7 @@ class GroundingDinoBackend:
       from PIL import Image
     except ImportError as exc:
       raise ImportError(
-        "Pillow is required for Grounding DINO. Install requirements-vision.txt."
+        "Pillow is required for Grounding DINO. Install requirements.txt."
       ) from exc
 
     processor, model, torch = self._load_model()
@@ -905,7 +905,7 @@ class UltralyticsSam2Backend:
     except ImportError as exc:
       raise ImportError(
         "ultralytics is required for SAM 2 mask refinement. "
-        "Install requirements-vision.txt first."
+        "Install requirements.txt first."
       ) from exc
     self._model = SAM(self.weights_path)
     return self._model
@@ -1098,7 +1098,7 @@ def _write_detection_overlay(
   except ImportError as exc:
     raise ImportError(
       "Pillow is required to write a detection overlay. "
-      "Install requirements-vision.txt first."
+      "Install requirements.txt first."
     ) from exc
 
   source = Path(image_path)

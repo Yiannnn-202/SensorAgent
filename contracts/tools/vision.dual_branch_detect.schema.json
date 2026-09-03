@@ -1,7 +1,7 @@
 {
   "name": "vision.dual_branch_detect",
   "version": "0.1.0",
-  "description": "Route a vision request through YOLO11-seg fixed industrial segmentation and GroundingDINO open-vocabulary detection.",
+  "description": "Route a vision request through YOLO11-seg fixed industrial segmentation and GroundingDINO+SAM2 open-vocabulary detection.",
   "input_schema": {
     "type": "object",
     "required": ["query"],

@@ -9,7 +9,6 @@ SensorAgent uses Python 3.12 for the agent process.
 
 ```powershell
 python -m pip install -r requirements.txt
-python -m pip install -r requirements-vision.txt
 python -m pip install onnxruntime pytest
 $env:PYTHONPATH = "$(Get-Location)\src"
 python -m pytest -q tests
@@ -35,9 +34,6 @@ Relevant environment variables:
 SENSORAGENT_LLM_API_KEY
 SENSORAGENT_LLM_MODEL
 SENSORAGENT_LLM_BASE_URL
-SENSORAGENT_VLM_API_KEY
-SENSORAGENT_VLM_MODEL
-SENSORAGENT_VLM_BASE_URL
 SENSORAGENT_ROS_PYTHON
 SENSORAGENT_ROS_SETUP
 SENSORAGENT_GROUNDING_DINO_MODEL
@@ -144,3 +140,10 @@ configs/vision_dataset.example.jsonl
 configs/vision_train_grounding_dino.example.yaml
 configs/vision_train_grounding_dino.example.jsonl
 ```
+
+The open branch uses GroundingDINO + SAM2. `SENSORAGENT_GROUNDING_DINO_MODEL`
+may override the configured GroundingDINO path, and `SENSORAGENT_SAM2_WEIGHTS`
+may override the SAM2 path.
+
+The current submission-branch test baseline is **389 passed, 49 subtests
+passed**.

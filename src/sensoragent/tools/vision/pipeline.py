@@ -2,8 +2,7 @@
 
 The competition vision stack intentionally has two perception branches:
 YOLO11-seg for stable fixed industrial classes, and GroundingDINO+SAM2 for
-open-vocabulary queries and long-tail language references. This module keeps
-that policy explicit while preserving the existing branch-specific Tools.
+open-vocabulary queries and long-tail language references.
 """
 
 from __future__ import annotations
@@ -53,15 +52,15 @@ class VisionBranchAttempt:
 
 
 class VisionDualBranchDetectTool:
-  """Route one detection request through YOLO11-seg and GroundingDINO branches."""
+  """Route one request through YOLO11-seg and GroundingDINO+SAM2 branches."""
 
   spec = ToolSpec(
     name="vision.dual_branch_detect",
     description=(
       "Detect an industrial object through a YOLO11-seg fixed-class branch "
-      "and an industrial GroundingDINO open-vocabulary branch."
+      "and a GroundingDINO+SAM2 open-vocabulary branch."
     ),
-    tags=("vision", "dual-branch", "yolo11", "grounding-dino", "segmentation"),
+    tags=("vision", "dual-branch", "yolo11", "grounding-dino", "sam2", "segmentation"),
     timeout_seconds=600.0,
   )
 

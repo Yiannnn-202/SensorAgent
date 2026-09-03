@@ -83,6 +83,11 @@ The simulation path captures Gazebo RGB-D frames and uses
 used only for language grounding and supported-class validation; object position
 comes from the vision output consumed by the recovery DecisionTree.
 
+Known industrial classes route to YOLO11-seg. Unknown/open-language targets
+route to the GroundingDINO + SAM2 branch. GroundingDINO produces text-grounded
+bboxes, and SAM2 refines the selected bbox into an instance mask for downstream
+depth/point-cloud localization.
+
 ## 2. Hardware agent
 
 The hardware launcher is safety-gated. By default it starts the hardware bridge
@@ -117,16 +122,6 @@ mode:    text
 motion:  disabled unless --enable-motion is present
 ```
 
-Because the hardware path can resolve complex natural-language visual references
-against localized candidates, configure the VLM endpoint before starting the
-launcher:
-
-```bash
-export SENSORAGENT_VLM_API_KEY=...
-export SENSORAGENT_VLM_MODEL=...
-export SENSORAGENT_VLM_BASE_URL=https://api.example.com/v1
-```
-
 The hardware path captures real RGB/point-cloud input, resolves the requested
 object from localized candidates, selects the configured pick profile, executes
 the approved pick/place actionlist, and records the same JSON turn output. It
@@ -144,6 +139,16 @@ export SENSORAGENT_LLM_BASE_URL=https://api.example.com
 The text LLM may only output an allowed object class, action, target, quantity,
 and spatial selector. Invalid output is ignored and the deterministic grounding
 result is returned.
+
+For open visual grounding, fill the GroundingDINO and SAM2 paths in
+`configs/competition_hardware.yaml`:
+
+```yaml
+integrations:
+  vision:
+    grounding_dino_model: models/vision/grounding-dino/industrial-open-vocab
+    sam2_model_path: models/vision/sam2_t.pt
+```
 
 ## Output contract
 
@@ -184,6 +189,34 @@ A successful or failed command prints one object like:
 
 If the command is ambiguous or the target cell is occupied, the agent returns a
 structured failure and waits for the next command instead of terminating.
+
+## Failure detection
+
+Failure detection is not a single vision-only module. The agent combines:
+
+```text
+robot / gripper state
+tool and bridge errors
+post-grasp verification
+post-place verification
+optional RGB-D visual re-detection
+```
+
+Visual checks are used for postconditions that require observing the object:
+
+- `vision.verify_object_lifted` compares before/after object poses and reports
+  `DROPPED_OBJECT` when the object did not move with the gripper.
+- `vision.verify_object_in_bin` checks whether the observed object position is
+  inside the requested bin cell and reports `WRONG_BIN` when it is outside.
+- In live-perception workflows, `vision.capture_frame` and
+  `vision.dual_branch_detect` can re-detect the object after a failed step so
+  recovery can re-plan from the observed pose instead of a stale command pose.
+
+Non-visual failures such as bridge timeout, gripper command failure, invalid
+target, or motion planning failure are classified from structured tool/skill
+evidence by `recovery.classify_failure`. The recovery policy then chooses a
+bounded local action such as re-detect, re-pick, re-place, open gripper, or stop
+and reset.
 
 ## Validation
 

@@ -45,6 +45,11 @@ venv/
 .env.*
 !.env.example
 
+# Local planning/report artifacts kept outside the runnable code package
+/planning/
+/*.docx
+/SUBMISSION_CHECKLIST.md
+
 # Machine-specific physical-hardware calibration and operating limits
 configs/robot_hardware.local.yaml
 

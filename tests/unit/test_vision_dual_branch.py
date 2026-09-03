@@ -193,3 +193,4 @@ def test_dual_branch_example_config_registers_without_loading_models() -> None:
   bundle = build_agent_from_config(ROOT / "configs" / "vision_dual_branch.example.yaml")
 
   assert bundle.tool_registry.names() == ["vision.dual_branch_detect"]
+

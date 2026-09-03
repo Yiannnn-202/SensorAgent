@@ -289,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
   try:
     from ultralytics import YOLO
   except ImportError:
-    print("ultralytics is required; install requirements-vision.txt first", file=sys.stderr)
+    print("ultralytics is required; install requirements.txt first", file=sys.stderr)
     return 2
 
   model = YOLO(args.model)
