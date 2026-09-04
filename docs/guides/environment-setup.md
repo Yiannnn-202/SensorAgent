@@ -82,8 +82,8 @@ Useful options:
 bash scripts/linux/run_sim_agent.sh --mode voice
 bash scripts/linux/run_sim_agent.sh --dry-run
 bash scripts/linux/run_sim_agent.sh --no-start-stack
-bash scripts/linux/run_sim_agent.sh --llm-grounding
-bash scripts/linux/run_sim_agent.sh --llm-grounding --llm-grounding-mode assist
+bash scripts/linux/run_sim_agent.sh --llm-grounding-mode fallback
+bash scripts/linux/run_sim_agent.sh --no-llm-grounding
 ```
 
 ## Hardware environment
@@ -130,8 +130,8 @@ Useful options:
 ```bash
 bash scripts/linux/run_hardware_agent.sh --mode voice
 bash scripts/linux/run_hardware_agent.sh --no-start-stack
-bash scripts/linux/run_hardware_agent.sh --llm-grounding
-bash scripts/linux/run_hardware_agent.sh --llm-grounding --llm-grounding-mode assist
+bash scripts/linux/run_hardware_agent.sh --llm-grounding-mode fallback
+bash scripts/linux/run_hardware_agent.sh --no-llm-grounding
 ```
 
 ## Main configs

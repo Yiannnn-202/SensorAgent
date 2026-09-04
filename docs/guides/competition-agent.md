@@ -57,18 +57,18 @@ Useful options:
 bash scripts/linux/run_sim_agent.sh --mode voice
 bash scripts/linux/run_sim_agent.sh --dry-run
 bash scripts/linux/run_sim_agent.sh --no-start-stack
-bash scripts/linux/run_sim_agent.sh --llm-grounding
-bash scripts/linux/run_sim_agent.sh --llm-grounding --llm-grounding-mode assist
+bash scripts/linux/run_sim_agent.sh --llm-grounding-mode fallback
+bash scripts/linux/run_sim_agent.sh --no-llm-grounding
 ```
 
 `--dry-run` switches robot execution to the fake backend. `--no-start-stack`
 assumes Gazebo/MoveIt/bridge are already running.
-`--llm-grounding` enables a constrained LLM fallback for utterances that the
-rule-based industrial ontology cannot map; valid rule-based commands do not call
-the LLM in the default `fallback` mode. `--llm-grounding-mode assist` lets the
-LLM refine rule-ready intents within the same strict whitelist, so it can add a
-missing spatial selector or request clarification for vague wording without
-being allowed to output coordinates or robot actions.
+Constrained LLM grounding is enabled by default in `assist` mode, so the LLM can
+refine rule-ready intents within the same strict whitelist, add a missing
+spatial selector, or request clarification for vague wording without being
+allowed to output coordinates or robot actions. `--llm-grounding-mode fallback`
+calls the LLM only after rule grounding fails. `--no-llm-grounding` disables
+external LLM calls for offline/rules-only runs.
 
 Example commands after the prompt appears:
 
@@ -118,8 +118,8 @@ Useful options:
 ```bash
 bash scripts/linux/run_hardware_agent.sh --mode voice
 bash scripts/linux/run_hardware_agent.sh --no-start-stack
-bash scripts/linux/run_hardware_agent.sh --llm-grounding
-bash scripts/linux/run_hardware_agent.sh --llm-grounding --llm-grounding-mode assist
+bash scripts/linux/run_hardware_agent.sh --llm-grounding-mode fallback
+bash scripts/linux/run_hardware_agent.sh --no-llm-grounding
 ```
 
 The hardware launcher uses:
@@ -137,7 +137,8 @@ configured pick profile, executes the approved pick/place actionlist, and
 records the same JSON turn output. It does not bypass bridge safety limits or
 issue arbitrary LLM-generated robot commands.
 
-If `--llm-grounding` is enabled, also configure the text LLM endpoint:
+Because constrained LLM grounding is enabled by default, configure the text LLM
+endpoint before running the normal competition launchers:
 
 ```bash
 export SENSORAGENT_LLM_API_KEY=...

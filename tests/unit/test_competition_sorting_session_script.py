@@ -50,6 +50,16 @@ class CompetitionSortingSessionScriptTest(TestCase):
       any(name.startswith("audio.") for name in active.tools.enabled)
     )
 
+  def test_llm_grounding_defaults_to_assist_and_can_be_disabled(self) -> None:
+    module = _load_module()
+
+    defaults = module._parser().parse_args([])
+    disabled = module._parser().parse_args(["--no-llm-grounding"])
+
+    self.assertTrue(defaults.llm_grounding)
+    self.assertEqual(defaults.llm_grounding_mode, "assist")
+    self.assertFalse(disabled.llm_grounding)
+
   def test_sim_backend_rejects_multi_instance_command_without_selector(self) -> None:
     _, session = self._sim_session()
 

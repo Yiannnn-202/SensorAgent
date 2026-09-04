@@ -196,14 +196,14 @@ bash scripts/linux/run_sim_agent.sh
 bash scripts/linux/run_hardware_agent.sh
 ```
 
-Add `--llm-grounding` to either launcher when you want constrained LLM semantic
-grounding. The default `--llm-grounding-mode fallback` calls the LLM only after
-deterministic grounding cannot map the command. Use
-`--llm-grounding-mode assist` when the LLM should also refine rule-ready intents
-inside the same whitelist, for example by adding a spatial selector or asking
-for clarification. In both modes the LLM may only output allowed object classes,
-targets, actions, quantities, and spatial selectors; it cannot generate
-coordinates or robot actions.
+Competition launchers enable constrained LLM semantic grounding by default in
+`assist` mode. The LLM may refine rule-ready intents inside a strict whitelist,
+for example by adding a spatial selector or asking for clarification. Use
+`--llm-grounding-mode fallback` if the LLM should run only after deterministic
+grounding fails, or `--no-llm-grounding` for offline/rules-only execution. In
+all modes the LLM may only output allowed object classes, targets, actions,
+quantities, and spatial selectors; it cannot generate coordinates or robot
+actions.
 
 ## Repository Layout
 

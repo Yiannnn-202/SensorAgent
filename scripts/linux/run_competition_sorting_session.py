@@ -561,16 +561,24 @@ def _parser() -> argparse.ArgumentParser:
   parser.add_argument("--duration", type=float, default=15.0)
   parser.add_argument(
     "--llm-grounding",
+    dest="llm_grounding",
     action="store_true",
+    default=True,
     help=(
-      "Enable constrained LLM grounding. The default mode only calls the LLM "
-      "when deterministic industrial grounding cannot map the command."
+      "Enable constrained LLM grounding. This is enabled by default for "
+      "competition launchers."
     ),
+  )
+  parser.add_argument(
+    "--no-llm-grounding",
+    dest="llm_grounding",
+    action="store_false",
+    help="Disable LLM grounding and use deterministic rules only.",
   )
   parser.add_argument(
     "--llm-grounding-mode",
     choices=("fallback", "assist"),
-    default="fallback",
+    default="assist",
     help=(
       "fallback calls the LLM only after rule grounding fails; assist also lets "
       "the LLM refine rule-ready intents within strict object/action/target/"
