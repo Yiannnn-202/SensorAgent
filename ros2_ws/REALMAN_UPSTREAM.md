@@ -1,6 +1,6 @@
 # RealMan RM65-B upstream source
 
-The RM65-B ROS 2 simulation files are imported locally from:
+The RM65-B ROS 2 simulation files included in SensorAgent were imported from:
 
 - Repository: <https://github.com/RealManRobot/ros2_rm_robot>
 - Branch: `humble`
@@ -11,13 +11,7 @@ The RM65-B ROS 2 simulation files are imported locally from:
 The project identifier `rm65_b` maps to the upstream standard RM65 model named
 `rm_65`. The `rm_65_6f` and `rm_65_6fb` variants are not imported.
 
-Run the following command on Ubuntu:
-
-```bash
-bash scripts/linux/fetch_rm65_b_upstream.sh
-```
-
-It populates:
+The submitted SensorAgent tree contains:
 
 - `ros2_ws/src/rm_description`
 - `ros2_ws/src/rm_gazebo`
@@ -30,10 +24,10 @@ Only the standard RM65 description, meshes, Gazebo integration, and MoveIt 2
 simulation configuration are selected. Drivers, examples, force-sensor
 variants, documentation assets, and other robot models are excluded.
 
-The tracked `sensoragent_rm65_b_bringup` package consumes these imported files
-and combines the arm with the vendored Robotiq 2F-85. The RealMan source files
-remain local and ignored; the integration package contains only project-owned
-configuration and references to the imported package.
+The tracked `sensoragent_rm65_b_bringup` package consumes these files and
+combines the arm with the vendored Robotiq 2F-85. Deployment does not run the
+network import script. `scripts/linux/fetch_rm65_b_upstream.sh` is retained only
+as a maintainer tool for refreshing the pinned upstream files.
 
 The import script also applies project compatibility adjustments:
 
@@ -48,7 +42,5 @@ The import script also applies project compatibility adjustments:
 
 At the pinned commit, the upstream repository does not declare a top-level
 GitHub license and `rm_description/package.xml` contains `TODO: License
-declaration`. The imported files are therefore kept as ignored local
-dependencies rather than redistributed by this repository. Confirm
-redistribution permission with RealMan before committing any imported model or
-source file.
+declaration`. Confirm redistribution permission with RealMan before submitting
+or publishing the integrated model and source files.

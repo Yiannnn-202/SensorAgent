@@ -70,13 +70,7 @@ ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
 
-# Locally imported RealMan files (upstream redistribution license is unclear)
-ros2_ws/src/rm_description/*
-!ros2_ws/src/rm_description/.gitkeep
-ros2_ws/src/rm_gazebo/*
-!ros2_ws/src/rm_gazebo/.gitkeep
-ros2_ws/src/rm_65_config/*
-!ros2_ws/src/rm_65_config/.gitkeep
+# RealMan ROS packages are integrated into ros2_ws/src and submitted with SensorAgent.
 
 # Reinforcement learning runtime artifacts
 reinforcement_learning/checkpoints/

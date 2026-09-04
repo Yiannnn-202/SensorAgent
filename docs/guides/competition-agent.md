@@ -107,11 +107,16 @@ and emergency-stop checks are complete:
 bash scripts/linux/run_hardware_agent.sh --enable-motion
 ```
 
-If the Island-Arm package is installed outside `~/Island-Arm`, set
-`SENSORAGENT_ISLAND_ARM_SETUP=/path/to/Island-Arm/install/setup.bash` before
-starting the hardware launcher. `SENSORAGENT_ROS_SETUP` and
-`SENSORAGENT_ROS_WS_SETUP` may also override the ROS 2 and SensorAgent workspace
-setup files.
+The required Island-Arm driver packages are integrated into the SensorAgent ROS
+2 workspace. On a new machine, build them together with the hardware bridge:
+
+```bash
+bash scripts/linux/prepare_hardware_stack.sh
+```
+
+No separate Island-Arm checkout or setup file is required.
+`SENSORAGENT_ROS_SETUP` and `SENSORAGENT_ROS_WS_SETUP` may override the ROS 2
+and SensorAgent workspace setup files.
 
 Useful options:
 

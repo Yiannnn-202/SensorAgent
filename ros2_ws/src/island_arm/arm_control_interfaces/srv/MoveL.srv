@@ -1,0 +1,8 @@
+# Cartesian straight-line motion.
+geometry_msgs/Pose pose
+uint8 speed
+bool block
+---
+bool success
+int32 error_code
+string message

@@ -1,0 +1,5 @@
+# Move to home/predefined initial pose.
+---
+bool success
+int32 error_code
+string message

@@ -1,0 +1,8 @@
+# Joint-space motion in degrees.
+float64[6] joints
+uint8 speed
+bool block
+---
+bool success
+int32 error_code
+string message

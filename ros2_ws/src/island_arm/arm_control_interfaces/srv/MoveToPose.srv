@@ -1,0 +1,8 @@
+# Move to end-effector pose via rm_driver movej_p (joint-interpolated to pose target).
+geometry_msgs/Pose pose
+uint8 speed
+bool block
+---
+bool success
+int32 error_code
+string message

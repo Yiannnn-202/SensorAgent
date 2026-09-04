@@ -1,0 +1,6 @@
+float64 threshold
+int32 min_matches
+---
+bool success
+string message
+string[] objects

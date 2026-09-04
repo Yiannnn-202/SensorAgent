@@ -25,12 +25,17 @@ set +u
 source "${ros_setup}"
 set -u
 
-bash "${repo_root}/scripts/linux/fetch_rm65_b_upstream.sh"
-
 rosdep install \
-  --from-paths "${workspace}/src" \
+  --from-paths \
+    "${workspace}/src/rm_description" \
+    "${workspace}/src/rm_gazebo" \
+    "${workspace}/src/rm_65_config" \
+    "${workspace}/src/robotiq_description" \
+    "${workspace}/src/sensoragent_robot_bridge" \
+    "${workspace}/src/sensoragent_rm65_b_bringup" \
   --ignore-src \
   --rosdistro "${ros_distro}" \
+  --skip-keys "ament_python" \
   -r -y
 
 cd "${workspace}"

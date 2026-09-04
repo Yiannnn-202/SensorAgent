@@ -1,0 +1,14 @@
+# Goal: execute a multi-waypoint trajectory.
+geometry_msgs/Pose[] waypoints
+uint8 speed
+---
+# Result
+bool success
+int32 error_code
+string message
+uint16 reached_index
+---
+# Feedback
+uint16 current_index
+geometry_msgs/Pose current_pose
+string state

@@ -38,7 +38,6 @@ SENSORAGENT_PYTHON
 SENSORAGENT_ROS_PYTHON
 SENSORAGENT_ROS_SETUP
 SENSORAGENT_ROS_WS_SETUP
-SENSORAGENT_ISLAND_ARM_SETUP
 SENSORAGENT_GROUNDING_DINO_MODEL
 SENSORAGENT_SAM2_WEIGHTS
 ```
@@ -93,14 +92,22 @@ The hardware path uses `sensoragent_hardware_bridge` on `127.0.0.1:8766`. It is
 an adapter, not a safety-certified driver. Physical motion is disabled unless
 the launcher receives `--enable-motion`.
 
-`scripts/linux/start_hardware_stack.sh` sources ROS 2, the externally installed
-Island-Arm stack, and this repository's built ROS workspace. On a new Linux
-machine, set these paths if they are not in the defaults:
+The required Island-Arm ROS 2 packages are integrated under
+`ros2_ws/src/island_arm`. Prepare the complete hardware workspace once; no
+separate Island-Arm checkout or install overlay is required:
+
+```bash
+cd ~/SensorAgent
+bash scripts/linux/prepare_hardware_stack.sh
+```
+
+`scripts/linux/start_hardware_stack.sh` then sources ROS 2 and this repository's
+built ROS workspace. Override these paths only when they differ from the
+defaults:
 
 ```bash
 export SENSORAGENT_ROS_SETUP=/opt/ros/humble/setup.bash
 export SENSORAGENT_ROS_WS_SETUP=$PWD/ros2_ws/install/local_setup.bash
-export SENSORAGENT_ISLAND_ARM_SETUP=/path/to/Island-Arm/install/setup.bash
 ```
 
 Before enabling motion, verify:

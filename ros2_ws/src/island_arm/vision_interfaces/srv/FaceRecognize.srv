@@ -1,0 +1,7 @@
+---
+bool success
+string message
+int32 face_count
+string[] names
+float64[] scores
+float64[] bboxes          # flat [x1,y1,x2,y2, x1,y1,x2,y2, ...] per face

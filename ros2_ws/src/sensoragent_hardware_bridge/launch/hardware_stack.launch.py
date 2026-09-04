@@ -6,6 +6,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, FindExecutable, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from pathlib import Path
 
 
@@ -20,11 +21,13 @@ def generate_launch_description() -> LaunchDescription:
   arm_control_share = Path(get_package_share_directory("arm_control"))
   description_share = Path(get_package_share_directory("rm_description"))
   op_port = LaunchConfiguration("op_port")
+  allow_motion = LaunchConfiguration("allow_motion")
   robot_description = Command([
     FindExecutable(name="xacro"), " ", description_share / "urdf" / "rm_65.urdf",
   ])
   return LaunchDescription([
     DeclareLaunchArgument("op_port", default_value="/dev/ttyUSB0"),
+    DeclareLaunchArgument("allow_motion", default_value="false"),
     _launch("rm_driver", "rm_65_driver.launch.py"),
     Node(
       package="robot_state_publisher",
@@ -57,5 +60,6 @@ def generate_launch_description() -> LaunchDescription:
                     "--qx", "0.0090451138", "--qy", "-0.0051656285", "--qz", "-0.6941265206",
                     "--qw", "0.7197776571", "--frame-id", "Link6", "--child-frame-id", "camera_link"]),
     Node(package="sensoragent_hardware_bridge", executable="hardware_bridge", output="screen",
-         parameters=[str(bridge_share / "config" / "hardware_bridge.yaml")]),
+         parameters=[str(bridge_share / "config" / "hardware_bridge.yaml"),
+                     {"allow_motion": ParameterValue(allow_motion, value_type=bool)}]),
   ])

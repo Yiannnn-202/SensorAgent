@@ -1,0 +1,8 @@
+# Joint-space motion in radians.
+float64[6] joints
+uint8 speed           # 1-100
+bool block            # true: wait until motion finishes before returning
+---
+bool success
+int32 error_code      # 0 = OK, non-zero = error category
+string message
