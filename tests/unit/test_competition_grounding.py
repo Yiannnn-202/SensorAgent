@@ -101,6 +101,18 @@ class CompetitionGroundingTest(TestCase):
     self.assertEqual(intent.status, GroundingStatus.NEEDS_CLARIFICATION)
     self.assertEqual(intent.reason, "TARGET_MISSING_OR_INVALID")
 
+  def test_multi_digit_invalid_target_is_not_partially_matched(self) -> None:
+    for command in (
+      "把最近的滚轮放到十二号格",
+      "put the nearest roller into bin_cell_10",
+      "put the nearest roller into cell10",
+    ):
+      with self.subTest(command=command):
+        intent = self.grounder.ground(command)
+
+        self.assertEqual(intent.status, GroundingStatus.NEEDS_CLARIFICATION)
+        self.assertEqual(intent.reason, "TARGET_MISSING_OR_INVALID")
+
   def test_english_alias_and_target_are_grounded(self) -> None:
     intent = self.grounder.ground(
       "put the nearest short bolt into bin_cell_4"
@@ -159,6 +171,72 @@ class CompetitionGroundingTest(TestCase):
     self.assertEqual(intent.object_class, "roller")
     self.assertEqual(intent.grounding_source, "rules")
     self.assertEqual(client.calls, [])
+
+  def test_llm_assist_mode_can_refine_rule_ready_intent(self) -> None:
+    client = _FakeGroundingClient(
+      {
+        "status": "ready",
+        "action": "pick_place",
+        "object_class": "short_bolt",
+        "selector": {"relation": "left", "ordinal": 1, "reference_frame": "camera"},
+        "quantity": 1,
+        "target": "bin_cell_1",
+        "verify": True,
+        "confidence": 0.82,
+        "reason": "operator likely means the left visible short bolt",
+      }
+    )
+    grounder = LlmAssistedSortingCommandGrounder(
+      self.grounder,
+      self.ontology,
+      self.config.scene.place_targets,
+      client,
+      mode="assist",
+    )
+
+    intent = grounder.ground("把短螺栓放到一号格")
+
+    self.assertEqual(intent.status, GroundingStatus.READY)
+    self.assertEqual(intent.object_class, "short_bolt")
+    self.assertEqual(intent.target, "bin_cell_1")
+    self.assertEqual(intent.selector.relation, "left")
+    self.assertEqual(intent.grounding_source, "llm_assisted")
+    self.assertEqual(intent.grounding_confidence, 0.82)
+    self.assertEqual(len(client.calls), 1)
+
+  def test_llm_assist_mode_keeps_rule_ready_intent_when_model_output_is_invalid(self) -> None:
+    client = _FakeGroundingClient(
+      {
+        "status": "ready",
+        "action": "pick_place",
+        "object_class": "dangerous_tool",
+        "target": "bin_cell_1",
+      }
+    )
+    grounder = LlmAssistedSortingCommandGrounder(
+      self.grounder,
+      self.ontology,
+      self.config.scene.place_targets,
+      client,
+      mode="assist",
+    )
+
+    intent = grounder.ground("把最近的滚轮放到一号格")
+
+    self.assertEqual(intent.status, GroundingStatus.READY)
+    self.assertEqual(intent.object_class, "roller")
+    self.assertEqual(intent.selector.relation, "nearest")
+    self.assertEqual(intent.grounding_source, "rules")
+
+  def test_llm_grounding_rejects_unknown_mode(self) -> None:
+    with self.assertRaises(ValueError):
+      LlmAssistedSortingCommandGrounder(
+        self.grounder,
+        self.ontology,
+        self.config.scene.place_targets,
+        _FakeGroundingClient({}),
+        mode="freeform",
+      )
 
   def test_llm_assisted_grounder_rejects_invalid_class_and_returns_rule_failure(self) -> None:
     client = _FakeGroundingClient(

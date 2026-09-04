@@ -20,10 +20,10 @@ tools:
     - gripper.open
     - gripper.close
     - gripper.get_state
+    - vision.dual_branch_detect
+    - vision.yolo11_seg_detect
     - vision.grounded_sam2
     - vision.open_vocab_detect
-    - vision.list_source_candidates
-    - vision.resolve_reference
     - vision.capture_frame
     - robot.select_pick_profile
 
@@ -58,13 +58,19 @@ integrations:
     endpoint: http://127.0.0.1:8766
     timeout_seconds: 120.0
   vision:
-    backend: grounding_dino
-    grounding_dino_model: runs/vision/baselines/grounding_dino_sensoragent_v1i_before_hex_nut_reweight
+    backend: dual_branch
+    model_path: models/vision/yolo11-seg/industrial-best.pt
+    grounding_dino_model: models/vision/grounding-dino/industrial-open-vocab
     sam2_model_path: models/vision/sam2_t.pt
     box_threshold: 0.25
     text_threshold: 0.25
-    refine_masks: false
-    require_masks: true
+    dual_branch:
+      route_policy: industrial_first
+      fallback_on_error: true
+      min_fixed_confidence: 0.35
+      grounding_dino:
+        refine_masks: true
+        require_masks: true
     # Only objects localized inside this manually recorded foam-sheet polygon
     # may be selected for picking. The 15 mm inset rejects edge candidates.
     source_region:

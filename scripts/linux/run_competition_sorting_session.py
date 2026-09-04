@@ -89,6 +89,7 @@ class CompetitionSortingSession:
     *,
     backend: str = "sim",
     llm_grounding: bool = False,
+    llm_grounding_mode: str = "fallback",
     max_recovery_attempts: int = 1,
   ) -> None:
     self.config = config
@@ -109,6 +110,7 @@ class CompetitionSortingSession:
         self.ontology,
         config.scene.place_targets,
         OpenAICompatibleClient(load_llm_config_from_env()),
+        mode=llm_grounding_mode,
       )
       if llm_grounding
       else base_grounder
@@ -206,7 +208,7 @@ class CompetitionSortingSession:
 
     if self.backend == "hardware":
       execution = self._execute_with_recovery(
-        intent.raw_text,
+        self._vision_query(intent.object_class),
         intent.target,
         pick_profile=intent.object_class or "",
         spatial_constraint=(
@@ -561,8 +563,18 @@ def _parser() -> argparse.ArgumentParser:
     "--llm-grounding",
     action="store_true",
     help=(
-      "Use constrained LLM fallback only when deterministic industrial "
-      "grounding cannot map the command."
+      "Enable constrained LLM grounding. The default mode only calls the LLM "
+      "when deterministic industrial grounding cannot map the command."
+    ),
+  )
+  parser.add_argument(
+    "--llm-grounding-mode",
+    choices=("fallback", "assist"),
+    default="fallback",
+    help=(
+      "fallback calls the LLM only after rule grounding fails; assist also lets "
+      "the LLM refine rule-ready intents within strict object/action/target/"
+      "spatial constraints."
     ),
   )
   parser.add_argument("--max-turns", type=int, default=None)
@@ -602,6 +614,7 @@ def main(argv: list[str] | None = None) -> int:
     bundle,
     backend=args.backend,
     llm_grounding=args.llm_grounding,
+    llm_grounding_mode=args.llm_grounding_mode,
     max_recovery_attempts=args.max_recovery_attempts,
   )
 

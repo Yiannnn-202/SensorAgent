@@ -76,11 +76,9 @@ SAM2 for open-vocabulary detection and mask refinement.
 
 Simple industrial references such as "左边的螺母" are not delegated to an
 unbounded LLM. They are handled by deterministic ontology and spatial grounding:
-aliases normalize the object class, detector candidates provide masks/boxes, and
-the spatial selector chooses among existing candidates by image or base-frame
-geometry. VLM use is limited to constrained candidate selection for complex
-hardware visual references; it must choose an existing candidate ID and cannot
-invent coordinates or robot actions.
+aliases normalize the object class, the dual-branch detector provides
+masks/boxes, and the spatial selector chooses among existing candidates by image
+or base-frame geometry.
 
 Gazebo RGB-D capture is isolated in `vision.capture_frame`, which shells out to
 ROS Python and writes image, depth, camera-info, and transform manifests under
@@ -137,8 +135,8 @@ live-perception world-state fusion, and physical-cell validation.
 | Offline vision dataset evaluation harness | Implemented; datasets and weights stay local |
 | Failure classification and recovery DecisionTree | Implemented for the industrial pick/place flow, including a live-perception mode; Gazebo acceptance pending |
 | Unified competition world state | Task-local object/bin/task state implemented for live perception and hardware sessions; durable long-horizon fusion remains pending |
-| Physical RM65 + OmniPicker bridge | Implemented through externally installed ROS packages on `127.0.0.1:8766`; motion is disabled by default and only single-object pick/verify is wired |
-| Hardware RGB-D capture and short-bolt planning | Implemented; uses synchronized RGB/point cloud capture, Grounded SAM2, a configured profile, and bounded workspace checks |
+| Physical RM65 + OmniPicker bridge | Implemented through externally installed ROS packages on `127.0.0.1:8766`; motion is disabled by default, and `scripts/linux/run_hardware_agent.sh --enable-motion` enables the real hardware pick-place path after operator safety checks |
+| Hardware RGB-D capture, pick planning, and bin placement | Implemented; uses synchronized RGB/point cloud capture, dual-branch visual grounding, configured object pick profiles, recorded bin-cell poses, and bounded workspace checks |
 | Experimental generic mask/point-cloud planner | Implemented as `robot.plan_mask_pointcloud_pick`; not enabled in shipped configs or any ActionList |
 | Batch simulation evaluation and repeatable scene reset | Not implemented |
 | HTTP/WebSocket/MCP service entry points | Not implemented; only the CLI exists |
@@ -151,9 +149,11 @@ place-target resolution, and `robot.pick` / `robot.place` / verification Skills.
 `configs/competition_eval.yaml` selects the local fake backend for offline
 evaluation, while `configs/competition_sim.yaml` selects the simulation HTTP
 bridge on port `8765`.
-`configs/robot_hardware_sensoragent_v1i_baseline.yaml` selects the physical
-hardware bridge on port `8766`; it supports capture, detect, profile selection,
-pick, and grasp verification, but not physical place/sort/recovery workflows.
+`configs/competition_hardware.yaml` selects the physical hardware bridge on port
+`8766`; it supports capture, dual-branch visual grounding, profile selection,
+physical pick, grasp verification, and placement into recorded bin-cell targets through
+`hardware.pick_place_actionlist`. Physical motion remains opt-in and must be
+started with `scripts/linux/run_hardware_agent.sh --enable-motion`.
 See the [environment setup guide](docs/guides/environment-setup.md) before
 enabling any physical motion.
 
@@ -196,10 +196,14 @@ bash scripts/linux/run_sim_agent.sh
 bash scripts/linux/run_hardware_agent.sh
 ```
 
-Add `--llm-grounding` to either launcher only when you want a constrained LLM
-fallback for unusual operator wording. The LLM maps language into allowed object
-classes, targets, and spatial selectors; it does not generate coordinates or
-robot actions.
+Add `--llm-grounding` to either launcher when you want constrained LLM semantic
+grounding. The default `--llm-grounding-mode fallback` calls the LLM only after
+deterministic grounding cannot map the command. Use
+`--llm-grounding-mode assist` when the LLM should also refine rule-ready intents
+inside the same whitelist, for example by adding a spatial selector or asking
+for clarification. In both modes the LLM may only output allowed object classes,
+targets, actions, quantities, and spatial selectors; it cannot generate
+coordinates or robot actions.
 
 ## Repository Layout
 

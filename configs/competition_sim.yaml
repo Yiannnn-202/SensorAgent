@@ -30,6 +30,9 @@ tools:
 integrations:
   vision:
     backend: dual_branch
+    model_path: models/vision/yolo11-seg/industrial-best.pt
+    grounding_dino_model: models/vision/grounding-dino/industrial-open-vocab
+    sam2_model_path: models/vision/sam2_t.pt
     dual_branch:
       route_policy: industrial_first
       fallback_on_error: true

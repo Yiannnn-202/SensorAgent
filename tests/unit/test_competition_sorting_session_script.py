@@ -6,7 +6,6 @@ import importlib.util
 from dataclasses import replace
 from pathlib import Path
 from unittest import TestCase
-from unittest.mock import patch
 
 from sensoragent.schemas import (
   ActionListResult,
@@ -109,14 +108,7 @@ class CompetitionSortingSessionScriptTest(TestCase):
     module = _load_module()
     config = module.load_config(ROOT / "configs" / "competition_hardware.yaml")
     config = module.prepare_config(config, execute=False, voice_enabled=False)
-    with patch.dict(
-      "os.environ",
-      {
-        "SENSORAGENT_VLM_API_KEY": "test-key",
-        "SENSORAGENT_VLM_MODEL": "test-model",
-      },
-    ):
-      bundle = module.build_agent(config)
+    bundle = module.build_agent(config)
     session = module.CompetitionSortingSession(config, bundle, backend="hardware")
     calls: list[dict] = []
 
@@ -143,6 +135,7 @@ class CompetitionSortingSessionScriptTest(TestCase):
     self.assertEqual(result["backend"], "hardware")
     self.assertEqual(result["perception_backend"], "hardware_rgbd")
     self.assertEqual(calls[0]["actionlist"], "hardware.pick_place_actionlist")
+    self.assertEqual(calls[0]["input"]["object_query"], "short bolt")
     self.assertEqual(calls[0]["input"]["pick_profile"], "short_bolt")
     self.assertEqual(calls[0]["input"]["target"], "bin_cell_1")
 

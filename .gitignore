@@ -49,6 +49,14 @@ venv/
 /planning/
 /*.docx
 /SUBMISSION_CHECKLIST.md
+/valid/
+/image.png
+/fig*.excalidraw
+/dual_branch_vision_flowchart*.excalidraw
+/dual_branch_vision_flowchart*.png
+/dual_branch_vision_flowchart*.svg
+/valid_first_short_bolt_*.json
+/valid_first_short_bolt_*.png
 
 # Machine-specific physical-hardware calibration and operating limits
 configs/robot_hardware.local.yaml

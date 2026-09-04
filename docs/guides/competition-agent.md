@@ -30,10 +30,8 @@ stages, and `world_state` records objects, bins, current task state, and history
 For simple industrial references, the perception layer uses deterministic
 grounding rather than free-form model reasoning. For example, "左边的螺母" becomes
 the normalized class `hex_nut` plus `spatial_constraint={"relation":"left",
-"ordinal":1}`; the vision branch detects candidate instances, then the spatial
-selector chooses from those existing candidates. A VLM is used only as a
-constrained reranker for more complex hardware visual references, and it must
-return an allowed candidate ID.
+"ordinal":1}`; `vision.dual_branch_detect` detects candidate instances, then the
+spatial selector chooses from those existing candidates.
 
 ## 1. Simulation agent
 
@@ -60,13 +58,17 @@ bash scripts/linux/run_sim_agent.sh --mode voice
 bash scripts/linux/run_sim_agent.sh --dry-run
 bash scripts/linux/run_sim_agent.sh --no-start-stack
 bash scripts/linux/run_sim_agent.sh --llm-grounding
+bash scripts/linux/run_sim_agent.sh --llm-grounding --llm-grounding-mode assist
 ```
 
 `--dry-run` switches robot execution to the fake backend. `--no-start-stack`
 assumes Gazebo/MoveIt/bridge are already running.
 `--llm-grounding` enables a constrained LLM fallback for utterances that the
 rule-based industrial ontology cannot map; valid rule-based commands do not call
-the LLM.
+the LLM in the default `fallback` mode. `--llm-grounding-mode assist` lets the
+LLM refine rule-ready intents within the same strict whitelist, so it can add a
+missing spatial selector or request clarification for vague wording without
+being allowed to output coordinates or robot actions.
 
 Example commands after the prompt appears:
 
@@ -105,12 +107,19 @@ and emergency-stop checks are complete:
 bash scripts/linux/run_hardware_agent.sh --enable-motion
 ```
 
+If the Island-Arm package is installed outside `~/Island-Arm`, set
+`SENSORAGENT_ISLAND_ARM_SETUP=/path/to/Island-Arm/install/setup.bash` before
+starting the hardware launcher. `SENSORAGENT_ROS_SETUP` and
+`SENSORAGENT_ROS_WS_SETUP` may also override the ROS 2 and SensorAgent workspace
+setup files.
+
 Useful options:
 
 ```bash
 bash scripts/linux/run_hardware_agent.sh --mode voice
 bash scripts/linux/run_hardware_agent.sh --no-start-stack
 bash scripts/linux/run_hardware_agent.sh --llm-grounding
+bash scripts/linux/run_hardware_agent.sh --llm-grounding --llm-grounding-mode assist
 ```
 
 The hardware launcher uses:
@@ -122,11 +131,11 @@ mode:    text
 motion:  disabled unless --enable-motion is present
 ```
 
-The hardware path captures real RGB/point-cloud input, resolves the requested
-object from localized candidates, selects the configured pick profile, executes
-the approved pick/place actionlist, and records the same JSON turn output. It
-does not bypass bridge safety limits or issue arbitrary LLM-generated robot
-commands.
+The hardware path captures real RGB/point-cloud input, runs
+`vision.dual_branch_detect` to localize the requested object, selects the
+configured pick profile, executes the approved pick/place actionlist, and
+records the same JSON turn output. It does not bypass bridge safety limits or
+issue arbitrary LLM-generated robot commands.
 
 If `--llm-grounding` is enabled, also configure the text LLM endpoint:
 
@@ -138,7 +147,9 @@ export SENSORAGENT_LLM_BASE_URL=https://api.example.com
 
 The text LLM may only output an allowed object class, action, target, quantity,
 and spatial selector. Invalid output is ignored and the deterministic grounding
-result is returned.
+result is returned. The `assist` mode improves semantic flexibility but keeps
+the same execution boundary: final robot motion still goes through approved
+Workflow, Skill, Tool, and bridge checks.
 
 For open visual grounding, fill the GroundingDINO and SAM2 paths in
 `configs/competition_hardware.yaml`:

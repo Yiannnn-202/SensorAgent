@@ -25,14 +25,12 @@ tools:
     - vision.yolo11_seg_detect
     - vision.grounded_sam2
     - vision.open_vocab_detect
-    - vision.list_source_candidates
-    - vision.resolve_reference
     - vision.capture_frame
     - robot.select_pick_profile
 
 integrations:
   vision:
-    backend: yolo11_seg
+    backend: dual_branch
     model_path: models/vision/yolo11-seg/industrial-best.pt
     grounding_dino_model: models/vision/grounding-dino/industrial-open-vocab
     sam2_model_path: models/vision/sam2_t.pt

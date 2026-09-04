@@ -476,22 +476,15 @@ class IndustrialVisionActionListTest(TestCase):
 
 
 class HardwarePickActionListTest(TestCase):
-  def test_capture_grounded_sam_profile_pick_verify_and_observe(self) -> None:
+  def test_capture_dual_branch_profile_pick_verify_and_observe(self) -> None:
     tool_runtime = _StubRuntime({
       "vision.capture_frame": lambda _i: {
         "image_path": "rgb.npy", "png_path": "rgb.png", "cloud_path": "cloud.npy", "T_base_camera": [],
       },
-        "vision.grounded_sam2": lambda input_data: {
+        "vision.dual_branch_detect": lambda input_data: {
         "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
         "mask_polygons": [], "center_px": [100.0, 100.0],
           "spatial_constraint": input_data["spatial_constraint"],
-        },
-        "vision.list_source_candidates": lambda _i: {"candidates": [{
-          "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
-          "mask_polygons": [], "center_px": [100.0, 100.0],
-        }]},
-        "vision.resolve_reference": lambda input_data: {
-          "candidate": input_data["candidates"][0],
         },
       "robot.select_pick_profile": lambda _i: {
         "planner": "robot.plan_short_bolt_pick", "orientation": [0, 1, 0, 0],
@@ -525,7 +518,7 @@ class HardwarePickActionListTest(TestCase):
 
     self.assertTrue(result.success, msg=result.error)
     self.assertEqual([step.step for step in result.steps], [
-      "ensure_observe_before_capture", "capture_frame", "list_source_candidates", "resolve_reference", "select_pick_profile", "plan_pick", "pick", "verify_grasp", "observe_after_pick",
+      "ensure_observe_before_capture", "capture_frame", "detect_object", "select_pick_profile", "plan_pick", "pick", "verify_grasp", "observe_after_pick",
     ])
     self.assertIn(("robot.plan_short_bolt_pick", {
       "pose_3d": [0.3, 0.1, 0.05], "cloud_path": "cloud.npy", "mask_polygons": [],
@@ -552,17 +545,12 @@ class HardwarePickActionListTest(TestCase):
   def test_hardware_pick_place_appends_configured_place_phase(self) -> None:
     tool_runtime = _StubRuntime({
       "vision.capture_frame": lambda _i: {"png_path": "rgb.png", "cloud_path": "cloud.npy", "T_base_camera": []},
-      "vision.grounded_sam2": lambda input_data: {
+      "vision.dual_branch_detect": lambda input_data: {
         "found": True,
         "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
         "mask_polygons": [], "center_px": [100.0, 100.0],
         "spatial_constraint": input_data["spatial_constraint"],
       },
-      "vision.list_source_candidates": lambda _i: {"candidates": [{
-        "label": "short_bolt", "object_id": "bolt_1", "pose_3d": [0.3, 0.1, 0.05],
-        "mask_polygons": [], "center_px": [100.0, 100.0],
-      }]},
-      "vision.resolve_reference": lambda input_data: {"candidate": input_data["candidates"][0]},
       "robot.select_pick_profile": lambda _i: {
         "planner": "robot.plan_short_bolt_pick", "orientation": [0, 1, 0, 0],
         "position_offset": [0, 0, 0.02], "approach_distance": 0.1,
@@ -613,7 +601,7 @@ class HardwarePickActionListTest(TestCase):
 
     self.assertTrue(result.success, msg=result.error)
     self.assertEqual([step.step for step in result.steps], [
-      "ensure_observe_before_capture", "capture_frame", "list_source_candidates", "resolve_reference", "select_pick_profile", "plan_pick", "pick",
+      "ensure_observe_before_capture", "capture_frame", "detect_object", "select_pick_profile", "plan_pick", "pick",
        "verify_grasp", "observe_after_pick", "resolve_place_target", "plan_place", "place_move_approach", "place_move_place",
        "place_open_gripper", "place_lift_clearance", "place_close_gripper", "observe_after_place",
     ])

@@ -102,9 +102,10 @@ _CN_DIGITS = {
 }
 _ORDINAL_PATTERN = re.compile(r"第?\s*([一二两三四五六七八九1-9])\s*(?:个|号)?")
 _TARGET_PATTERN = re.compile(
+  r"(?<![零十百千万一二两三四五六七八九0-9])"
   r"(?:第?\s*)?([一二两三四五六七八九1-9])\s*(?:号)?(?:格|格子|格位)"
 )
-_TARGET_EN_PATTERN = re.compile(r"(?:bin_cell_|cell|bin)([1-9])")
+_TARGET_EN_PATTERN = re.compile(r"(?:bin_cell_|cell|bin)([1-9])(?![0-9])")
 _PUNCTUATION = re.compile(r"[\s，。！？,.!?；;：:]+")
 
 
@@ -322,11 +323,13 @@ class SortingCommandGrounder:
 
 
 class LlmAssistedSortingCommandGrounder:
-  """Rule-first industrial command grounder with constrained LLM fallback.
+  """Rule-first industrial command grounder with constrained LLM assistance.
 
   The LLM never produces coordinates or robot actions. It may only map an
   operator utterance onto the configured ontology, target cells, action names,
-  and spatial selectors. Invalid model output is rejected and the deterministic
+  and spatial selectors. In fallback mode it runs only after deterministic
+  grounding fails; in assist mode it may refine rule-ready intents inside the
+  same whitelist. Invalid model output is rejected and the deterministic
   grounding result is returned unchanged.
   """
 
@@ -336,15 +339,21 @@ class LlmAssistedSortingCommandGrounder:
     ontology: ObjectOntology,
     place_targets: Mapping[str, object],
     client: JsonGroundingClient,
+    *,
+    mode: str = "fallback",
   ) -> None:
+    normalized_mode = str(mode).strip().casefold().replace("-", "_")
+    if normalized_mode not in {"fallback", "assist"}:
+      raise ValueError("LLM grounding mode must be fallback or assist")
     self._base = base_grounder
     self._ontology = ontology
     self._place_targets = set(place_targets)
     self._client = client
+    self._mode = normalized_mode
 
   def ground(self, text: str) -> GroundedIntent:
     base = self._base.ground(text)
-    if base.status == GroundingStatus.READY:
+    if base.status == GroundingStatus.READY and self._mode == "fallback":
       return base
     try:
       candidate = self._client.complete_json(

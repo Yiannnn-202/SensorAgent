@@ -49,10 +49,11 @@ class ConfigLoaderTest(TestCase):
 
     self.assertEqual(config.agent.mode, "competition_hardware")
     self.assertEqual(config.integrations.robot["endpoint"], "http://127.0.0.1:8766")
-    self.assertEqual(config.integrations.vision["backend"], "yolo11_seg")
+    self.assertEqual(config.integrations.vision["backend"], "dual_branch")
     self.assertIn("vision.dual_branch_detect", config.tools.enabled)
     self.assertIn("vision.capture_frame", config.tools.enabled)
-    self.assertIn("vision.resolve_reference", config.tools.enabled)
+    self.assertNotIn("vision.resolve_reference", config.tools.enabled)
+    self.assertNotIn("vision.list_source_candidates", config.tools.enabled)
     self.assertIn("robot.verify_grasp", config.skills.enabled)
     self.assertIn("robot.verify_place", config.skills.enabled)
     self.assertIn("short_bolt", config.scene.object_ontology)

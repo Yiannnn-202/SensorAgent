@@ -36,6 +36,8 @@ SENSORAGENT_LLM_MODEL
 SENSORAGENT_LLM_BASE_URL
 SENSORAGENT_ROS_PYTHON
 SENSORAGENT_ROS_SETUP
+SENSORAGENT_ROS_WS_SETUP
+SENSORAGENT_ISLAND_ARM_SETUP
 SENSORAGENT_GROUNDING_DINO_MODEL
 SENSORAGENT_SAM2_WEIGHTS
 ```
@@ -81,6 +83,7 @@ bash scripts/linux/run_sim_agent.sh --mode voice
 bash scripts/linux/run_sim_agent.sh --dry-run
 bash scripts/linux/run_sim_agent.sh --no-start-stack
 bash scripts/linux/run_sim_agent.sh --llm-grounding
+bash scripts/linux/run_sim_agent.sh --llm-grounding --llm-grounding-mode assist
 ```
 
 ## Hardware environment
@@ -88,6 +91,16 @@ bash scripts/linux/run_sim_agent.sh --llm-grounding
 The hardware path uses `sensoragent_hardware_bridge` on `127.0.0.1:8766`. It is
 an adapter, not a safety-certified driver. Physical motion is disabled unless
 the launcher receives `--enable-motion`.
+
+`scripts/linux/start_hardware_stack.sh` sources ROS 2, the externally installed
+Island-Arm stack, and this repository's built ROS workspace. On a new Linux
+machine, set these paths if they are not in the defaults:
+
+```bash
+export SENSORAGENT_ROS_SETUP=/opt/ros/humble/setup.bash
+export SENSORAGENT_ROS_WS_SETUP=$PWD/ros2_ws/install/local_setup.bash
+export SENSORAGENT_ISLAND_ARM_SETUP=/path/to/Island-Arm/install/setup.bash
+```
 
 Before enabling motion, verify:
 
@@ -118,6 +131,7 @@ Useful options:
 bash scripts/linux/run_hardware_agent.sh --mode voice
 bash scripts/linux/run_hardware_agent.sh --no-start-stack
 bash scripts/linux/run_hardware_agent.sh --llm-grounding
+bash scripts/linux/run_hardware_agent.sh --llm-grounding --llm-grounding-mode assist
 ```
 
 ## Main configs
