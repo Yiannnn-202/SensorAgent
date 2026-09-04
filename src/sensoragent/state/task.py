@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from enum import StrEnum
 
+from sensoragent._compat import StrEnum
 from sensoragent.schemas import AgentPlan, TraceContext
 from sensoragent.schemas.core import utc_now_iso
 

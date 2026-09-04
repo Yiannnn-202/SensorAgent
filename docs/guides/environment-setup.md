@@ -5,7 +5,7 @@ agent. Use it together with the [industrial agent reproduction guide](competitio
 
 ## Python runtime
 
-SensorAgent uses Python 3.12 for the agent process.
+SensorAgent uses Python 3.10 or newer for the agent process.
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -34,6 +34,7 @@ Relevant environment variables:
 SENSORAGENT_LLM_API_KEY
 SENSORAGENT_LLM_MODEL
 SENSORAGENT_LLM_BASE_URL
+SENSORAGENT_PYTHON
 SENSORAGENT_ROS_PYTHON
 SENSORAGENT_ROS_SETUP
 SENSORAGENT_ROS_WS_SETUP

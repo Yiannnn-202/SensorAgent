@@ -7,6 +7,7 @@ MODE="text"
 EXECUTE="true"
 START_STACK="true"
 EXTRA_ARGS=()
+PYTHON_BIN="${SENSORAGENT_PYTHON:-python3}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -61,4 +62,4 @@ fi
 SESSION_ARGS+=("${EXTRA_ARGS[@]}")
 
 echo "[SensorAgent] Starting industrial simulation agent loop..."
-PYTHONPATH="${ROOT}/src" python3 "${SESSION_ARGS[@]}"
+PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}" "${PYTHON_BIN}" "${SESSION_ARGS[@]}"

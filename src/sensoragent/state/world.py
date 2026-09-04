@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from enum import StrEnum
 from typing import Any, Mapping
 
+from sensoragent._compat import StrEnum
 from sensoragent.grounding import GroundedInstance
 
 

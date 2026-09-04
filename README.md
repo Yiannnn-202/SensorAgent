@@ -159,7 +159,7 @@ enabling any physical motion.
 
 ## Quick Start
 
-Python 3.12 is required for the Agent package.
+Python 3.10 or newer is required for the Agent package.
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -170,6 +170,7 @@ Runtime configuration is resolved in this order: an explicit `--config` path,
 `SENSORAGENT_CONFIG`, `SENSORAGENT_ENV` mapped to `configs/<env>.yaml`, then
 `configs/competition_sim.yaml`. Copy `.env.example` to an ignored `.env` for LLM
 credentials and logging overrides. Other recognized variables are
+`SENSORAGENT_PYTHON` (agent launcher interpreter override),
 `SENSORAGENT_ROS_PYTHON` (ROS 2 interpreter used by RGB-D capture),
 `SENSORAGENT_GROUNDING_DINO_MODEL`, and `SENSORAGENT_SAM2_WEIGHTS`.
 
@@ -398,7 +399,7 @@ curl http://127.0.0.1:8765/ready
 Then run the persistent agent loop:
 
 ```bash
-PYTHONPATH=src .venv312/bin/python scripts/linux/run_competition_sorting_session.py \
+PYTHONPATH=src python3 scripts/linux/run_competition_sorting_session.py \
   --mode text \
   --execute
 ```
@@ -406,7 +407,7 @@ PYTHONPATH=src .venv312/bin/python scripts/linux/run_competition_sorting_session
 For voice input, switch the mode after local ASR/VAD assets are installed:
 
 ```bash
-PYTHONPATH=src .venv312/bin/python scripts/linux/run_competition_sorting_session.py \
+PYTHONPATH=src python3 scripts/linux/run_competition_sorting_session.py \
   --mode voice \
   --execute
 ```
@@ -415,6 +416,5 @@ The loop keeps a session-level world state, accepts multiple commands, rejects
 ambiguous references, tracks occupied bin cells, records execution history, and
 performs bounded recovery before waiting for the next command.
 
-The Python Agent package currently declares Python 3.12, while Ubuntu 22.04 and
-ROS 2 Humble normally use Python 3.10. The implemented design keeps them in
-separate processes and connects them through HTTP.
+The Python Agent package supports Python 3.10+, so it can run on Ubuntu 22.04
+alongside ROS 2 Humble while keeping ROS and the agent connected through HTTP.

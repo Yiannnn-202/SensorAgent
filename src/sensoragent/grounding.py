@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from enum import StrEnum
+import json
 import math
 import re
-import json
 from typing import Mapping, Protocol
+
+from sensoragent._compat import StrEnum
 
 
 class GroundingStatus(StrEnum):
