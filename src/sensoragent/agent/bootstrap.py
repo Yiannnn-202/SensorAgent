@@ -18,7 +18,6 @@ from sensoragent.integrations import (
   SoundDeviceVadRecorder,
   SoundDeviceRecorder,
   load_llm_config_from_env,
-  load_vlm_config_from_env,
 )
 from sensoragent.integrations.robot import FakeRobotControlClient, HttpRobotControlClient
 from sensoragent.logger import TaskLogger
@@ -64,9 +63,7 @@ from sensoragent.tools.vision import (
   VisionConfigDetectTool,
   VisionDualBranchDetectTool,
   VisionGroundedSam2Tool,
-  VisionListSourceCandidatesTool,
   VisionOpenVocabularyDetectTool,
-  VisionResolveReferenceTool,
   VisionYolo11SegDetectTool,
 )
 from sensoragent.tools.vision import VisionCaptureFrameTool
@@ -116,10 +113,8 @@ SCENE_TOOL_NAMES = {
   "vision.grounded_sam2",
   "vision.open_vocab_detect",
   "vision.yolo11_seg_detect",
-  "vision.list_source_candidates",
   "vision.capture_frame",
   "vision.verify_object_in_bin",
-  "vision.resolve_reference",
   "robot.resolve_place_target",
   "robot.select_pick_profile",
 }
@@ -167,7 +162,6 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
     "vision.dual_branch_detect",
     "vision.open_vocab_detect",
     "vision.yolo11_seg_detect",
-    "vision.list_source_candidates",
   }:
     vision_config = config.integrations.vision
     source_region = dict(vision_config.get("source_region") or {})
@@ -221,12 +215,6 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       )
     if tool_name == "vision.yolo11_seg_detect":
       return VisionYolo11SegDetectTool(**common_settings)
-    if tool_name == "vision.list_source_candidates":
-      return VisionListSourceCandidatesTool(
-        backend=str(vision_config.get("backend", "yoloe")),
-        require_masks=bool(vision_config.get("require_masks", False)),
-        **common_settings,
-      )
     return VisionOpenVocabularyDetectTool(
       backend=str(vision_config.get("backend", "yoloe")),
       refine_masks=vision_config.get("refine_masks"),
@@ -269,8 +257,6 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       {} if config.agent.mode == "robot_hardware" else default_place_target_registry()
     )
     return VisionVerifyObjectInBinTool(targets)
-  if tool_name == "vision.resolve_reference":
-    return VisionResolveReferenceTool(OpenAICompatibleClient(load_vlm_config_from_env()))
   raise KeyError(f"Not a scene tool: {tool_name}")
 
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {

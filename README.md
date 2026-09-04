@@ -138,8 +138,6 @@ live-perception world-state fusion, and physical-cell validation.
 | Physical RM65 + OmniPicker bridge | Implemented through externally installed ROS packages on `127.0.0.1:8766`; motion is disabled by default, and `scripts/linux/run_hardware_agent.sh --enable-motion` enables the real hardware pick-place path after operator safety checks |
 | Hardware RGB-D capture, pick planning, and bin placement | Implemented; uses synchronized RGB/point cloud capture, dual-branch visual grounding, configured object pick profiles, recorded bin-cell poses, and bounded workspace checks |
 | Experimental generic mask/point-cloud planner | Implemented as `robot.plan_mask_pointcloud_pick`; not enabled in shipped configs or any ActionList |
-| Batch simulation evaluation and repeatable scene reset | Not implemented |
-| HTTP/WebSocket/MCP service entry points | Not implemented; only the CLI exists |
 | Industrial Gazebo tabletop scenario | Initial environment implemented under the ROS 2 bringup package |
 | Multi-instance competition sorting session | Implemented with text/real-voice input, semantic grounding, ambiguity rejection, Gazebo RGB-D dual-branch perception, state tracking, and bounded recovery |
 
