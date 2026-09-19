@@ -165,7 +165,9 @@ configs/vision_train_grounding_dino.example.jsonl
 
 The open branch uses GroundingDINO + SAM2. `SENSORAGENT_GROUNDING_DINO_MODEL`
 may override the configured GroundingDINO path, and `SENSORAGENT_SAM2_WEIGHTS`
-may override the SAM2 path.
+may override the SAM2 path. Dataset validation, evaluation, and fine-tuning
+commands are collected in the
+[vision training and evaluation guide](vision-training.md).
 
-The current submission-branch test baseline is **389 passed, 49 subtests
+The current submission-branch test baseline is **396 passed, 52 subtests
 passed**.
