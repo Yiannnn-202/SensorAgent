@@ -2,7 +2,10 @@
 
 This is the evaluator-facing entry point for the SensorAgent submission branch.
 The project exposes one persistent industrial agent loop with two launch modes:
-Gazebo simulation and physical hardware.
+Gazebo simulation and physical hardware. Environment preparation is covered in
+the [environment setup guide](environment-setup.md); offline vision evaluation
+and fine-tuning are covered in the
+[vision training and evaluation guide](vision-training.md).
 
 ## Agent loop
 
@@ -88,7 +91,9 @@ comes from the vision output consumed by the recovery DecisionTree.
 Known industrial classes route to YOLO11-seg. Unknown/open-language targets
 route to the GroundingDINO + SAM2 branch. GroundingDINO produces text-grounded
 bboxes, and SAM2 refines the selected bbox into an instance mask for downstream
-depth/point-cloud localization.
+depth/point-cloud localization. Offline dataset evaluation and fine-tuning
+commands live in the
+[vision training and evaluation guide](vision-training.md).
 
 ## 2. Hardware agent
 

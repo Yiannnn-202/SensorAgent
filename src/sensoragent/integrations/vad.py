@@ -90,6 +90,20 @@ class SileroVadSegmenter:
     self._max_utterance_samples = int(16000 * float(max_utterance_sec))
     self._window_samples = 512
 
+    # The ONNX session is created lazily so that building agents and tools does
+    # not require local model weights; only actual audio processing does.
+    self._session = None
+    self._inputs: dict = {}
+    self._audio_input_name = ""
+    self._use_split_state = False
+    self._use_short_split_state = False
+    self._use_combined_state = False
+    self._sr_value = None
+
+  def _ensure_session(self) -> None:
+    if self._session is not None:
+      return
+
     if not self._model_path.is_file():
       raise VadError(f"VAD model file not found: {self._model_path}")
     try:
@@ -187,10 +201,13 @@ class SileroVadSegmenter:
   def reset(self) -> None:
     import numpy as np
 
+    self._ensure_session()
     self._reset_state(np)
 
   def speech_probability(self, chunk) -> float:
     import numpy as np
+
+    self._ensure_session()
 
     samples = np.asarray(chunk, dtype=np.float32).reshape(-1)
     if samples.size < self._window_samples:
@@ -202,6 +219,7 @@ class SileroVadSegmenter:
   def segment_wav(self, audio_path: str, output_path: str | None = None) -> dict:
     import numpy as np
 
+    self._ensure_session()
     self._reset_state(np)
     source = Path(audio_path)
     samples = _read_mono_16k_wav(source)

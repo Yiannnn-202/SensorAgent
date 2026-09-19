@@ -113,10 +113,10 @@ checks.
 
 ## Current Status
 
-As of 2026-08-17, the repository is beyond framework scaffolding. It has
-simulation and physical-hardware execution adapters, but competition acceptance
-is still limited by repeatable Gazebo testing, measured vision quality,
-live-perception world-state fusion, and physical-cell validation.
+The repository is beyond framework scaffolding. It has simulation and
+physical-hardware execution adapters, but competition acceptance is still
+limited by repeatable Gazebo testing, measured vision quality, live-perception
+world-state fusion, and physical-cell validation.
 
 | Area | Status |
 | --- | --- |
@@ -152,8 +152,6 @@ bridge on port `8765`.
 physical pick, grasp verification, and placement into recorded bin-cell targets through
 `hardware.pick_place_actionlist`. Physical motion remains opt-in and must be
 started with `scripts/linux/run_hardware_agent.sh --enable-motion`.
-See the [environment setup guide](docs/guides/environment-setup.md) before
-enabling any physical motion.
 
 ## Quick Start
 
@@ -176,33 +174,104 @@ Run the default offline test suite:
 
 ```powershell
 $env:PYTHONPATH = "$(Get-Location)\src"
-python -m pytest -q tests\unit
+python -m pytest -q tests
 ```
 
 See the [environment setup guide](docs/guides/environment-setup.md) for runtime
-dependencies and validation commands.
+dependencies, local model layout, and validation commands.
 
-## Reproduce the Industrial Agent
+## Run the Competition Agent
 
-Evaluators should start from the single reproduction guide:
-
-- [Industrial agent reproduction guide](docs/guides/competition-agent.md)
-
-The two submission entry points are:
+Evaluators should start from the
+[industrial agent reproduction guide](docs/guides/competition-agent.md). The two
+submission entry points are:
 
 ```bash
-bash scripts/linux/run_sim_agent.sh
-bash scripts/linux/run_hardware_agent.sh
+bash scripts/linux/run_sim_agent.sh        # Gazebo simulation
+bash scripts/linux/run_hardware_agent.sh   # safety-gated physical hardware
 ```
 
-Competition launchers enable constrained LLM semantic grounding by default in
-`assist` mode. The LLM may refine rule-ready intents inside a strict whitelist,
-for example by adding a spatial selector or asking for clarification. Use
-`--llm-grounding-mode fallback` if the LLM should run only after deterministic
-grounding fails, or `--no-llm-grounding` for offline/rules-only execution. In
-all modes the LLM may only output allowed object classes, targets, actions,
-quantities, and spatial selectors; it cannot generate coordinates or robot
-actions.
+The sim launcher starts the Gazebo/MoveIt stack and the HTTP bridge
+(`curl http://127.0.0.1:8765/ready` reports readiness), then enters the same
+persistent competition session as the hardware launcher. The loop keeps a
+session-level world state, accepts multiple commands, rejects ambiguous
+references, tracks occupied bin cells, records execution history, and performs
+bounded recovery before waiting for the next command.
+
+Voice input switches on with `--mode voice` after local ASR/VAD assets are
+installed. The equivalent direct entry point is:
+
+```bash
+PYTHONPATH=src python3 scripts/linux/run_competition_sorting_session.py \
+  --mode text \
+  --execute
+```
+
+Constrained LLM semantic grounding is enabled by default in `assist` mode. The
+LLM may refine rule-ready intents inside a strict whitelist, for example by
+adding a spatial selector or asking for clarification; it can only output
+allowed object classes, targets, actions, quantities, and spatial selectors,
+never coordinates or robot actions. Use `--llm-grounding-mode fallback` if the
+LLM should run only after deterministic grounding fails, or
+`--no-llm-grounding` for offline/rules-only execution.
+
+Physical motion is disabled by default on the hardware path. Enable it only
+after workspace, camera, gripper, operator, and emergency-stop checks, using
+`scripts/linux/run_hardware_agent.sh --enable-motion`. See the
+[environment setup guide](docs/guides/environment-setup.md) before enabling any
+physical motion.
+
+The Python Agent package supports Python 3.10+, so it can run on Ubuntu 22.04
+alongside ROS 2 Humble while keeping ROS and the agent connected through HTTP.
+
+## RM65-B and Robotiq Simulation
+
+The tracked `sensoragent_rm65_b_bringup` package combines:
+
+```text
+RealMan RM65-B
+└── Link6
+    └── Robotiq 2F-85
+```
+
+The gripper is attached to `Link6` by a fixed joint. A single
+`gz_ros2_control` system manages the six arm joints and two independently
+effort-controlled parallel gripper joints. MoveIt exposes separate `rm_group`
+and `gripper` planning groups.
+
+On Ubuntu 22.04 with ROS 2 Humble, prepare the workspace once:
+
+```bash
+bash scripts/linux/prepare_rm65_b_sim.sh
+```
+
+After that, start the complete Gazebo and MoveIt stack with one command:
+
+```bash
+bash scripts/linux/run_rm65_b_sim.sh
+```
+
+An optional shell alias can reduce this to `sensoragent-sim`.
+
+To start Gazebo without MoveIt and RViz:
+
+```bash
+bash scripts/linux/run_rm65_b_sim.sh start_moveit:=false
+```
+
+The combined model, arm motion, and gripper opening/closing have been manually
+exercised on Ubuntu. Repeatable object-contact and grasp-stability acceptance
+remain before this simulation should be used for reinforcement learning.
+
+## Vision Models
+
+The competition-facing path is `vision.dual_branch_detect`: known industrial
+classes route to the fixed-class YOLO11-seg branch, and open-vocabulary
+references route to GroundingDINO + SAM2. Dataset validation, evaluation runs,
+COCO conversion, and Grounding DINO fine-tuning commands are collected in the
+[vision training and evaluation guide](docs/guides/vision-training.md);
+configuration templates live under `configs/vision_*.yaml`. Checkpoints,
+datasets, caches, and run outputs stay outside Git.
 
 ## Repository Layout
 
@@ -260,159 +329,22 @@ subcommands. Evaluator-facing commands are documented in the reproduction guide.
 
 ## Documentation
 
-The submission branch keeps only two operational guides:
+Operational guides:
 
-- [Industrial agent reproduction guide](docs/guides/competition-agent.md)
-- [Environment setup guide](docs/guides/environment-setup.md)
+- [Industrial agent reproduction guide](docs/guides/competition-agent.md) — evaluator-facing entry point for the sim and hardware agents
+- [Environment setup guide](docs/guides/environment-setup.md) — runtime dependencies, configs, local model layout
+- [Vision training and evaluation guide](docs/guides/vision-training.md) — dataset, evaluation, and Grounding DINO fine-tuning
 
-## Vision Model Training and Evaluation
+Reference and component documentation:
 
-The competition-facing path is `vision.dual_branch_detect`. It routes common
-industrial classes such as bolts, nuts, rollers, gears, flanges, and wrenches to
-the fixed-class YOLO11-seg branch, then falls back to the GroundingDINO + SAM2
-branch when needed. Queries outside the fixed industrial ontology start from
-GroundingDINO to preserve open-vocabulary behavior. Validate a portable dataset
-manifest before running a long evaluation:
+- [Contracts](contracts/README.md) — cross-module JSON tool contracts
+- [Vision model weights](models/vision/README.md) — local weight layout rules
+- [Vision model metadata](models/vision/metadata/README.md) — artifact metadata records
+- [SenseVoice ASR model](models/asr/sense-voice/README.md) — converted local ASR model
+- [RM65-B upstream source](ros2_ws/REALMAN_UPSTREAM.md) — imported RealMan simulation files
+- [Robotiq upstream source](ros2_ws/ROBOTIQ_UPSTREAM.md) — vendored Robotiq 2F-85 description
+- [Island-Arm integration](ros2_ws/src/island_arm/README.md) — vendored physical-hardware driver packages
+- [OmniPicker control API](ros2_ws/src/island_arm/op_control/OP_API.md) — gripper driver ROS interface
 
-```powershell
-python scripts\vision_eval.py validate `
-  --manifest configs\vision_dataset.example.jsonl `
-  --allow-missing-files
-```
-
-Run a labeled local dataset with one persistent model instance:
-
-```powershell
-python scripts\vision_eval.py run `
-  --manifest data\vision\competition_test.jsonl `
-  --config configs\vision_dual_branch.example.yaml `
-  --tool vision.dual_branch_detect `
-  --output-dir runs\vision\competition_test `
-  --device 0 `
-  --require-masks `
-  --save-overlays
-```
-
-The runner saves per-sample JSONL, aggregate metrics, Tool logs, and optional
-overlays. Dataset images, model weights, caches, and `runs/` outputs remain local.
-
-Reviewed COCO segmentation exports can be converted without adding a runtime
-dependency on `pycocotools`:
-
-```powershell
-python scripts\vision_coco_segmentation_to_eval.py `
-  --source-root data\vision\raw_coco `
-  --output-root data\vision\competition_eval `
-  --sample-prefix industrial_part `
-  --query "industrial part" `
-  --category-name "industrial-part" `
-  --dataset-name "SensorAgent competition dataset" `
-  --source-license "internal-reviewed"
-```
-
-The current first training target is Grounding DINO itself. Its JSONL manifest
-keeps text class names, absolute `bbox_xyxy` targets, provenance, and scene-level
-splits. Validate the complete dataset before allocating GPU time:
-
-```powershell
-python scripts\vision_train_grounding_dino.py `
-  --config configs\vision_train_grounding_dino.example.yaml `
-  --manifest data\vision\competition_train.jsonl `
-  --dry-run
-```
-
-After the prompt order, scene-level splits, and detection boxes are reviewed,
-start direct full-parameter fine-tuning with:
-
-```powershell
-python scripts\vision_train_grounding_dino.py `
-  --config configs\vision_train_grounding_dino.example.yaml `
-  --manifest data\vision\competition_train.jsonl `
-  --device cuda:0
-```
-
-`configs/vision_train_grounding_dino.example.yaml` records the proposed prompt
-order and reproducible training parameters. `class_labels` are indexes into
-that exact text list; they are not an independent YOLO class map. SAM 2 masks
-remain useful annotations, but Grounding DINO is optimized on text-grounded
-boxes. The fixed industrial-class branch uses YOLO11-seg checkpoints through
-`vision.yolo11_seg_detect`; the competition-facing router is
-`vision.dual_branch_detect`.
-
-The templates are not checked-in training data. Checkpoints, datasets, caches,
-and run outputs stay outside Git; the repository keeps only code, contracts,
-configuration templates, and reproducible evaluation scripts.
-The [environment setup guide](docs/guides/environment-setup.md) lists the
-submission configs, local model layout, and validation commands.
-## RM65-B and Robotiq Simulation
-
-The tracked `sensoragent_rm65_b_bringup` package combines:
-
-```text
-RealMan RM65-B
-└── Link6
-    └── Robotiq 2F-85
-```
-
-The gripper is attached to `Link6` by a fixed joint. A single
-`gz_ros2_control` system manages the six arm joints and two independently
-effort-controlled parallel gripper joints. MoveIt exposes separate `rm_group`
-and `gripper` planning groups.
-
-On Ubuntu 22.04 with ROS 2 Humble, prepare the workspace once:
-
-```bash
-bash scripts/linux/prepare_rm65_b_sim.sh
-```
-
-After that, start the complete Gazebo and MoveIt stack with one command:
-
-```bash
-bash scripts/linux/run_rm65_b_sim.sh
-```
-
-An optional shell alias can reduce this to `sensoragent-sim`.
-
-To start Gazebo without MoveIt and RViz:
-
-```bash
-bash scripts/linux/run_rm65_b_sim.sh start_moveit:=false
-```
-
-The combined model, arm motion, and gripper opening/closing have been manually
-exercised on Ubuntu. Repeatable object-contact and grasp-stability acceptance
-remain before this simulation should be used for reinforcement learning.
-
-## Competition Agent Runtime
-
-The submission branch exposes the industrial sorting agent through one
-persistent competition session script. In simulation, start Gazebo, MoveIt, and
-the HTTP bridge:
-
-```bash
-bash scripts/linux/run_rm65_b_sim.sh
-curl http://127.0.0.1:8765/ready
-```
-
-Then run the persistent agent loop:
-
-```bash
-PYTHONPATH=src python3 scripts/linux/run_competition_sorting_session.py \
-  --mode text \
-  --execute
-```
-
-For voice input, switch the mode after local ASR/VAD assets are installed:
-
-```bash
-PYTHONPATH=src python3 scripts/linux/run_competition_sorting_session.py \
-  --mode voice \
-  --execute
-```
-
-The loop keeps a session-level world state, accepts multiple commands, rejects
-ambiguous references, tracks occupied bin cells, records execution history, and
-performs bounded recovery before waiting for the next command.
-
-The Python Agent package supports Python 3.10+, so it can run on Ubuntu 22.04
-alongside ROS 2 Humble while keeping ROS and the agent connected through HTTP.
+The single-file Chinese deployment and usage manual is not tracked in Git; it
+can be regenerated locally with `python scripts/generate_usage_manual.py`.
