@@ -61,8 +61,8 @@ flowchart LR
   cfg --> execution
   contracts["contracts/"] --> decision
   contracts --> execution
-  logs["logs / traces"] <-- decision
-  logs <-- execution
+  decision --> logs["logs / traces"]
+  execution --> logs
 ```
 
 ### Perception layer
