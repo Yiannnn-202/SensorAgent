@@ -16,7 +16,7 @@ if str(SRC) not in sys.path:
 from sensoragent.integrations import FakeAudioClient, FakeMicrophoneRecorder, LocalAudioClient
 from sensoragent.integrations.audio import AudioError, _write_wav
 from sensoragent.integrations.microphone import MicrophoneError
-from sensoragent.integrations.vad import SoundDeviceVadRecorder
+from sensoragent.integrations.vad import SileroVadSegmenter, SoundDeviceVadRecorder, VadError
 from sensoragent.integrations.vad import _extract_speech_probability
 from sensoragent.schemas import ToolCall, TraceContext
 from sensoragent.tools.audio import AudioSpeakTool, AudioTranscribeTool
@@ -36,6 +36,12 @@ class AudioIntegrationTest(TestCase):
     self.assertEqual(_extract_speech_probability([0.9, 0.1]), 0.1)
     self.assertEqual(_extract_speech_probability([0.1, 0.9]), 0.9)
     self.assertEqual(_extract_speech_probability([0.7]), 0.7)
+
+  def test_vad_segmenter_builds_without_local_model_weights(self) -> None:
+    segmenter = SileroVadSegmenter(model_path="models/asr/vad/missing.onnx")
+
+    with self.assertRaises(VadError):
+      segmenter.segment_wav("tests/fixtures/audio/command.wav")
 
   def test_fake_audio_client_transcribes_and_speaks(self) -> None:
     client = FakeAudioClient()
