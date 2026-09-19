@@ -21,7 +21,6 @@ contracts/
 └── tools/
     ├── audio.listen_transcribe.schema.json
     ├── audio.listen_vad_transcribe.schema.json
-    ├── audio.mock_transcribe.schema.json
     ├── audio.speak.schema.json
     ├── audio.transcribe.schema.json
     ├── gripper.close.schema.json
@@ -33,13 +32,11 @@ contracts/
     ├── robot.move_joints.schema.json
     ├── robot.move_linear.schema.json
     ├── robot.move_pose.schema.json
-    ├── robot.mock_pick.schema.json
-    ├── robot.mock_place.schema.json
     ├── robot.resolve_place_target.schema.json
     ├── robot.stop.schema.json
     ├── vision.config_detect.schema.json
+    ├── vision.dual_branch_detect.schema.json
     ├── vision.grounded_sam2.schema.json
-    ├── vision.mock_detect.schema.json
     ├── vision.open_vocab_detect.schema.json
     ├── vision.verify_object_in_bin.schema.json
     └── vision.verify_object_lifted.schema.json
@@ -58,12 +55,12 @@ output_schema
 errors
 ```
 
-`input_schema` and `output_schema` use JSON Schema-style objects. During development, tests validate mock tool inputs and outputs against these contracts.
+`input_schema` and `output_schema` use JSON Schema-style objects. Tests validate
+tool inputs and outputs against these contracts.
 
 ## Current coverage
 
-Contracts exist for the mock, audio, vision (including the optional YOLO11-seg
-backup), recovery, arm, and gripper tools
+Contracts exist for audio, vision, recovery, arm, and gripper tools
 listed above. The following implemented helpers intentionally have no contract
 file because their interface remains repository-internal:
 
@@ -88,13 +85,13 @@ tools without a stable contract.
 Contracts are used to:
 
 - communicate expected tool formats to other teams;
-- validate mock and real tool adapters;
+- validate tool adapters;
 - generate or document MCP tool definitions;
 - align HTTP/API/WebSocket payloads with Agent-side tool calls.
 
 ## Rule of thumb
 
 - One tool, one contract file.
-- File names should match tool names, e.g. `robot.mock_pick.schema.json`.
+- File names should match tool names, e.g. `robot.move_pose.schema.json`.
 - Contracts describe the interface, not the implementation.
 - Changes to contracts should be treated as interface changes.

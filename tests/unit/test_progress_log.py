@@ -29,13 +29,13 @@ class ProgressLogTest(TestCase):
       )
       trace = TraceContext(task_id="task_test", trace_id="trace_test")
 
-      logger.log("tool_call_started", trace, {"tool": "vision.mock_detect"})
+      logger.log("tool_call_started", trace, {"tool": "vision.dual_branch_detect"})
 
       # Both the structured JSONL and the human-readable progress file exist.
       self.assertTrue(jsonl_path.exists())
       self.assertTrue(progress_path.exists())
       content = progress_path.read_text(encoding="utf-8")
-      self.assertIn("[tool] start vision.mock_detect", content)
+      self.assertIn("[tool] start vision.dual_branch_detect", content)
       # Each progress line is prefixed with "YYYY-MM-DD HH:MM:SS ".
       self.assertRegex(
         content.splitlines()[-1], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} "
@@ -46,13 +46,13 @@ class ProgressLogTest(TestCase):
 
     # No progress_path supplied: formatting/persistence is skipped cleanly.
     plain = TaskLogger()
-    plain.log("tool_call_started", trace, {"tool": "vision.mock_detect"})
+    plain.log("tool_call_started", trace, {"tool": "vision.dual_branch_detect"})
     self.assertEqual(list(plain.events()), ["tool_call_started"])
 
     # console=True without progress_path still works (stderr only) and must not
     # raise or require a progress file path.
     console_only = TaskLogger(console=True)
-    console_only.log("tool_call_started", trace, {"tool": "vision.mock_detect"})
+    console_only.log("tool_call_started", trace, {"tool": "vision.dual_branch_detect"})
     self.assertEqual(list(console_only.events()), ["tool_call_started"])
 
   def test_runtime_spine_events_render_to_progress_file(self) -> None:

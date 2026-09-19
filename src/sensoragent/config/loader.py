@@ -80,7 +80,7 @@ def load_config(path: str | Path) -> SensorAgentConfig:
   return SensorAgentConfig(
     agent=AgentConfig(
       name=str(agent.get("name", "sensoragent")),
-      mode=str(agent.get("mode", "mock")),
+      mode=str(agent.get("mode", "competition_sim")),
       default_skill=(
         str(agent["default_skill"]) if agent.get("default_skill") is not None else None
       ),

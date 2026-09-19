@@ -21,7 +21,7 @@ HARDWARE_POST_RELEASE_LIFT_SPEED = 1.0
 
 def build_hardware_roller_approach_calibration_actionlist(
   joint_poses: Mapping[str, Any] | None = None,
-  detect_tool: str = "vision.grounded_sam2",
+  detect_tool: str = "vision.dual_branch_detect",
 ) -> ActionList:
   """Move above a detected roller for calibration without attempting a grasp."""
 
@@ -99,7 +99,7 @@ def build_hardware_roller_approach_calibration_actionlist(
 
 def build_hardware_roller_pregrasp_calibration_actionlist(
   joint_poses: Mapping[str, Any] | None = None,
-  detect_tool: str = "vision.grounded_sam2",
+  detect_tool: str = "vision.dual_branch_detect",
 ) -> ActionList:
   """Open safely above a roller, then move to its pregrasp pose."""
 
@@ -135,7 +135,7 @@ def build_hardware_roller_pregrasp_calibration_actionlist(
 
 def build_hardware_hex_nut_approach_calibration_actionlist(
   joint_poses: Mapping[str, Any] | None = None,
-  detect_tool: str = "vision.grounded_sam2",
+  detect_tool: str = "vision.dual_branch_detect",
 ) -> ActionList:
   """Move above a detected hex nut for calibration without attempting a grasp."""
 
@@ -186,7 +186,7 @@ def build_hardware_hex_nut_approach_calibration_actionlist(
 
 def build_hardware_pick_object_actionlist(
   joint_poses: Mapping[str, Any] | None = None,
-  detect_tool: str = "vision.grounded_sam2",
+  detect_tool: str = "vision.dual_branch_detect",
 ) -> ActionList:
   """Capture, detect, select a configured profile, pick, verify, and observe."""
   observe = observe_joints(joint_poses)
@@ -231,14 +231,25 @@ def build_hardware_pick_object_actionlist(
     steps=[
       *observe_before_steps,
       ActionStep(name="capture_frame", kind=ActionStepKind.TOOL, target="vision.capture_frame", input={}, save_as="frame"),
-      ActionStep(name="list_source_candidates", kind=ActionStepKind.TOOL, target="vision.list_source_candidates", input={"image_path": "{{ frame.png_path }}", "cloud_path": "{{ frame.cloud_path }}", "T_base_camera": "{{ frame.T_base_camera }}"}, save_as="source_candidates"),
-      ActionStep(name="resolve_reference", kind=ActionStepKind.TOOL, target="vision.resolve_reference", input={"instruction": "{{ object_query }}", "spatial_constraint": "{{ spatial_constraint }}", "image_path": "{{ frame.png_path }}", "candidates": "{{ source_candidates.candidates }}"}, save_as="reference"),
-      ActionStep(name="select_pick_profile", kind=ActionStepKind.TOOL, target="robot.select_pick_profile", input={"label": "{{ reference.candidate.label }}", "profile": "{{ pick_profile }}"}, save_as="pick_profile_selected"),
-    ActionStep(
-        name="plan_pick", kind=ActionStepKind.TOOL, target="{{ pick_profile_selected.planner }}",
-        input={"pose_3d": "{{ reference.candidate.pose_3d }}", "cloud_path": "{{ frame.cloud_path }}", "mask_polygons": "{{ reference.candidate.mask_polygons }}", "center_px": "{{ reference.candidate.center_px }}", "T_base_camera": "{{ frame.T_base_camera }}", "orientation": "{{ pick_profile_selected.orientation }}", "position_offset": "{{ pick_profile_selected.position_offset }}", "approach_distance": "{{ pick_profile_selected.approach_distance }}", "pregrasp_distance": "{{ pick_profile_selected.pregrasp_distance }}", "lift_height": "{{ pick_profile_selected.lift_height }}", "tcp_offset": "{{ pick_profile_selected.tcp_offset }}", "grasp_point_mode": "{{ pick_profile_selected.grasp_point_mode }}", "headward_offset": "{{ pick_profile_selected.headward_offset }}", "camera_left_offset_px": "{{ pick_profile_selected.camera_left_offset_px }}", "camera_left_offset_m": "{{ pick_profile_selected.camera_left_offset_m }}", "minimum_safe_z": "{{ pick_profile_selected.minimum_safe_z }}", "lock_orientation": "{{ pick_profile_selected.lock_orientation }}", "orientation_mode": "{{ pick_profile_selected.orientation_mode }}", "workspace_min": "{{ pick_profile_selected.workspace_min }}", "workspace_max": "{{ pick_profile_selected.workspace_max }}"}, save_as="pick_plan",
+      ActionStep(
+        name="detect_object",
+        kind=ActionStepKind.TOOL,
+        target=detect_tool,
+        input={
+          "query": "{{ object_query }}",
+          "image_path": "{{ frame.png_path }}",
+          "cloud_path": "{{ frame.cloud_path }}",
+          "T_base_camera": "{{ frame.T_base_camera }}",
+          "spatial_constraint": "{{ spatial_constraint }}",
+        },
+        save_as="object",
       ),
-      ActionStep(name="pick", kind=ActionStepKind.SKILL, target="robot.pick", input={"plan": "{{ pick_plan.plan }}", "object_id": "{{ reference.candidate.object_id }}", "speed": "{{ pick_profile_selected.motion_speed }}", "descent_speed": "{{ pick_profile_selected.descent_speed }}", "lift_speed": "{{ pick_profile_selected.lift_speed }}", "open_opening": "{{ pick_profile_selected.open_opening }}", "open_min_opening": "{{ pick_profile_selected.open_min_opening }}", "close_opening": "{{ pick_profile_selected.close_opening }}", "max_grasp_opening": "{{ pick_profile_selected.max_grasp_opening }}", "gripper_force": "{{ pick_profile_selected.gripper_force }}", "gripper_speed": "{{ pick_profile_selected.gripper_speed }}", "require_grasp_confirmation": "{{ pick_profile_selected.require_grasp_confirmation }}", "fallback_move_pose_on_grasp_failure": False}, save_as="pick_result"),
+      ActionStep(name="select_pick_profile", kind=ActionStepKind.TOOL, target="robot.select_pick_profile", input={"label": "{{ object.label }}", "profile": "{{ pick_profile }}"}, save_as="pick_profile_selected"),
+      ActionStep(
+        name="plan_pick", kind=ActionStepKind.TOOL, target="{{ pick_profile_selected.planner }}",
+        input={"pose_3d": "{{ object.pose_3d }}", "cloud_path": "{{ frame.cloud_path }}", "mask_polygons": "{{ object.mask_polygons }}", "center_px": "{{ object.center_px }}", "T_base_camera": "{{ frame.T_base_camera }}", "orientation": "{{ pick_profile_selected.orientation }}", "position_offset": "{{ pick_profile_selected.position_offset }}", "approach_distance": "{{ pick_profile_selected.approach_distance }}", "pregrasp_distance": "{{ pick_profile_selected.pregrasp_distance }}", "lift_height": "{{ pick_profile_selected.lift_height }}", "tcp_offset": "{{ pick_profile_selected.tcp_offset }}", "grasp_point_mode": "{{ pick_profile_selected.grasp_point_mode }}", "headward_offset": "{{ pick_profile_selected.headward_offset }}", "camera_left_offset_px": "{{ pick_profile_selected.camera_left_offset_px }}", "camera_left_offset_m": "{{ pick_profile_selected.camera_left_offset_m }}", "minimum_safe_z": "{{ pick_profile_selected.minimum_safe_z }}", "lock_orientation": "{{ pick_profile_selected.lock_orientation }}", "orientation_mode": "{{ pick_profile_selected.orientation_mode }}", "workspace_min": "{{ pick_profile_selected.workspace_min }}", "workspace_max": "{{ pick_profile_selected.workspace_max }}"}, save_as="pick_plan",
+      ),
+      ActionStep(name="pick", kind=ActionStepKind.SKILL, target="robot.pick", input={"plan": "{{ pick_plan.plan }}", "object_id": "{{ object.object_id }}", "speed": "{{ pick_profile_selected.motion_speed }}", "descent_speed": "{{ pick_profile_selected.descent_speed }}", "lift_speed": "{{ pick_profile_selected.lift_speed }}", "open_opening": "{{ pick_profile_selected.open_opening }}", "open_min_opening": "{{ pick_profile_selected.open_min_opening }}", "close_opening": "{{ pick_profile_selected.close_opening }}", "max_grasp_opening": "{{ pick_profile_selected.max_grasp_opening }}", "gripper_force": "{{ pick_profile_selected.gripper_force }}", "gripper_speed": "{{ pick_profile_selected.gripper_speed }}", "require_grasp_confirmation": "{{ pick_profile_selected.require_grasp_confirmation }}", "fallback_move_pose_on_grasp_failure": False}, save_as="pick_result"),
       ActionStep(name="verify_grasp", kind=ActionStepKind.SKILL, target="robot.verify_grasp", input={}, save_as="grasp_check"),
       *observe_after_steps,
     ],
@@ -247,7 +258,7 @@ def build_hardware_pick_object_actionlist(
 
 def build_hardware_pick_place_actionlist(
   joint_poses: Mapping[str, Any] | None = None,
-  detect_tool: str = "vision.grounded_sam2",
+  detect_tool: str = "vision.dual_branch_detect",
 ) -> ActionList:
   """Pick with the configured vision/profile path, then place into a configured cell."""
 
@@ -311,14 +322,25 @@ def build_hardware_pick_place_actionlist(
     steps=[
       *observe_before_steps,
       ActionStep(name="capture_frame", kind=ActionStepKind.TOOL, target="vision.capture_frame", input={}, save_as="frame"),
-      ActionStep(name="list_source_candidates", kind=ActionStepKind.TOOL, target="vision.list_source_candidates", input={"image_path": "{{ frame.png_path }}", "cloud_path": "{{ frame.cloud_path }}", "T_base_camera": "{{ frame.T_base_camera }}"}, save_as="source_candidates"),
-      ActionStep(name="resolve_reference", kind=ActionStepKind.TOOL, target="vision.resolve_reference", input={"instruction": "{{ object_query }}", "spatial_constraint": "{{ spatial_constraint }}", "image_path": "{{ frame.png_path }}", "candidates": "{{ source_candidates.candidates }}"}, save_as="reference"),
-      ActionStep(name="select_pick_profile", kind=ActionStepKind.TOOL, target="robot.select_pick_profile", input={"label": "{{ reference.candidate.label }}", "profile": "{{ pick_profile }}"}, save_as="pick_profile_selected"),
+      ActionStep(
+        name="detect_object",
+        kind=ActionStepKind.TOOL,
+        target=detect_tool,
+        input={
+          "query": "{{ object_query }}",
+          "image_path": "{{ frame.png_path }}",
+          "cloud_path": "{{ frame.cloud_path }}",
+          "T_base_camera": "{{ frame.T_base_camera }}",
+          "spatial_constraint": "{{ spatial_constraint }}",
+        },
+        save_as="object",
+      ),
+      ActionStep(name="select_pick_profile", kind=ActionStepKind.TOOL, target="robot.select_pick_profile", input={"label": "{{ object.label }}", "profile": "{{ pick_profile }}"}, save_as="pick_profile_selected"),
       ActionStep(
         name="plan_pick", kind=ActionStepKind.TOOL, target="{{ pick_profile_selected.planner }}",
-        input={"pose_3d": "{{ reference.candidate.pose_3d }}", "cloud_path": "{{ frame.cloud_path }}", "mask_polygons": "{{ reference.candidate.mask_polygons }}", "center_px": "{{ reference.candidate.center_px }}", "T_base_camera": "{{ frame.T_base_camera }}", "orientation": "{{ pick_profile_selected.orientation }}", "position_offset": "{{ pick_profile_selected.position_offset }}", "approach_distance": "{{ pick_profile_selected.approach_distance }}", "pregrasp_distance": "{{ pick_profile_selected.pregrasp_distance }}", "lift_height": "{{ pick_profile_selected.lift_height }}", "tcp_offset": "{{ pick_profile_selected.tcp_offset }}", "grasp_point_mode": "{{ pick_profile_selected.grasp_point_mode }}", "headward_offset": "{{ pick_profile_selected.headward_offset }}", "camera_left_offset_px": "{{ pick_profile_selected.camera_left_offset_px }}", "camera_left_offset_m": "{{ pick_profile_selected.camera_left_offset_m }}", "minimum_safe_z": "{{ pick_profile_selected.minimum_safe_z }}", "lock_orientation": "{{ pick_profile_selected.lock_orientation }}", "orientation_mode": "{{ pick_profile_selected.orientation_mode }}", "workspace_min": "{{ pick_profile_selected.workspace_min }}", "workspace_max": "{{ pick_profile_selected.workspace_max }}"}, save_as="pick_plan",
+        input={"pose_3d": "{{ object.pose_3d }}", "cloud_path": "{{ frame.cloud_path }}", "mask_polygons": "{{ object.mask_polygons }}", "center_px": "{{ object.center_px }}", "T_base_camera": "{{ frame.T_base_camera }}", "orientation": "{{ pick_profile_selected.orientation }}", "position_offset": "{{ pick_profile_selected.position_offset }}", "approach_distance": "{{ pick_profile_selected.approach_distance }}", "pregrasp_distance": "{{ pick_profile_selected.pregrasp_distance }}", "lift_height": "{{ pick_profile_selected.lift_height }}", "tcp_offset": "{{ pick_profile_selected.tcp_offset }}", "grasp_point_mode": "{{ pick_profile_selected.grasp_point_mode }}", "headward_offset": "{{ pick_profile_selected.headward_offset }}", "camera_left_offset_px": "{{ pick_profile_selected.camera_left_offset_px }}", "camera_left_offset_m": "{{ pick_profile_selected.camera_left_offset_m }}", "minimum_safe_z": "{{ pick_profile_selected.minimum_safe_z }}", "lock_orientation": "{{ pick_profile_selected.lock_orientation }}", "orientation_mode": "{{ pick_profile_selected.orientation_mode }}", "workspace_min": "{{ pick_profile_selected.workspace_min }}", "workspace_max": "{{ pick_profile_selected.workspace_max }}"}, save_as="pick_plan",
       ),
-      ActionStep(name="pick", kind=ActionStepKind.SKILL, target="robot.pick", input={"plan": "{{ pick_plan.plan }}", "object_id": "{{ reference.candidate.object_id }}", "speed": "{{ pick_profile_selected.motion_speed }}", "descent_speed": "{{ pick_profile_selected.descent_speed }}", "lift_speed": "{{ pick_profile_selected.lift_speed }}", "open_opening": "{{ pick_profile_selected.open_opening }}", "open_min_opening": "{{ pick_profile_selected.open_min_opening }}", "close_opening": "{{ pick_profile_selected.close_opening }}", "max_grasp_opening": "{{ pick_profile_selected.max_grasp_opening }}", "gripper_force": "{{ pick_profile_selected.gripper_force }}", "gripper_speed": "{{ pick_profile_selected.gripper_speed }}", "require_grasp_confirmation": "{{ pick_profile_selected.require_grasp_confirmation }}", "fallback_move_pose_on_grasp_failure": False}, save_as="pick_result"),
+      ActionStep(name="pick", kind=ActionStepKind.SKILL, target="robot.pick", input={"plan": "{{ pick_plan.plan }}", "object_id": "{{ object.object_id }}", "speed": "{{ pick_profile_selected.motion_speed }}", "descent_speed": "{{ pick_profile_selected.descent_speed }}", "lift_speed": "{{ pick_profile_selected.lift_speed }}", "open_opening": "{{ pick_profile_selected.open_opening }}", "open_min_opening": "{{ pick_profile_selected.open_min_opening }}", "close_opening": "{{ pick_profile_selected.close_opening }}", "max_grasp_opening": "{{ pick_profile_selected.max_grasp_opening }}", "gripper_force": "{{ pick_profile_selected.gripper_force }}", "gripper_speed": "{{ pick_profile_selected.gripper_speed }}", "require_grasp_confirmation": "{{ pick_profile_selected.require_grasp_confirmation }}", "fallback_move_pose_on_grasp_failure": False}, save_as="pick_result"),
       ActionStep(name="verify_grasp", kind=ActionStepKind.SKILL, target="robot.verify_grasp", input={}, save_as="grasp_check"),
       *observe_after_pick_steps,
       *optional_move_joints_step("carry_joints", carry, HARDWARE_TRAVEL_SPEED),

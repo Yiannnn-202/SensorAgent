@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from enum import StrEnum
 from typing import Any
+
+from sensoragent._compat import StrEnum
 
 
 class FailureType(StrEnum):

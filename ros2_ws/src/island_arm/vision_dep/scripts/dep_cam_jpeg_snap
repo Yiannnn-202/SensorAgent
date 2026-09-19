@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+from vision_dep.dep_cam_jpeg_snap import main
+
+if __name__ == '__main__':
+    main()

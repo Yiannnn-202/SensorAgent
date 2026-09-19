@@ -47,7 +47,7 @@ class LLMPlanner:
     self,
     client: JsonPlanningClient,
     prompt_path: Path | None = None,
-    allowed_targets: tuple[str, ...] = ("mock.pick_place_actionlist",),
+    allowed_targets: tuple[str, ...] = ("industrial.recovery_pick_place_tree",),
     allowed_place_targets: tuple[str, ...] = (),
   ) -> None:
     self._client = client

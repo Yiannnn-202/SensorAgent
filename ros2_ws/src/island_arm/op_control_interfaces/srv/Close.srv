@@ -1,0 +1,7 @@
+# Close the OmniPicker gripper.
+# force and speed are normalized to [0.0, 1.0].
+float32 force
+float32 speed
+---
+bool success
+int8 result_code

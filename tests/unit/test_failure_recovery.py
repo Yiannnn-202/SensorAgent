@@ -11,17 +11,13 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
   sys.path.insert(0, str(SRC))
 
-from sensoragent.agent import build_agent_from_config
 from sensoragent.recovery import FailureDetector, FailureType, RecoveryPlanner, RecoveryStrategy
 from sensoragent.schemas import TraceContext
 from sensoragent.tools.recovery import RecoveryClassifyFailureTool, RecoveryPlanTool
-from sensoragent.tools.vision.failure import MockNotFoundDetectTool
 from sensoragent.tools.vision.verify import (
   VisionVerifyObjectInBinTool,
   VisionVerifyObjectLiftedTool,
 )
-from sensoragent.workflows import DecisionTreeRuntime
-from sensoragent.workflows.decision_trees import build_mock_not_found_branch_tree
 
 
 class FailureDetectorTest(TestCase):
@@ -443,32 +439,6 @@ class VisionVerificationToolTest(TestCase):
 
     self.assertFalse(result.success)
     self.assertIn("DROPPED_OBJECT", result.error or "")
-
-
-class DecisionTreeLastFailureTest(TestCase):
-  def test_failed_node_is_available_to_recovery_tools(self) -> None:
-    bundle = build_agent_from_config(ROOT / "configs" / "robot_mock.yaml")
-    bundle.tool_registry.register(MockNotFoundDetectTool())
-    runtime = DecisionTreeRuntime(
-      bundle.tool_runtime,
-      bundle.skill_runtime,
-      bundle.actionlist_runtime,
-      bundle.actionlists,
-      bundle.logger,
-    )
-
-    result = runtime.run(
-      build_mock_not_found_branch_tree(),
-      {"object_query": "missing object"},
-      TraceContext(),
-    )
-
-    self.assertFalse(result.success)
-    self.assertIn("last_failure", result.output)
-    # last_failure records the last non-terminal failing node; the terminal
-    # `not_found` node is intentionally not written back (pinned by
-    # test_terminal_failure_result_serializes_without_recursion).
-    self.assertEqual(result.output["last_failure"]["failed_step"], "found_check")
 
 
 def _call(tool: str, input_data: dict, trace: TraceContext):

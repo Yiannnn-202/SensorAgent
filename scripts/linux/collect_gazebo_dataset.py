@@ -171,12 +171,12 @@ def _parser() -> argparse.ArgumentParser:
   parser.add_argument(
     "--dataset-dir",
     type=Path,
-    default=ROOT / "data" / "vision" / "red_block_v0",
+    default=ROOT / "data" / "vision" / "industrial_part_v0",
   )
-  parser.add_argument("--class-name", default="red block")
+  parser.add_argument("--class-name", default="industrial part")
   parser.add_argument(
     "--prefix",
-    default="red_block",
+    default="industrial_part",
     help="Filename prefix + index pattern for captures; match your object (e.g. 'metal_part').",
   )
   parser.add_argument("--target-count", type=int, default=20)

@@ -35,7 +35,7 @@ class ConfigEnvTest(TestCase):
 
     self.assertEqual(path, Path("configs") / "competition.yaml")
 
-  def test_default_config_is_mock(self) -> None:
+  def test_default_config_is_competition_sim(self) -> None:
     path = resolve_config_path(environ={})
 
-    self.assertEqual(path, Path("configs") / "mock.yaml")
+    self.assertEqual(path, Path("configs") / "competition_sim.yaml")

@@ -30,7 +30,7 @@ class LLMPlannerTest(TestCase):
     client = FakeJsonClient(
       {
         "target_kind": "actionlist",
-        "target": "mock.pick_place_actionlist",
+        "target": "industrial.recovery_pick_place_tree",
         "input": {
           "object_query": "silver roller",
           "target": "third bin cell",
@@ -43,7 +43,7 @@ class LLMPlannerTest(TestCase):
     plan = planner.plan("put the roller into the third cell", {})
 
     self.assertEqual(plan.target_kind, PlanTargetKind.ACTIONLIST)
-    self.assertEqual(plan.target, "mock.pick_place_actionlist")
+    self.assertEqual(plan.target, "industrial.recovery_pick_place_tree")
     self.assertEqual(plan.input["object_query"], "silver roller")
     self.assertEqual(plan.reason, "The task matches pick-and-place.")
     self.assertEqual(len(client.calls), 1)
@@ -66,7 +66,7 @@ class LLMPlannerTest(TestCase):
     client = FakeJsonClient(
       {
         "target_kind": "actionlist",
-        "target": "mock.pick_place_actionlist",
+        "target": "industrial.recovery_pick_place_tree",
         "input": {"object_query": "roller", "target": "bin_cell_3"},
         "intent": {
           "object": "roller",
@@ -87,7 +87,7 @@ class LLMPlannerTest(TestCase):
     client = FakeJsonClient(
       {
         "target_kind": "actionlist",
-        "target": "mock.pick_place_actionlist",
+        "target": "industrial.recovery_pick_place_tree",
         "input": {
           "object_query": "扳手",
           "target": "bin_cell_3",
@@ -140,7 +140,7 @@ class LLMPlannerTest(TestCase):
     client = FakeJsonClient(
       {
         "target_kind": "actionlist",
-        "target": "mock.pick_place_actionlist",
+        "target": "industrial.recovery_pick_place_tree",
         "input": {"object_query": "滚柱", "target": "bin_cell_3"},
         "reason": (
           "intent={\"object\":\"滚柱\",\"action\":\"pick_place\",\"target\":\"bin_cell_3\"};"
@@ -157,7 +157,7 @@ class LLMPlannerTest(TestCase):
     client = FakeJsonClient(
       {
         "target_kind": "actionlist",
-        "target": "mock.pick_place_actionlist",
+        "target": "industrial.recovery_pick_place_tree",
         "input": {"object_query": "roller", "target": ""},
         "reason": "no intent field, no fallback string",
       }

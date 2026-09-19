@@ -1,0 +1,13 @@
+arm_control_server:
+  ros__parameters:
+    # Home / initial joint pose in radians.
+    home_joints_rad: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    # Default motion speed (1-100).
+    default_speed: 20
+
+    # Timeout for blocking motion commands (seconds).
+    motion_timeout_sec: 30.0
+
+    # Robot DOF.
+    arm_dof: 6

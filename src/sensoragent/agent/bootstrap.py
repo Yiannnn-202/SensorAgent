@@ -18,13 +18,11 @@ from sensoragent.integrations import (
   SoundDeviceVadRecorder,
   SoundDeviceRecorder,
   load_llm_config_from_env,
-  load_vlm_config_from_env,
 )
 from sensoragent.integrations.robot import FakeRobotControlClient, HttpRobotControlClient
 from sensoragent.logger import TaskLogger
 from sensoragent.skills import SkillRegistry, SkillRuntime
 from sensoragent.skills.audio import AudioAnnounceSkill, AudioListenCommandSkill
-from sensoragent.skills.mock import MockPickAndPlaceSkill
 from sensoragent.skills.hardware import HardwareStartupSkill
 from sensoragent.skills.robot import (
   RobotPickSkill,
@@ -34,14 +32,12 @@ from sensoragent.skills.robot import (
 )
 from sensoragent.state import InMemoryEventStream, InMemoryTaskStore
 from sensoragent.tools import ToolRegistry, ToolRuntime
-from sensoragent.tools.audio.mock import MockTranscribeTool
 from sensoragent.tools.audio import (
   AudioListenTranscribeTool,
   AudioListenVadTranscribeTool,
   AudioSpeakTool,
   AudioTranscribeTool,
 )
-from sensoragent.tools.robot.mock import MockPickTool, MockPlaceTool
 from sensoragent.tools.robot import (
   GripperCloseTool,
   GripperGetStateTool,
@@ -65,15 +61,13 @@ from sensoragent.tools.hardware import HardwareStartStackTool
 from sensoragent.tools.robot.pick_profile import RobotSelectPickProfileTool
 from sensoragent.tools.vision import (
   VisionConfigDetectTool,
+  VisionDualBranchDetectTool,
   VisionGroundedSam2Tool,
-  VisionListSourceCandidatesTool,
   VisionOpenVocabularyDetectTool,
-  VisionResolveReferenceTool,
   VisionYolo11SegDetectTool,
 )
 from sensoragent.tools.vision import VisionCaptureFrameTool
 from sensoragent.tools.vision import VisionVerifyObjectInBinTool, VisionVerifyObjectLiftedTool
-from sensoragent.tools.vision.mock import MockDetectTool
 from sensoragent.workflows import (
   ActionListRuntime,
   build_industrial_recovery_pick_place_tree,
@@ -88,7 +82,6 @@ from sensoragent.workflows import (
   build_industrial_pick_place_actionlist,
   build_industrial_place_only_actionlist,
   build_industrial_vision_pick_place_actionlist,
-  build_mock_pick_place_actionlist,
   build_sorting_config_pick_place_actionlist,
   build_voice_command_ack_actionlist,
 )
@@ -101,10 +94,6 @@ SkillFactory = Callable[[], object]
 
 
 AVAILABLE_TOOLS: dict[str, ToolFactory] = {
-  "vision.mock_detect": MockDetectTool,
-  "audio.mock_transcribe": MockTranscribeTool,
-  "robot.mock_pick": MockPickTool,
-  "robot.mock_place": MockPlaceTool,
   "robot.plan_mask_pointcloud_pick": RobotPlanMaskPointCloudPickTool,
   "robot.plan_oriented_pick": RobotPlanOrientedPickTool,
   "robot.plan_place": RobotPlanPlaceTool,
@@ -120,20 +109,33 @@ AVAILABLE_TOOLS: dict[str, ToolFactory] = {
 
 SCENE_TOOL_NAMES = {
   "vision.config_detect",
+  "vision.dual_branch_detect",
   "vision.grounded_sam2",
   "vision.open_vocab_detect",
   "vision.yolo11_seg_detect",
-  "vision.list_source_candidates",
   "vision.capture_frame",
   "vision.verify_object_in_bin",
-  "vision.resolve_reference",
   "robot.resolve_place_target",
   "robot.select_pick_profile",
 }
 
 
+def _configured_detection_tool(config: SensorAgentConfig) -> str:
+  """Return the preferred live perception Tool for workflows."""
+
+  enabled_tools = set(config.tools.enabled or ())
+  backend = str(config.integrations.vision.get("backend", "")).casefold()
+  if "vision.dual_branch_detect" in enabled_tools or backend == "dual_branch":
+    return "vision.dual_branch_detect"
+  if "vision.grounded_sam2" in enabled_tools or backend == "grounding_dino":
+    return "vision.grounded_sam2"
+  if "vision.yolo11_seg_detect" in enabled_tools or backend == "yolo11_seg":
+    return "vision.yolo11_seg_detect"
+  return "vision.open_vocab_detect"
+
+
 def _build_recovery_tree(config: SensorAgentConfig):
-  """Build the recovery tree in mock or perception-driven mode."""
+  """Build the recovery tree in configured perception mode."""
 
   vision_config = config.integrations.vision
   if not bool(vision_config.get("recovery_live_detect", False)):
@@ -144,7 +146,7 @@ def _build_recovery_tree(config: SensorAgentConfig):
   capture_tool = "vision.capture_frame" if "vision.capture_frame" in enabled_tools else None
   return build_industrial_recovery_pick_place_tree(
     joint_poses=config.scene.joint_poses,
-    detect_tool="vision.open_vocab_detect",
+    detect_tool=_configured_detection_tool(config),
     capture_tool=capture_tool,
     live_verify=capture_tool is not None,
     spatial_constraint_input=True,
@@ -157,9 +159,9 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
     return VisionConfigDetectTool(catalog, config.scene.release_profiles)
   if tool_name in {
     "vision.grounded_sam2",
+    "vision.dual_branch_detect",
     "vision.open_vocab_detect",
     "vision.yolo11_seg_detect",
-    "vision.list_source_candidates",
   }:
     vision_config = config.integrations.vision
     source_region = dict(vision_config.get("source_region") or {})
@@ -196,14 +198,23 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
     )
     if tool_name == "vision.grounded_sam2":
       return VisionGroundedSam2Tool(**common_settings)
-    if tool_name == "vision.yolo11_seg_detect":
-      return VisionYolo11SegDetectTool(**common_settings)
-    if tool_name == "vision.list_source_candidates":
-      return VisionListSourceCandidatesTool(
-        backend=str(vision_config.get("backend", "yoloe")),
-        require_masks=bool(vision_config.get("require_masks", False)),
+    if tool_name == "vision.dual_branch_detect":
+      dual_branch_config = dict(vision_config.get("dual_branch") or {})
+      return VisionDualBranchDetectTool(
+        route_policy=str(
+          dual_branch_config.get("route_policy", "industrial_first")
+        ),
+        fallback_on_error=bool(
+          dual_branch_config.get("fallback_on_error", True)
+        ),
+        min_fixed_confidence=dual_branch_config.get("min_fixed_confidence"),
+        industrial_labels=dual_branch_config.get("industrial_labels"),
+        yolo11_seg=dual_branch_config.get("yolo11_seg"),
+        grounding_dino=dual_branch_config.get("grounding_dino"),
         **common_settings,
       )
+    if tool_name == "vision.yolo11_seg_detect":
+      return VisionYolo11SegDetectTool(**common_settings)
     return VisionOpenVocabularyDetectTool(
       backend=str(vision_config.get("backend", "yoloe")),
       refine_masks=vision_config.get("refine_masks"),
@@ -246,14 +257,11 @@ def _build_scene_tool(tool_name: str, config: SensorAgentConfig):
       {} if config.agent.mode == "robot_hardware" else default_place_target_registry()
     )
     return VisionVerifyObjectInBinTool(targets)
-  if tool_name == "vision.resolve_reference":
-    return VisionResolveReferenceTool(OpenAICompatibleClient(load_vlm_config_from_env()))
   raise KeyError(f"Not a scene tool: {tool_name}")
 
 AVAILABLE_SKILLS: dict[str, SkillFactory] = {
   "audio.announce": AudioAnnounceSkill,
   "audio.listen_command": AudioListenCommandSkill,
-  "mock.pick_and_place": MockPickAndPlaceSkill,
   "robot.pick": RobotPickSkill,
   "robot.place": RobotPlaceSkill,
   "robot.verify_grasp": RobotVerifyGraspSkill,
@@ -319,11 +327,7 @@ def _allowed_planner_targets(config: SensorAgentConfig, actionlists: dict, decis
   enabled_tools = set(config.tools.enabled or ())
   enabled_skills = set(config.skills.enabled or ())
   targets = list(actionlists.keys()) + list(decision_trees.keys())
-  hardware_detect_tool = (
-    "vision.grounded_sam2"
-    if config.integrations.vision.get("backend", "grounding_dino") == "grounding_dino"
-    else "vision.open_vocab_detect"
-  )
+  hardware_detect_tool = _configured_detection_tool(config)
   hardware_pick_ready = (
     {
       "vision.capture_frame",
@@ -465,13 +469,8 @@ def build_agent(
   skill_runtime = SkillRuntime(skill_registry, tool_runtime, logger)
   actionlist_runtime = ActionListRuntime(tool_runtime, skill_runtime, logger)
   joint_poses = config.scene.joint_poses
-  hardware_detect_tool = (
-    "vision.grounded_sam2"
-    if config.integrations.vision.get("backend", "grounding_dino") == "grounding_dino"
-    else "vision.open_vocab_detect"
-  )
+  hardware_detect_tool = _configured_detection_tool(config)
   actionlists = {
-    "mock.pick_place_actionlist": build_mock_pick_place_actionlist(),
     "audio.voice_command_ack_actionlist": build_voice_command_ack_actionlist(),
     "industrial.pick_place_actionlist": build_industrial_pick_place_actionlist(joint_poses),
     "industrial.pick_only_actionlist": build_industrial_pick_only_actionlist(joint_poses),

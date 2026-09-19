@@ -1,0 +1,7 @@
+# Target jaw opening normalized to [0.0, 1.0]; 1.0 is fully open.
+float32 position
+# Motion speed normalized to [0.0, 1.0].
+float32 speed
+---
+bool success
+int8 result_code

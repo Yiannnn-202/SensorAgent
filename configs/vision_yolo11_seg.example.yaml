@@ -3,8 +3,8 @@ agent:
   mode: vision_yolo11_seg_backup
 
 # Backup fixed-class segmentation path. It is intentionally not enabled by the
-# shipped simulation, sorting, or hardware workflows; Grounded SAM2 remains the
-# primary perception Tool.
+# shipped simulation, sorting, or hardware workflows; the submission perception
+# entry point is vision.dual_branch_detect.
 tools:
   enabled:
     - vision.yolo11_seg_detect

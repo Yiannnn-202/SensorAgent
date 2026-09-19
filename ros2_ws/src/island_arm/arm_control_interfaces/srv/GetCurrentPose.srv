@@ -1,0 +1,6 @@
+# Query current end-effector pose.
+---
+geometry_msgs/Pose pose
+bool valid
+int32 error_code
+string message

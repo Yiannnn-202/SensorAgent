@@ -8,3 +8,11 @@ requests>=2.32
 # Audio runtime
 sounddevice>=0.4.6
 sherpa-onnx
+
+# Vision runtime
+Pillow>=10
+hf_xet>=1.2,<2
+safetensors>=0.4
+scipy>=1.13,<2
+transformers>=4.45,<5
+ultralytics>=8.3,<9

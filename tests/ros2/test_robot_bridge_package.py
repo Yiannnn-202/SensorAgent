@@ -40,12 +40,10 @@ class RobotBridgePackageTest(TestCase):
       / "sensoragent_rm65_b_bringup"
       / "launch"
       / "full_demo.launch.py",
-      ROOT / "scripts" / "linux" / "test_gazebo_pick_pipeline.py",
-      ROOT / "scripts" / "linux" / "test_gazebo_place_pipeline.py",
-      ROOT / "scripts" / "linux" / "test_gazebo_pick_place_pipeline.py",
+      ROOT / "scripts" / "linux" / "agent_bridge_support.py",
+      ROOT / "scripts" / "linux" / "run_competition_sorting_session.py",
       ROOT / "scripts" / "linux" / "capture_gazebo_rgbd_frame.py",
       ROOT / "scripts" / "linux" / "record_rm65_joint_pose.py",
-      ROOT / "scripts" / "linux" / "run_gazebo_vision_actionlist_sim.py",
     ]
 
     for path in paths:

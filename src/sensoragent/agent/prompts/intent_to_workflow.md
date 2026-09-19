@@ -63,7 +63,7 @@ Your job:
       → `hardware.pick_object_actionlist`
     - `intent.action == "pick"`       → `industrial.pick_only_actionlist`
    - `intent.action == "place"`      → `industrial.place_only_actionlist`
-   Fall back to `mock.pick_place_actionlist` only when no industrial target is available.
+   Return an unsupported-target error instead of selecting unapproved workflows.
 3. Normalize the destination string. If `allowed_place_targets` is provided, `input.target`
    MUST be one of those ids exactly (e.g. `bin_cell_3`), even if the operator said "cell 3"
    or "第三个格子". Map obvious synonyms:
@@ -121,7 +121,7 @@ Rules:
 - Prefer `industrial.recovery_pick_place_tree` for verified pick-and-place requests when
   present in `allowed_targets`; otherwise prefer `hardware.pick_place_actionlist` when it
   is available, then `industrial.pick_place_actionlist`. Fall back to
-  `mock.pick_place_actionlist` only when no industrial or hardware target is available.
+  no fallback target when no industrial or hardware target is available.
 - `intent` and `input` must agree: `intent.object == input.object_query`,
   `intent.target == input.target`, and `intent.spatial == input.spatial_constraint` (when
   spatial is present).

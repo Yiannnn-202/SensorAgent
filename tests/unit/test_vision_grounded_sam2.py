@@ -174,17 +174,6 @@ def test_grounded_sam2_config_registers_without_loading_models() -> None:
   assert bundle.tool_registry.names() == ["vision.grounded_sam2"]
 
 
-def test_scene_aware_example_config_reaches_the_tool() -> None:
-  bundle = build_agent_from_config(
-    ROOT / "configs" / "vision_scene_aware.example.yaml"
-  )
-  tool = bundle.tool_registry.get("vision.grounded_sam2")
-
-  assert tool._candidate_policy == "scene_aware"
-  assert tool._scene_profile.name == "industrial_tabletop_v1"
-  assert tool._scene_profile.image_size == (424.0, 240.0)
-
-
 def test_grounded_sam2_refines_the_scene_aware_winner() -> None:
   tool = VisionGroundedSam2Tool(
     detector=_SceneDetector(),

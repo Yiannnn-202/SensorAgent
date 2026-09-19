@@ -740,7 +740,7 @@ class RobotControlTest(TestCase):
     self.assertNotIn(("robot.move_pose", {"pose": plan.grasp.to_dict(), "speed": 0.2, "avoid_collisions": True}), tool_runtime.calls)
 
   def test_robot_tools_register_from_project_configuration(self) -> None:
-    bundle = build_agent_from_config(ROOT / "configs" / "robot_mock.yaml")
+    bundle = build_agent_from_config(ROOT / "configs" / "competition_eval.yaml")
 
     self.assertIn("robot.move_pose", bundle.tool_registry.names())
     self.assertIn("robot.plan_top_down_pick", bundle.tool_registry.names())

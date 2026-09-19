@@ -6,7 +6,7 @@ so recovery behaviour is exercised and collected into RunRecords for the
 competition metrics reducer.
 
 Decoupled from Gazebo/ROS: it builds the agent from a fake-backend config
-(e.g. configs/robot_mock.yaml), wraps specific tools with _SequenceTool to
+(e.g. configs/competition_eval.yaml), wraps specific tools with _SequenceTool to
 plant failures, runs the recovery tree directly via
 ``bundle.decision_tree_runtime.run`` (bypassing the planner — object_query and
 target are known per scenario), and feeds each DecisionTreeResult into
